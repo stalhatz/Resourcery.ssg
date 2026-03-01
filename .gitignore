@@ -21,6 +21,11 @@ wheels/
 .installed.cfg
 *.egg
 
+data/
+output/
+*.jpg
+*.png
+
 # Virtual Environment
 .venv/
 venv/
