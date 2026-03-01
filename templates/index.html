@@ -25,10 +25,7 @@
             </select>
         </div>
         
-        <div class="view-toggle">
-            <button class="view-btn active" data-view="grid" aria-label="Grid view">⊞</button>
-            <button class="view-btn" data-view="list" aria-label="List view">☰</button>
-        </div>
+        <div class="results-count" id="resultsCount">0 items</div>
     </div>
     
     <div class="links-grid" id="linksGrid">
@@ -38,54 +35,41 @@
                  data-id="{{ link.id }}"
                  data-category="{{ link.category }}"
                  data-tags="{{ link.tags | join(',') }}"
-                 data-created="{{ link.created_at }}">
+                 data-created="{{ link.created_at }}"
+                 data-title="{{ link.title }}"
+                 data-summary="{{ link.summary }}"
+                 data-description="{{ link.description }}"
+                 data-url="{{ link.url }}"
+                 data-image="{{ link.image if link.image else '' }}"
+                 data-pricing="{{ link.pricing if link.pricing else 'unknown' }}"
+                 data-language="{{ link.language if link.language else 'en' }}"
+                 data-featured="{{ 'true' if link.featured else 'false' }}"
+                 tabindex="0"
+                 role="button"
+                 aria-label="View details for {{ link.title }}">
             
-            <div class="card-image">
-                {% if link.image %}
-                <img src="{{ link.image }}" 
-                     alt="{{ link.title }}"
-                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
-                {% else %}
-                <div class="image-placeholder">
-                    <span>🔗</span>
-                </div>
-                {% endif %}
-                {% if link.featured %}
-                <span class="featured-badge">Featured</span>
-                {% endif %}
-            </div>
+            <div class="card-bg" style="background-image: url('{{ link.image if link.image else '/static/images/placeholders/' + link.category + '.jpg' }}');"></div>
+            <div class="card-overlay"></div>
             
             <div class="card-content">
+                {% if link.featured %}
+                <span class="featured-badge">★</span>
+                {% endif %}
+                
+                <span class="card-category">{{ link.category }}</span>
                 <h3 class="card-title">{{ link.title }}</h3>
                 <p class="card-summary">{{ link.summary }}</p>
                 
                 <div class="card-meta">
-                    <span class="card-category">{{ link.category }}</span>
-                    {% if link.pricing %}
-                    <span class="card-pricing pricing-{{ link.pricing }}">{{ link.pricing }}</span>
-                    {% endif %}
-                </div>
-                
-                <div class="card-tags">
-                    {% for tag in link.tags %}
-                    <span class="tag" data-tag="{{ tag }}">{{ tag }}</span>
-                    {% endfor %}
+                    <span class="meta-item pricing-{{ link.pricing if link.pricing else 'unknown' }}">
+                        {{ link.pricing if link.pricing else 'unknown' }}
+                    </span>
+                    <span class="meta-item language">{{ link.language if link.language else 'en' }}</span>
                 </div>
             </div>
             
-            <div class="card-actions">
-                <a href="{{ link.url }}" 
-                   class="action-btn visit-btn"
-                   target="_blank"
-                   rel="noopener"
-                   title="{{ config.content.tooltips.visit_site }}">
-                    Visit ↗
-                </a>
-                <button class="action-btn copy-btn"
-                        data-url="{{ link.url }}"
-                        title="{{ config.content.tooltips.copy_link }}">
-                    📋
-                </button>
+            <div class="card-footer">
+                <span class="view-details">View Details →</span>
             </div>
         </article>
         {% endif %}
@@ -96,108 +80,63 @@
         <p>{{ config.content.errors.no_results }}</p>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('searchInput');
-    const categoryFilter = document.getElementById('categoryFilter');
-    const sortFilter = document.getElementById('sortFilter');
-    const linksGrid = document.getElementById('linksGrid');
-    const noResults = document.getElementById('noResults');
-    const viewBtns = document.querySelectorAll('.view-btn');
-    
-    let currentView = 'grid';
-    
-    // Search functionality
-    if (searchInput) {
-        searchInput.addEventListener('input', debounce(filterLinks, 300));
-    }
-    
-    // Category filter
-    if (categoryFilter) {
-        categoryFilter.addEventListener('change', filterLinks);
-    }
-    
-    // Sort filter
-    if (sortFilter) {
-        sortFilter.addEventListener('change', filterLinks);
-    }
-    
-    // View toggle
-    viewBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            viewBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentView = btn.dataset.view;
-            linksGrid.className = `links-grid view-${currentView}`;
-        });
-    });
-    
-    // Tag filtering
-    document.querySelectorAll('.tag').forEach(tag => {
-        tag.addEventListener('click', () => {
-            searchInput.value = tag.dataset.tag;
-            filterLinks();
-        });
-    });
-    
-    // Copy link functionality
-    document.querySelectorAll('.copy-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            try {
-                await navigator.clipboard.writeText(btn.dataset.url);
-                btn.textContent = '✓';
-                setTimeout(() => btn.textContent = '📋', 2000);
-            } catch (err) {
-                console.error('Failed to copy:', err);
-            }
-        });
-    });
-    
-    function filterLinks() {
-        const searchTerm = searchInput.value.toLowerCase();
-        const category = categoryFilter.value;
-        const cards = document.querySelectorAll('.link-card');
-        let visibleCount = 0;
+<!-- Modal Dialog -->
+<div class="modal-overlay" id="modalOverlay" style="display: none;">
+    <div class="modal" id="modal" role="dialog" aria-modal="true">
+        <button class="modal-close" id="modalClose" aria-label="Close modal">×</button>
         
-        cards.forEach(card => {
-            const title = card.querySelector('.card-title').textContent.toLowerCase();
-            const summary = card.querySelector('.card-summary').textContent.toLowerCase();
-            const tags = card.dataset.tags.toLowerCase();
-            const cardCategory = card.dataset.category;
-            
-            const matchesSearch = !searchTerm || 
-                                  title.includes(searchTerm) || 
-                                  summary.includes(searchTerm) || 
-                                  tags.includes(searchTerm);
-            
-            const matchesCategory = !category || cardCategory === category;
-            
-            if (matchesSearch && matchesCategory) {
-                card.style.display = '';
-                visibleCount++;
-            } else {
-                card.style.display = 'none';
-            }
-        });
+        <div class="modal-header">
+            <div class="modal-image" id="modalImage"></div>
+            <div class="modal-title-section">
+                <h2 class="modal-title" id="modalTitle"></h2>
+                <div class="modal-badges">
+                    <span class="modal-category" id="modalCategory"></span>
+                    <span class="modal-pricing" id="modalPricing"></span>
+                    <span class="modal-language" id="modalLanguage"></span>
+                    {% if config.features.social_share %}
+                    <button class="modal-share" id="modalShare" title="Share">🔗</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
         
-        noResults.style.display = visibleCount === 0 ? 'block' : 'none';
-    }
-    
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-});
-</script>
+        <div class="modal-body">
+            <div class="modal-section">
+                <h4>Summary</h4>
+                <p id="modalSummary"></p>
+            </div>
+            
+            <div class="modal-section">
+                <h4>Description</h4>
+                <p id="modalDescription"></p>
+            </div>
+            
+            <div class="modal-section">
+                <h4>Tags</h4>
+                <div class="modal-tags" id="modalTags"></div>
+            </div>
+            
+            {% if config.social %}
+            <div class="modal-section">
+                <h4>Share</h4>
+                <div class="modal-share-links">
+                    {% if config.social.twitter %}
+                    <a href="#" class="share-link twitter" id="shareTwitter" target="_blank" rel="noopener">Twitter</a>
+                    {% endif %}
+                    {% if config.social.github %}
+                    <a href="#" class="share-link github" id="shareGithub" target="_blank" rel="noopener">GitHub</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="modal-footer">
+            <a href="#" class="modal-visit-btn" id="modalVisit" target="_blank" rel="noopener">
+                Visit Website ↗
+            </a>
+        </div>
+    </div>
+</div>
 {% endblock %}

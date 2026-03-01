@@ -1,5 +1,6 @@
 /**
  * Main JavaScript for Static Link Aggregation Site
+ * Compact Cards + Modal Version
  */
 
 const CategoryHierarchy = {
@@ -19,8 +20,6 @@ const CategoryHierarchy = {
                 });
             }
         });
-        
-        console.log('📁 [DEBUG] Category hierarchy:', this.map);
     },
     
     getMatchingCategories: function(categoryId) {
@@ -33,9 +32,115 @@ const CategoryHierarchy = {
     }
 };
 
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 [DEBUG] DOMContentLoaded fired');
+const ModalManager = {
+    open: function(card) {
+        var overlay = document.getElementById('modalOverlay');
+        var modal = document.getElementById('modal');
+        
+        // Populate modal data
+        document.getElementById('modalTitle').textContent = card.dataset.title;
+        document.getElementById('modalSummary').textContent = card.dataset.summary;
+        document.getElementById('modalDescription').textContent = card.dataset.description || card.dataset.summary;
+        document.getElementById('modalCategory').textContent = card.dataset.category;
+        document.getElementById('modalPricing').textContent = card.dataset.pricing;
+        document.getElementById('modalLanguage').textContent = card.dataset.language;
+        document.getElementById('modalVisit').href = card.dataset.url;
+        
+        // Set modal image
+        var modalImage = document.getElementById('modalImage');
+        if (card.dataset.image) {
+            modalImage.style.backgroundImage = 'url(' + card.dataset.image + ')';
+        } else {
+            modalImage.style.backgroundImage = 'url(/static/images/placeholders/' + card.dataset.category + '.jpg)';
+        }
+        
+        // Populate tags
+        var tagsContainer = document.getElementById('modalTags');
+        tagsContainer.innerHTML = '';
+        var tags = card.dataset.tags.split(',');
+        tags.forEach(function(tag) {
+            if (tag.trim()) {
+                var tagEl = document.createElement('span');
+                tagEl.className = 'modal-tag';
+                tagEl.textContent = tag.trim();
+                tagsContainer.appendChild(tagEl);
+            }
+        });
+        
+        // Setup share links
+        var shareUrl = encodeURIComponent(card.dataset.url);
+        var shareTitle = encodeURIComponent(card.dataset.title);
+        var twitterLink = document.getElementById('shareTwitter');
+        if (twitterLink) {
+            twitterLink.href = 'https://twitter.com/intent/tweet?url=' + shareUrl + '&text=' + shareTitle;
+        }
+        
+        // Show modal
+        overlay.style.display = 'flex';
+        setTimeout(function() {
+            overlay.classList.add('active');
+        }, 10);
+        
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+        
+        // Focus trap
+        modal.focus();
+    },
     
+    close: function() {
+        var overlay = document.getElementById('modalOverlay');
+        overlay.classList.remove('active');
+        
+        setTimeout(function() {
+            overlay.style.display = 'none';
+            document.body.style.overflow = '';
+        }, 300);
+    },
+    
+    init: function() {
+        var self = this;
+        var overlay = document.getElementById('modalOverlay');
+        var closeBtn = document.getElementById('modalClose');
+        
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function() {
+                self.close();
+            });
+        }
+        
+        if (overlay) {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    self.close();
+                }
+            });
+        }
+        
+        // Close on escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && overlay.style.display !== 'none') {
+                self.close();
+            }
+        });
+        
+        // Share button
+        var shareBtn = document.getElementById('modalShare');
+        if (shareBtn) {
+            shareBtn.addEventListener('click', function() {
+                var url = document.getElementById('modalVisit').href;
+                navigator.clipboard.writeText(url).then(function() {
+                    shareBtn.textContent = '✓';
+                    setTimeout(function() {
+                        shareBtn.textContent = '🔗';
+                    }, 2000);
+                });
+            });
+        }
+    }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
     if (window.APP_CONFIG) {
         CategoryHierarchy.init(window.APP_CONFIG);
     }
@@ -44,17 +149,16 @@ document.addEventListener('DOMContentLoaded', function() {
     ThemeManager.init();
     SidebarManager.init();
     FilterManager.init();
-    CardManager.init();
+    ModalManager.init();
     
-    console.log('🔍 [DEBUG] Initial hash:', window.location.hash);
     handleHashChange();
     
     window.addEventListener('hashchange', function() {
-        console.log('🔔 [DEBUG] Hash change detected:', window.location.hash);
         handleHashChange();
     });
     
-    console.log('✅ [DEBUG] Initialization complete');
+    // Update results count
+    updateResultsCount();
 });
 
 function applyThemeColors() {
@@ -109,8 +213,6 @@ var SidebarManager = {
 
 var FilterManager = {
     init: function() {
-        console.log('🛠️ [DEBUG] FilterManager initializing...');
-        
         var categoryFilter = document.getElementById('categoryFilter');
         var searchInput = document.getElementById('searchInput');
         var sortFilter = document.getElementById('sortFilter');
@@ -118,7 +220,6 @@ var FilterManager = {
         if (categoryFilter) {
             categoryFilter.addEventListener('change', function(e) {
                 var category = e.target.value;
-                console.log('👇 [DEBUG] Dropdown changed to:', category);
                 if (category) {
                     window.location.hash = 'category-' + category;
                 } else {
@@ -130,26 +231,22 @@ var FilterManager = {
         
         if (searchInput) {
             searchInput.addEventListener('input', debounce(function() {
-                console.log('🔍 [DEBUG] Search input changed');
                 filterCards();
             }, 300));
         }
         
         if (sortFilter) {
             sortFilter.addEventListener('change', function() {
-                console.log('🔀 [DEBUG] Sort changed');
                 sortCards();
             });
         }
         
         var sidebarLinks = document.querySelectorAll('.category-link, .subcategory-link');
-        console.log('🔗 [DEBUG] Found ' + sidebarLinks.length + ' sidebar category links');
         
         sidebarLinks.forEach(function(link) {
             link.addEventListener('click', function(e) {
                 e.preventDefault();
                 var category = link.dataset.category;
-                console.log('🖱️ [DEBUG] Sidebar link clicked:', category);
                 
                 var dropdown = document.getElementById('categoryFilter');
                 if (category && dropdown) {
@@ -160,42 +257,16 @@ var FilterManager = {
             });
         });
         
-        document.querySelectorAll('.view-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                document.querySelectorAll('.view-btn').forEach(function(b) {
-                    b.classList.remove('active');
-                });
-                btn.classList.add('active');
-                var grid = document.getElementById('linksGrid');
-                if (grid) {
-                    grid.className = 'links-grid view-' + btn.dataset.view;
-                }
-                localStorage.setItem('viewMode', btn.dataset.view);
+        // Card click handlers
+        document.querySelectorAll('.link-card').forEach(function(card) {
+            card.addEventListener('click', function() {
+                ModalManager.open(card);
             });
-        });
-    }
-};
-
-var CardManager = {
-    init: function() {
-        document.querySelectorAll('.copy-btn').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                navigator.clipboard.writeText(btn.dataset.url).then(function() {
-                    btn.textContent = '✓';
-                    setTimeout(function() {
-                        btn.textContent = '📋';
-                    }, 2000);
-                });
-            });
-        });
-        
-        document.querySelectorAll('.tag').forEach(function(tag) {
-            tag.addEventListener('click', function() {
-                var searchInput = document.getElementById('searchInput');
-                if (searchInput) {
-                    searchInput.value = tag.dataset.tag;
-                    filterCards();
+            
+            card.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    ModalManager.open(card);
                 }
             });
         });
@@ -203,34 +274,27 @@ var CardManager = {
 };
 
 function filterCards() {
-    console.log('🔄 [DEBUG] filterCards() called');
-    
     var searchInput = document.getElementById('searchInput');
     var categoryFilter = document.getElementById('categoryFilter');
     var cards = document.querySelectorAll('.link-card');
     var noResults = document.getElementById('noResults');
     
-    console.log('🃏 [DEBUG] Found ' + cards.length + ' cards to filter');
-    
     var searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
     var category = categoryFilter ? categoryFilter.value : '';
     
     var matchingCategories = CategoryHierarchy.getMatchingCategories(category);
-    console.log('🔑 [DEBUG] Matching categories:', matchingCategories);
     
     var visibleCount = 0;
     
     cards.forEach(function(card) {
-        var title = card.querySelector('.card-title');
-        var summary = card.querySelector('.card-summary');
-        var titleText = title ? title.textContent.toLowerCase() : '';
-        var summaryText = summary ? summary.textContent.toLowerCase() : '';
-        var tags = card.dataset.tags ? card.dataset.tags.toLowerCase() : '';
+        var title = card.dataset.title.toLowerCase();
+        var summary = card.dataset.summary.toLowerCase();
+        var tags = card.dataset.tags.toLowerCase();
         var cardCategory = card.dataset.category || '';
         
         var matchesSearch = !searchTerm || 
-                            titleText.includes(searchTerm) || 
-                            summaryText.includes(searchTerm) || 
+                            title.includes(searchTerm) || 
+                            summary.includes(searchTerm) || 
                             tags.includes(searchTerm);
         
         var matchesCategory = !category || matchingCategories.indexOf(cardCategory) !== -1;
@@ -243,11 +307,11 @@ function filterCards() {
         }
     });
     
-    console.log('✅ [DEBUG] Filtering complete. Visible: ' + visibleCount + '/' + cards.length);
-    
     if (noResults) {
         noResults.style.display = visibleCount === 0 ? 'block' : 'none';
     }
+    
+    updateResultsCount(visibleCount);
 }
 
 function sortCards() {
@@ -264,9 +328,7 @@ function sortCards() {
         } else if (sortValue === 'oldest') {
             return new Date(a.dataset.created || 0) - new Date(b.dataset.created || 0);
         } else if (sortValue === 'alphabetical') {
-            return a.querySelector('.card-title').textContent.localeCompare(
-                b.querySelector('.card-title').textContent
-            );
+            return a.dataset.title.localeCompare(b.dataset.title);
         }
         return 0;
     });
@@ -278,18 +340,27 @@ function sortCards() {
 
 function handleHashChange() {
     var hash = window.location.hash;
-    console.log('🔗 [DEBUG] handleHashChange:', hash);
     
     if (hash.startsWith('#category-')) {
         var category = hash.replace('#category-', '');
         var dropdown = document.getElementById('categoryFilter');
         
         if (dropdown) {
-            console.log('⬇️ [DEBUG] Setting dropdown to:', category);
             dropdown.value = category;
             filterCards();
         }
     }
+}
+
+function updateResultsCount(visibleCount) {
+    var countEl = document.getElementById('resultsCount');
+    if (!countEl) return;
+    
+    if (visibleCount === undefined) {
+        visibleCount = document.querySelectorAll('.link-card[style=""]').length;
+    }
+    
+    countEl.textContent = visibleCount + ' item' + (visibleCount !== 1 ? 's' : '');
 }
 
 function debounce(func, wait) {
