@@ -199,36 +199,32 @@ var SidebarManager = {
     }
 };
 
-var FilterManager = {
+const FilterManager = {
+    dropdowns: {},
+    
     init: function() {
+        var self = this;
+        
+        // Category trigger
+        var categoryTrigger = document.getElementById('categoryTrigger');
         var categoryFilter = document.getElementById('categoryFilter');
-        var searchInput = document.getElementById('searchInput');
+        var categoryValue = document.getElementById('categoryValue');
+        
+        // Sort trigger
+        var sortTrigger = document.getElementById('sortTrigger');
         var sortFilter = document.getElementById('sortFilter');
+        var sortValue = document.getElementById('sortValue');
         
-        if (categoryFilter) {
-            categoryFilter.addEventListener('change', function(e) {
-                var category = e.target.value;
-                if (category) {
-                    window.location.hash = 'category-' + category;
-                } else {
-                    history.pushState('', '', window.location.pathname);
-                }
-                filterCards();
-            });
+        // Initialize dropdowns
+        if (categoryTrigger && categoryFilter) {
+            this.createDropdown(categoryTrigger, categoryFilter, categoryValue, 'category');
         }
         
-        if (searchInput) {
-            searchInput.addEventListener('input', debounce(function() {
-                filterCards();
-            }, 300));
+        if (sortTrigger && sortFilter) {
+            this.createDropdown(sortTrigger, sortFilter, sortValue, 'sort');
         }
         
-        if (sortFilter) {
-            sortFilter.addEventListener('change', function() {
-                sortCards();
-            });
-        }
-        
+        // Sidebar category links
         var sidebarLinks = document.querySelectorAll('.category-link, .subcategory-link');
         
         sidebarLinks.forEach(function(link) {
@@ -236,9 +232,9 @@ var FilterManager = {
                 e.preventDefault();
                 var category = link.dataset.category;
                 
-                var dropdown = document.getElementById('categoryFilter');
-                if (category && dropdown) {
-                    dropdown.value = category;
+                if (category && categoryFilter) {
+                    categoryFilter.value = category;
+                    categoryValue.textContent = link.querySelector('.category-label').textContent;
                     window.location.hash = 'category-' + category;
                     filterCards();
                 }
@@ -258,6 +254,118 @@ var FilterManager = {
                 }
             });
         });
+    },
+    
+    createDropdown: function(trigger, nativeSelect, valueDisplay, type) {
+        var self = this;
+        var dropdown = document.createElement('div');
+        dropdown.className = 'filter-dropdown';
+        dropdown.id = type + 'Dropdown';
+        
+        // Create options from native select
+        Array.from(nativeSelect.options).forEach(function(option) {
+            var btn = document.createElement('button');
+            btn.className = 'filter-dropdown-option';
+            btn.textContent = option.textContent;
+            btn.dataset.value = option.value;
+            
+            if (option.value === nativeSelect.value) {
+                btn.classList.add('selected');
+            }
+            
+            btn.addEventListener('click', function() {
+                nativeSelect.value = option.value;
+                valueDisplay.textContent = option.textContent;
+                
+                // Update dropdown UI
+                dropdown.querySelectorAll('.filter-dropdown-option').forEach(function(opt) {
+                    opt.classList.remove('selected');
+                });
+                btn.classList.add('selected');
+                
+                // Close dropdown
+                self.closeAllDropdowns();
+                
+                // Trigger filter
+                if (type === 'category') {
+                    if (option.value) {
+                        window.location.hash = 'category-' + option.value;
+                    } else {
+                        history.pushState('', '', window.location.pathname);
+                    }
+                }
+                
+                filterCards();
+            });
+            
+            dropdown.appendChild(btn);
+        });
+        
+        // Position dropdown
+        trigger.style.position = 'relative';
+        trigger.appendChild(dropdown);
+        
+        // Toggle dropdown
+        trigger.addEventListener('click', function(e) {
+            e.stopPropagation();
+            self.toggleDropdown(type);
+        });
+        
+        // Store reference
+        this.dropdowns[type] = {
+            trigger: trigger,
+            dropdown: dropdown,
+            native: nativeSelect,
+            display: valueDisplay
+        };
+        
+        // Close on outside click
+        document.addEventListener('click', function(e) {
+            if (!trigger.contains(e.target)) {
+                self.closeDropdown(type);
+            }
+        });
+    },
+    
+    toggleDropdown: function(type) {
+        var dropdown = this.dropdowns[type];
+        if (!dropdown) return;
+        
+        var isActive = dropdown.dropdown.classList.contains('active');
+        this.closeAllDropdowns();
+        
+        if (!isActive) {
+            dropdown.dropdown.classList.add('active');
+            dropdown.trigger.classList.add('active');
+        }
+    },
+    
+    closeDropdown: function(type) {
+        var dropdown = this.dropdowns[type];
+        if (!dropdown) return;
+        
+        dropdown.dropdown.classList.remove('active');
+        dropdown.trigger.classList.remove('active');
+    },
+    
+    closeAllDropdowns: function() {
+        var self = this;
+        Object.keys(this.dropdowns).forEach(function(type) {
+            self.closeDropdown(type);
+        });
+    },
+    
+    updateDisplay: function(type, value) {
+        var dropdown = this.dropdowns[type];
+        if (!dropdown) return;
+        
+        var option = Array.from(dropdown.native.options).find(function(opt) {
+            return opt.value === value;
+        });
+        
+        if (option) {
+            dropdown.display.textContent = option.textContent;
+        }
     }
 };
 
@@ -331,10 +439,21 @@ function handleHashChange() {
     
     if (hash.startsWith('#category-')) {
         var category = hash.replace('#category-', '');
-        var dropdown = document.getElementById('categoryFilter');
+        var categoryFilter = document.getElementById('categoryFilter');
+        var categoryValue = document.getElementById('categoryValue');
         
-        if (dropdown) {
-            dropdown.value = category;
+        if (categoryFilter && categoryValue) {
+            categoryFilter.value = category;
+            
+            // Find the label for this category
+            var option = Array.from(categoryFilter.options).find(function(opt) {
+                return opt.value === category;
+            });
+            
+            if (option) {
+                categoryValue.textContent = option.textContent;
+            }
+            
             filterCards();
         }
     }

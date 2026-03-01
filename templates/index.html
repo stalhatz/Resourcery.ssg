@@ -2,30 +2,40 @@
 
 {% block content %}
 <div class="links-container" id="linksContainer">
-    <div class="filter-bar" id="filterBar">
-        <div class="filter-group">
-            <label for="categoryFilter">Category:</label>
-            <select id="categoryFilter" class="filter-select">
-                <option value="">All Categories</option>
-                {% for category in config.navigation.categories %}
-                <option value="{{ category.id }}">{{ category.label }}</option>
-                {% for child in category.children %}
-                <option value="{{ child.id }}">  └ {{ child.label }}</option>
-                {% endfor %}
-                {% endfor %}
-            </select>
-        </div>
+    <!-- Sentence-Style Filter Header -->
+    <div class="filter-header" id="filterHeader">
+        <span class="filter-text">Showing</span>
         
-        <div class="filter-group">
-            <label for="sortFilter">Sort:</label>
-            <select id="sortFilter" class="filter-select">
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="alphabetical">Alphabetical</option>
-            </select>
-        </div>
+        <button class="filter-trigger" id="categoryTrigger" type="button">
+            <span class="filter-value" id="categoryValue">All Categories</span>
+            <span class="filter-icon">▾</span>
+        </button>
         
-        <div class="results-count" id="resultsCount">0 items</div>
+        <span class="filter-text">by</span>
+        
+        <button class="filter-trigger" id="sortTrigger" type="button">
+            <span class="filter-value" id="sortValue">newest first</span>
+            <span class="filter-icon">▾</span>
+        </button>
+        
+        <span class="results-count" id="resultsCount">0 items</span>
+        
+        <!-- Hidden Selects (for functionality) -->
+        <select id="categoryFilter" class="hidden-select" aria-hidden="true">
+            <option value="">All Categories</option>
+            {% for category in config.navigation.categories %}
+            <option value="{{ category.id }}">{{ category.label }}</option>
+            {% for child in category.children %}
+            <option value="{{ child.id }}">  └ {{ child.label }}</option>
+            {% endfor %}
+            {% endfor %}
+        </select>
+        
+        <select id="sortFilter" class="hidden-select" aria-hidden="true">
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="alphabetical">Alphabetical</option>
+        </select>
     </div>
     
     <div class="links-grid" id="linksGrid">
