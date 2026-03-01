@@ -10,18 +10,8 @@
     <link rel="icon" href="{{ config.site_info.favicon }}">
     {% endif %}
     
-    <link rel="stylesheet" href="static/css/style.css">
-    
-    {% if config.theme.typography.font_family %}
-    <style>
-        :root {
-            --font-family: {{ config.theme.typography.font_family }};
-            {% if config.theme.typography.heading_font %}
-            --heading-font: {{ config.theme.typography.heading_font }};
-            {% endif %}
-        }
-    </style>
-    {% endif %}
+    <!-- Templated CSS -->
+    <link rel="stylesheet" href="static/css/style.css?v={{ links.site_meta.version }}">
 </head>
 <body>
     <div class="app-container">

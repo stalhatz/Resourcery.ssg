@@ -36,25 +36,9 @@ def validate_data(config, links):
         if key not in links:
             raise ValueError(f"Missing required links key: {key}")
 
-def build(acquire_images=False):
+def build():
     """Build the static site."""
     print("🔨 Building static site...")
-    
-    # Optional: Acquire images before build
-    if acquire_images:
-        from image_acquirer import ImageAcquirer
-        
-        links_path = DATA_DIR / 'links.json'
-        links_data = load_json(links_path)
-        
-        acquirer = ImageAcquirer(ROOT_DIR)
-        updated_data = acquirer.acquire_all(links_data, force=False)
-        
-        # Save updated links
-        with open(links_path, 'w', encoding='utf-8') as f:
-            json.dump(updated_data, f, indent=2, ensure_ascii=False)
-        
-        print()
     
     # Clean output directory
     if OUTPUT_DIR.exists():
@@ -81,14 +65,28 @@ def build(acquire_images=False):
     
     with open(OUTPUT_DIR / 'index.html', 'w', encoding='utf-8') as f:
         f.write(output)
-    
     print("✓ index.html rendered")
     
-    # Copy static files
-    static_output = OUTPUT_DIR / 'static'
-    if STATIC_DIR.exists():
-        shutil.copytree(STATIC_DIR, static_output)
-        print("✓ Static files copied")
+    # Render style.css (NEW)
+    css_template = env.get_template('style.css')
+    css_output = css_template.render(config=config, links=links)
+    
+    css_dir = OUTPUT_DIR / 'static' / 'css'
+    css_dir.mkdir(parents=True, exist_ok=True)
+    
+    with open(css_dir / 'style.css', 'w', encoding='utf-8') as f:
+        f.write(css_output)
+    print("✓ style.css rendered")
+    
+    # Copy other static files (JS, images, etc.)
+    for item in STATIC_DIR.iterdir():
+        if item.name != 'css':  # Skip css folder, we rendered it
+            dest = OUTPUT_DIR / 'static' / item.name
+            if item.is_dir():
+                shutil.copytree(item, dest)
+            else:
+                shutil.copy2(item, dest)
+    print("✓ Other static files copied")
     
     # Copy data files
     data_output = OUTPUT_DIR / 'data'
@@ -104,5 +102,4 @@ def build(acquire_images=False):
     print("   Then open: http://localhost:8000")
 
 if __name__ == '__main__':
-    acquire = '--acquire-images' in sys.argv
-    build(acquire_images=acquire)
+    build()

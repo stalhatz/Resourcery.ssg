@@ -8,7 +8,7 @@
 }
 
 body {
-    font-family: var(--font-family);
+    font-family: {{ config.theme.typography.font_family | default("'Inter', -apple-system, BlinkMacSystemFont, sans-serif", true) }};
     background-color: var(--color-background);
     color: var(--color-text);
     line-height: 1.6;
@@ -35,26 +35,27 @@ ul, li {
    CSS VARIABLES
    ============================================ */
 :root {
-    --color-primary: #2563eb;
-    --color-secondary: #64748b;
-    --color-background: #ffffff;
-    --color-surface: #f8fafc;
-    --color-text: #0f172a;
-    --color-text-muted: #64748b;
-    --color-accent: #7c3aed;
-    --color-error: #dc2626;
-    --color-success: #16a34a;
+    /* Colors from site.config.json */
+    --color-primary: {{ config.theme.colors.primary | default('#2563eb', true) }};
+    --color-secondary: {{ config.theme.colors.secondary | default('#64748b', true) }};
+    --color-background: {{ config.theme.colors.background | default('#ffffff', true) }};
+    --color-surface: {{ config.theme.colors.surface | default('#f8fafc', true) }};
+    --color-text: {{ config.theme.colors.text | default('#0f172a', true) }};
+    --color-text-muted: {{ config.theme.colors.text_muted | default('#64748b', true) }};
+    --color-accent: {{ config.theme.colors.accent | default('#7c3aed', true) }};
+    --color-error: {{ config.theme.colors.error | default('#dc2626', true) }};
+    --color-success: {{ config.theme.colors.success | default('#16a34a', true) }};
     
-    --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    --heading-font: 'Poppins', var(--font-family);
+    /* Fonts from site.config.json */
+    --font-family: {{ config.theme.typography.font_family | default("'Inter', -apple-system, BlinkMacSystemFont, sans-serif", true) }};
+    --heading-font: {{ config.theme.typography.heading_font | default("'Poppins', var(--font-family)", true) }};
     
-    --sidebar-width: 280px;
-    --header-height: 80px;
-    --max-width: 1400px;
+    /* Layout */
+    --sidebar-width: {{ config.theme.layout.sidebar_width | default('280px', true) }};
+    --max-width: {{ config.theme.layout.max_width | default('1400px', true) }};
     --border-radius: 8px;
     --shadow: 0 1px 3px rgba(0,0,0,0.1);
     --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
-    
     --transition: all 0.3s ease;
 }
 
@@ -360,7 +361,7 @@ ul, li {
 }
 
 /* ============================================
-   LINKS GRID - COMPACT
+   LINKS GRID
    ============================================ */
 .links-grid {
     display: grid;
@@ -830,8 +831,7 @@ ul, li {
 }
 
 /* ============================================
-   RESPONSIVE: LANDSCAPE (Desktop)
-   Min-width: 1024px
+   RESPONSIVE: DESKTOP (≥1024px)
    ============================================ */
 @media (min-width: 1024px) {
     .sidebar {
@@ -848,8 +848,7 @@ ul, li {
 }
 
 /* ============================================
-   RESPONSIVE: PORTRAIT MOUSE (Tablet)
-   Min-width: 768px, Max-width: 1023px
+   RESPONSIVE: TABLET (768px - 1023px)
    ============================================ */
 @media (min-width: 768px) and (max-width: 1023px) {
     :root {
@@ -898,13 +897,11 @@ ul, li {
 }
 
 /* ============================================
-   RESPONSIVE: PORTRAIT TOUCHSCREEN (Mobile)
-   Max-width: 767px
+   RESPONSIVE: MOBILE (≤767px)
    ============================================ */
 @media (max-width: 767px) {
     :root {
         --sidebar-width: 280px;
-        --header-height: 60px;
     }
     
     .sidebar {

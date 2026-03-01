@@ -145,7 +145,6 @@ document.addEventListener('DOMContentLoaded', function() {
         CategoryHierarchy.init(window.APP_CONFIG);
     }
     
-    applyThemeColors();
     ThemeManager.init();
     SidebarManager.init();
     FilterManager.init();
@@ -160,17 +159,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update results count
     updateResultsCount();
 });
-
-function applyThemeColors() {
-    if (window.APP_CONFIG?.theme?.colors) {
-        var root = document.documentElement;
-        Object.entries(window.APP_CONFIG.theme.colors).forEach(function(entry) {
-            var key = entry[0];
-            var value = entry[1];
-            root.style.setProperty('--color-' + key, value);
-        });
-    }
-}
 
 var ThemeManager = {
     init: function() {
