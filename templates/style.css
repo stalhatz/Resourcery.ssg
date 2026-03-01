@@ -220,66 +220,70 @@ ul, li {
 }
 
 /* ============================================
-   HEADER
+   HEADER - COMPACT
    ============================================ */
 .main-header {
     background-color: var(--color-surface);
-    padding: 2rem;
+    padding: 1rem 1.5rem;
     border-bottom: 1px solid rgba(0,0,0,0.1);
     position: sticky;
     top: 0;
     z-index: 50;
 }
 
-.header-content {
+.header-row {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-    gap: 1rem;
+    justify-content: space-between;
+    gap: 1.5rem;
+    max-width: var(--max-width);
+    margin: 0 auto;
 }
 
-.header-text h1 {
+.header-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.header-title h1 {
     font-family: var(--heading-font);
-    font-size: 2rem;
+    font-size: 1.25rem;
     font-weight: 700;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.15rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .subtitle {
     color: var(--color-text-muted);
-    font-size: 1.1rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.cta-button {
-    background-color: var(--color-primary);
-    color: white;
-    padding: 0.75rem 1.5rem;
-    border-radius: var(--border-radius);
-    font-weight: 600;
-    transition: var(--transition);
-}
-
-.cta-button:hover {
-    background-color: var(--color-secondary);
-    transform: translateY(-2px);
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
 }
 
 .search-container {
     position: relative;
-    max-width: 500px;
-    flex: 1;
+    width: 280px;
+    flex-shrink: 0;
 }
 
 .search-input {
     width: 100%;
-    padding: 0.75rem 1rem 0.75rem 2.5rem;
+    padding: 0.5rem 0.75rem 0.5rem 2.25rem;
     border: 2px solid rgba(0,0,0,0.1);
     border-radius: var(--border-radius);
     background-color: var(--color-background);
     color: var(--color-text);
-    font-size: 1rem;
+    font-size: 0.9rem;
     transition: var(--transition);
 }
 
@@ -290,23 +294,109 @@ ul, li {
 
 .search-icon {
     position: absolute;
-    left: 1rem;
+    left: 0.75rem;
     top: 50%;
     transform: translateY(-50%);
     color: var(--color-text-muted);
+    font-size: 0.9rem;
 }
 
 .theme-toggle {
-    padding: 0.75rem;
+    padding: 0.5rem;
     border-radius: var(--border-radius);
     background: var(--color-background);
     border: 2px solid rgba(0,0,0,0.1);
-    font-size: 1.2rem;
+    font-size: 1.1rem;
+    flex-shrink: 0;
 }
 
 .theme-icon-dark { display: none; }
 [data-theme="dark"] .theme-icon-light { display: none; }
 [data-theme="dark"] .theme-icon-dark { display: inline; }
+
+/* ============================================
+   RESPONSIVE: TABLET (768px - 1023px)
+   ============================================ */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .main-header {
+        padding: 0.75rem 1rem;
+    }
+    
+    .header-row {
+        gap: 1rem;
+    }
+    
+    .header-title h1 {
+        font-size: 1.1rem;
+    }
+    
+    .subtitle {
+        font-size: 0.8rem;
+        display: none; /* Hide subtitle on tablet to save space */
+    }
+    
+    .search-container {
+        width: 220px;
+    }
+}
+
+/* ============================================
+   RESPONSIVE: MOBILE (≤767px)
+   ============================================ */
+@media (max-width: 767px) {
+    .main-header {
+        padding: 0.75rem 1rem;
+    }
+    
+    .header-row {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    
+    .header-title {
+        width: 100%;
+        order: 1;
+    }
+    
+    .header-title h1 {
+        font-size: 1rem;
+        margin-bottom: 0.1rem;
+    }
+    
+    .subtitle {
+        font-size: 0.75rem;
+        display: none; /* Hide subtitle on mobile */
+    }
+    
+    .header-actions {
+        width: 100%;
+        order: 2;
+        justify-content: space-between;
+    }
+    
+    .search-container {
+        flex: 1;
+        min-width: 0;
+        width: auto;
+    }
+    
+    .search-input {
+        padding: 0.4rem 0.6rem 0.4rem 2rem;
+        font-size: 0.85rem;
+    }
+    
+    .search-icon {
+        left: 0.6rem;
+        font-size: 0.85rem;
+    }
+    
+    .theme-toggle {
+        padding: 0.4rem;
+        font-size: 1rem;
+        min-width: 44px;
+        min-height: 44px;
+    }
+}
 
 /* ============================================
    FILTER BAR

@@ -10,7 +10,6 @@
     <link rel="icon" href="{{ config.site_info.favicon }}">
     {% endif %}
     
-    <!-- Templated CSS -->
     <link rel="stylesheet" href="static/css/style.css?v={{ links.site_meta.version }}">
 </head>
 <body>
@@ -77,37 +76,34 @@
         
         <main class="main-content">
             <header class="main-header">
-                <div class="header-content">
-                    <div class="header-text">
+                <div class="header-row">
+                    <div class="header-title">
                         <h1>{{ config.content.header.title }}</h1>
                         {% if config.content.header.subtitle %}
                         <p class="subtitle">{{ config.content.header.subtitle }}</p>
                         {% endif %}
                     </div>
-                    {% if config.content.header.cta_button %}
-                    <a href="{{ config.content.header.cta_link }}" class="cta-button">
-                        {{ config.content.header.cta_button }}
-                    </a>
-                    {% endif %}
+                    
+                    <div class="header-actions">
+                        {% if config.features.search.enabled %}
+                        <div class="search-container">
+                            <input type="text" 
+                                   id="searchInput" 
+                                   class="search-input"
+                                   placeholder="{{ config.content.placeholders.search_bar }}"
+                                   aria-label="Search">
+                            <span class="search-icon">🔍</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if config.features.dark_mode.enabled %}
+                        <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                            <span class="theme-icon-light">☀️</span>
+                            <span class="theme-icon-dark">🌙</span>
+                        </button>
+                        {% endif %}
+                    </div>
                 </div>
-                
-                {% if config.features.search.enabled %}
-                <div class="search-container">
-                    <input type="text" 
-                           id="searchInput" 
-                           class="search-input"
-                           placeholder="{{ config.content.placeholders.search_bar }}"
-                           aria-label="Search">
-                    <span class="search-icon">🔍</span>
-                </div>
-                {% endif %}
-                
-                {% if config.features.dark_mode.enabled %}
-                <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
-                    <span class="theme-icon-light">☀️</span>
-                    <span class="theme-icon-dark">🌙</span>
-                </button>
-                {% endif %}
             </header>
             
             <div class="content-wrapper">
