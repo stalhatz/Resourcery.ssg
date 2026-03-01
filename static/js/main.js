@@ -177,12 +177,13 @@ var ThemeManager = {
     }
 };
 
-var SidebarManager = {
+const SidebarManager = {
     init: function() {
         var toggle = document.getElementById('sidebarToggle');
         var sidebar = document.getElementById('sidebar');
         if (!toggle || !sidebar) return;
         
+        // Create overlay
         var overlay = document.createElement('div');
         overlay.className = 'sidebar-overlay';
         document.body.appendChild(overlay);
@@ -195,6 +196,24 @@ var SidebarManager = {
         overlay.addEventListener('click', function() {
             sidebar.classList.remove('active');
             overlay.classList.remove('active');
+        });
+        
+        // Category collapsible behavior (visual only)
+        var categoryTriggers = document.querySelectorAll('.category-trigger');
+        
+        categoryTriggers.forEach(function(trigger) {
+            trigger.addEventListener('click', function() {
+                var isExpanded = trigger.getAttribute('aria-expanded') === 'true';
+                var subcategoryList = document.getElementById(
+                    trigger.getAttribute('aria-controls')
+                );
+                
+                trigger.setAttribute('aria-expanded', !isExpanded);
+                
+                if (subcategoryList) {
+                    subcategoryList.classList.toggle('expanded', !isExpanded);
+                }
+            });
         });
     }
 };
@@ -224,19 +243,104 @@ const FilterManager = {
             this.createDropdown(sortTrigger, sortFilter, sortValue, 'sort');
         }
         
-        // Sidebar category links
-        var sidebarLinks = document.querySelectorAll('.category-link, .subcategory-link');
+        // Sidebar category triggers (parent categories)
+        var categoryTriggers = document.querySelectorAll('.category-trigger');
         
-        sidebarLinks.forEach(function(link) {
+        categoryTriggers.forEach(function(trigger) {
+            trigger.addEventListener('click', function() {
+                var categoryId = trigger.dataset.categoryId;
+                
+                console.log('🖱️ Category trigger clicked:', categoryId);
+                
+                var dropdown = document.getElementById('categoryFilter');
+                var categoryValueEl = document.getElementById('categoryValue');
+                
+                if (categoryId && dropdown) {
+                    dropdown.value = categoryId;
+                    
+                    if (categoryValueEl) {
+                        var option = Array.from(dropdown.options).find(function(opt) {
+                            return opt.value === categoryId;
+                        });
+                        
+                        if (option) {
+                            categoryValueEl.textContent = option.textContent;
+                        } else {
+                            var nameEl = trigger.querySelector('.category-name');
+                            if (nameEl) {
+                                categoryValueEl.textContent = nameEl.textContent.trim();
+                            }
+                        }
+                    }
+                    
+                    window.location.hash = 'category-' + categoryId;
+                    filterCards();
+                }
+                
+                // Highlight active category
+                document.querySelectorAll('.category-trigger').forEach(function(t) {
+                    t.classList.remove('active');
+                });
+                trigger.classList.add('active');
+                
+                // Clear subcategory highlights
+                document.querySelectorAll('.subcategory-link').forEach(function(l) {
+                    l.classList.remove('active');
+                });
+            });
+        });
+        
+        // Sidebar subcategory links
+        var subcategoryLinks = document.querySelectorAll('.subcategory-link');
+        
+        subcategoryLinks.forEach(function(link) {
             link.addEventListener('click', function(e) {
                 e.preventDefault();
                 var category = link.dataset.category;
                 
-                if (category && categoryFilter) {
-                    categoryFilter.value = category;
-                    categoryValue.textContent = link.querySelector('.category-label').textContent;
+                console.log('🖱️ Subcategory clicked:', category);
+                
+                var dropdown = document.getElementById('categoryFilter');
+                if (category && dropdown) {
+                    dropdown.value = category;
+                    
+                    var categoryValueEl = document.getElementById('categoryValue');
+                    if (categoryValueEl) {
+                        var option = Array.from(dropdown.options).find(function(opt) {
+                            return opt.value === category;
+                        });
+                        
+                        if (option) {
+                            categoryValueEl.textContent = option.textContent;
+                        } else {
+                            var nameEl = link.querySelector('.subcategory-name');
+                            if (nameEl) {
+                                categoryValueEl.textContent = nameEl.textContent.trim();
+                            }
+                        }
+                    }
+                    
                     window.location.hash = 'category-' + category;
                     filterCards();
+                }
+                
+                // Highlight active subcategory
+                document.querySelectorAll('.subcategory-link').forEach(function(l) {
+                    l.classList.remove('active');
+                });
+                link.classList.add('active');
+                
+                // Clear category highlights
+                document.querySelectorAll('.category-trigger').forEach(function(t) {
+                    t.classList.remove('active');
+                });
+                
+                // Close mobile sidebar
+                var sidebar = document.getElementById('sidebar');
+                var overlay = document.querySelector('.sidebar-overlay');
+                if (window.innerWidth <= 1023) {
+                    sidebar.classList.remove('active');
+                    overlay.classList.remove('active');
                 }
             });
         });
@@ -434,6 +538,7 @@ function sortCards() {
     });
 }
 
+// After hash change, mark active subcategory
 function handleHashChange() {
     var hash = window.location.hash;
     
@@ -445,13 +550,51 @@ function handleHashChange() {
         if (categoryFilter && categoryValue) {
             categoryFilter.value = category;
             
-            // Find the label for this category
             var option = Array.from(categoryFilter.options).find(function(opt) {
                 return opt.value === category;
             });
             
             if (option) {
                 categoryValue.textContent = option.textContent;
+            }
+            
+            // Highlight in sidebar - try subcategory first
+            var foundSubcategory = false;
+            document.querySelectorAll('.subcategory-link').forEach(function(link) {
+                link.classList.remove('active');
+                if (link.dataset.category === category) {
+                    link.classList.add('active');
+                    foundSubcategory = true;
+                    
+                    // Auto-expand parent
+                    var parentList = link.closest('.subcategory-list');
+                    if (parentList) {
+                        parentList.classList.add('expanded');
+                        var trigger = document.querySelector(
+                            '[aria-controls="' + parentList.id + '"]'
+                        );
+                        if (trigger) {
+                            trigger.setAttribute('aria-expanded', 'true');
+                        }
+                    }
+                }
+            });
+            
+            // If no subcategory matched, highlight parent category
+            if (!foundSubcategory) {
+                document.querySelectorAll('.category-trigger').forEach(function(trigger) {
+                    trigger.classList.remove('active');
+                    if (trigger.dataset.categoryId === category) {
+                        trigger.classList.add('active');
+                        trigger.setAttribute('aria-expanded', 'true');
+                        var subcategoryList = document.getElementById(
+                            trigger.getAttribute('aria-controls')
+                        );
+                        if (subcategoryList) {
+                            subcategoryList.classList.add('expanded');
+                        }
+                    }
+                });
             }
             
             filterCards();

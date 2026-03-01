@@ -30,27 +30,24 @@
                 <ul class="category-list">
                     {% for category in config.navigation.categories %}
                     <li class="category-item">
-                        <a href="#category-{{ category.id }}" 
-                           class="category-link" 
-                           data-category="{{ category.id }}"
-                           data-children="{{ category.children | map(attribute='id') | join(',') if category.children else '' }}">
-                            {% if category.icon %}
-                            <span class="category-icon">{{ category.icon }}</span>
-                            {% endif %}
-                            <span class="category-label">{{ category.label }}</span>
-                        </a>
+                        <button class="category-trigger" 
+                                data-category-id="{{ category.id }}"
+                                aria-expanded="false"
+                                aria-controls="subcategory-{{ category.id }}">
+                            <span class="category-name">{{ category.label }}</span>
+                            <span class="category-chevron">▾</span>
+                        </button>
+                        
                         {% if category.children %}
-                        <ul class="subcategory-list">
+                        <ul class="subcategory-list" id="subcategory-{{ category.id }}">
                             {% for child in category.children %}
                             <li>
                                 <a href="#category-{{ child.id }}" 
-                                   class="subcategory-link" 
-                                   data-category="{{ child.id }}"
-                                   data-parent="{{ category.id }}">
-                                    {% if child.icon %}
-                                    <span class="category-icon">{{ child.icon }}</span>
-                                    {% endif %}
-                                    <span class="category-label">{{ child.label }}</span>
+                                class="subcategory-link" 
+                                data-category="{{ child.id }}"
+                                data-parent="{{ category.id }}">
+                                    <span class="subcategory-line"></span>
+                                    <span class="subcategory-name">{{ child.label }}</span>
                                 </a>
                             </li>
                             {% endfor %}
@@ -65,8 +62,8 @@
             <div class="sidebar-footer">
                 {% for link in config.navigation.menu_links %}
                 <a href="{{ link.url }}" 
-                   class="menu-link"
-                   {% if link.open_new_tab %}target="_blank" rel="noopener"{% endif %}>
+                class="menu-link"
+                {% if link.open_new_tab %}target="_blank" rel="noopener"{% endif %}>
                     {{ link.label }}
                 </a>
                 {% endfor %}
