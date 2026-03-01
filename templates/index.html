@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="links-container" id="linksContainer">
+    <div class="filter-bar" id="filterBar">
+        <div class="filter-group">
+            <label for="categoryFilter">Category:</label>
+            <select id="categoryFilter" class="filter-select">
+                <option value="">All Categories</option>
+                {% for category in config.navigation.categories %}
+                <option value="{{ category.id }}">{{ category.label }}</option>
+                {% for child in category.children %}
+                <option value="{{ child.id }}">  └ {{ child.label }}</option>
+                {% endfor %}
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label for="sortFilter">Sort:</label>
+            <select id="sortFilter" class="filter-select">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="alphabetical">Alphabetical</option>
+            </select>
+        </div>
+        
+        <div class="view-toggle">
+            <button class="view-btn active" data-view="grid" aria-label="Grid view">⊞</button>
+            <button class="view-btn" data-view="list" aria-label="List view">☰</button>
+        </div>
+    </div>
+    
+    <div class="links-grid" id="linksGrid">
+        {% for link in links.links %}
+        {% if link.status == 'active' %}
+        <article class="link-card" 
+                 data-id="{{ link.id }}"
+                 data-category="{{ link.category }}"
+                 data-tags="{{ link.tags | join(',') }}"
+                 data-created="{{ link.created_at }}">
+            
+            <div class="card-image">
+                {% if link.image %}
+                <img src="{{ link.image }}" 
+                     alt="{{ link.title }}"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                {% else %}
+                <div class="image-placeholder">
+                    <span>🔗</span>
+                </div>
+                {% endif %}
+                {% if link.featured %}
+                <span class="featured-badge">Featured</span>
+                {% endif %}
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">{{ link.title }}</h3>
+                <p class="card-summary">{{ link.summary }}</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">{{ link.category }}</span>
+                    {% if link.pricing %}
+                    <span class="card-pricing pricing-{{ link.pricing }}">{{ link.pricing }}</span>
+                    {% endif %}
+                </div>
+                
+                <div class="card-tags">
+                    {% for tag in link.tags %}
+                    <span class="tag" data-tag="{{ tag }}">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="{{ link.url }}" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="{{ config.content.tooltips.visit_site }}">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="{{ link.url }}"
+                        title="{{ config.content.tooltips.copy_link }}">
+                    📋
+                </button>
+            </div>
+        </article>
+        {% endif %}
+        {% endfor %}
+    </div>
+    
+    <div class="no-results" id="noResults" style="display: none;">
+        <p>{{ config.content.errors.no_results }}</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const sortFilter = document.getElementById('sortFilter');
+    const linksGrid = document.getElementById('linksGrid');
+    const noResults = document.getElementById('noResults');
+    const viewBtns = document.querySelectorAll('.view-btn');
+    
+    let currentView = 'grid';
+    
+    // Search functionality
+    if (searchInput) {
+        searchInput.addEventListener('input', debounce(filterLinks, 300));
+    }
+    
+    // Category filter
+    if (categoryFilter) {
+        categoryFilter.addEventListener('change', filterLinks);
+    }
+    
+    // Sort filter
+    if (sortFilter) {
+        sortFilter.addEventListener('change', filterLinks);
+    }
+    
+    // View toggle
+    viewBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            viewBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentView = btn.dataset.view;
+            linksGrid.className = `links-grid view-${currentView}`;
+        });
+    });
+    
+    // Tag filtering
+    document.querySelectorAll('.tag').forEach(tag => {
+        tag.addEventListener('click', () => {
+            searchInput.value = tag.dataset.tag;
+            filterLinks();
+        });
+    });
+    
+    // Copy link functionality
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+                await navigator.clipboard.writeText(btn.dataset.url);
+                btn.textContent = '✓';
+                setTimeout(() => btn.textContent = '📋', 2000);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+        });
+    });
+    
+    function filterLinks() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const category = categoryFilter.value;
+        const cards = document.querySelectorAll('.link-card');
+        let visibleCount = 0;
+        
+        cards.forEach(card => {
+            const title = card.querySelector('.card-title').textContent.toLowerCase();
+            const summary = card.querySelector('.card-summary').textContent.toLowerCase();
+            const tags = card.dataset.tags.toLowerCase();
+            const cardCategory = card.dataset.category;
+            
+            const matchesSearch = !searchTerm || 
+                                  title.includes(searchTerm) || 
+                                  summary.includes(searchTerm) || 
+                                  tags.includes(searchTerm);
+            
+            const matchesCategory = !category || cardCategory === category;
+            
+            if (matchesSearch && matchesCategory) {
+                card.style.display = '';
+                visibleCount++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+        
+        noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+    }
+    
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+});
+</script>
+{% endblock %}

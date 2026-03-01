@@ -1,0 +1,191 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Static Site Configuration",
+  "description": "Configuration for theme, layout, content, and navigation",
+  "type": "object",
+  "required": ["site_info", "theme", "navigation", "content"],
+  "properties": {
+    "site_info": {
+      "type": "object",
+      "required": ["name", "url"],
+      "properties": {
+        "name": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "logo": { "type": "string" },
+        "favicon": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "theme": {
+      "type": "object",
+      "required": ["colors", "layout"],
+      "properties": {
+        "colors": {
+          "type": "object",
+          "required": ["primary", "background", "text"],
+          "properties": {
+            "primary": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "secondary": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "background": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "surface": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "text": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "text_muted": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "error": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "success": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+          }
+        },
+        "typography": {
+          "type": "object",
+          "properties": {
+            "font_family": { "type": "string" },
+            "font_size_base": { "type": "string" },
+            "heading_font": { "type": "string" }
+          }
+        },
+        "layout": {
+          "type": "object",
+          "properties": {
+            "view_mode": { "type": "string", "enum": ["grid", "list", "masonry"] },
+            "items_per_page": { "type": "integer", "minimum": 1 },
+            "sidebar_enabled": { "type": "boolean", "default": true },
+            "max_width": { "type": "string" }
+          }
+        }
+      }
+    },
+    "navigation": {
+      "type": "object",
+      "required": ["categories"],
+      "properties": {
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "label"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+              "label": { "type": "string" },
+              "icon": { "type": "string" },
+              "children": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["id", "label"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "label": { "type": "string" },
+                    "icon": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "menu_links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "url"],
+            "properties": {
+              "label": { "type": "string" },
+              "url": { "type": "string" },
+              "open_new_tab": { "type": "boolean", "default": false }
+            }
+          }
+        }
+      }
+    },
+    "content": {
+      "type": "object",
+      "required": ["header", "footer", "errors", "placeholders"],
+      "properties": {
+        "header": {
+          "type": "object",
+          "properties": {
+            "title": { "type": "string" },
+            "subtitle": { "type": "string" },
+            "cta_button": { "type": "string" },
+            "cta_link": { "type": "string" }
+          }
+        },
+        "footer": {
+          "type": "object",
+          "properties": {
+            "copyright": { "type": "string" },
+            "text": { "type": "string" },
+            "links": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": { "type": "string" },
+                  "url": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "errors": {
+          "type": "object",
+          "properties": {
+            "404": { "type": "string" },
+            "no_results": { "type": "string" },
+            "load_failed": { "type": "string" }
+          }
+        },
+        "placeholders": {
+          "type": "object",
+          "properties": {
+            "search_bar": { "type": "string" },
+            "default_image_alt": { "type": "string" },
+            "image_error_text": { "type": "string" }
+          }
+        },
+        "tooltips": {
+          "type": "object",
+          "properties": {
+            "copy_link": { "type": "string" },
+            "visit_site": { "type": "string" },
+            "filter_by_tag": { "type": "string" }
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "properties": {
+        "search": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "min_chars": { "type": "integer", "default": 2 }
+          }
+        },
+        "dark_mode": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "default": { "type": "string", "enum": ["light", "dark", "system"] }
+          }
+        },
+        "analytics": {
+          "type": "object",
+          "properties": {
+            "provider": { "type": "string" },
+            "id": { "type": "string" }
+          }
+        },
+        "social_share": { "type": "boolean", "default": true }
+      }
+    },
+    "social": {
+      "type": "object",
+      "properties": {
+        "twitter": { "type": "string", "format": "uri" },
+        "github": { "type": "string", "format": "uri" },
+        "email": { "type": "string", "format": "email" }
+      }
+    }
+  }
+}

@@ -1,0 +1,1513 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Curated resources for computer vision researchers, practitioners, and enthusiasts.">
+    <title>CV Research Hub</title>
+    
+    
+    <link rel="icon" href="/static/images/favicon.ico">
+    
+    
+    <link rel="stylesheet" href="static/css/style.css">
+    
+    
+    <style>
+        :root {
+            --font-family: &#39;Inter&#39;, -apple-system, BlinkMacSystemFont, sans-serif;
+            
+            --heading-font: &#39;Poppins&#39;, sans-serif;
+            
+        }
+    </style>
+    
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                
+                <img src="/static/images/logo.svg" alt="CV Research Hub" class="logo">
+                
+                <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+                    <span class="hamburger"></span>
+                </button>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <ul class="category-list">
+                    
+                    <li class="category-item">
+                        <a href="#category-publications" 
+                           class="category-link" 
+                           data-category="publications"
+                           data-children="papers,books,articles,patents">
+                            
+                            <span class="category-icon">📄</span>
+                            
+                            <span class="category-label">Publications</span>
+                        </a>
+                        
+                        <ul class="subcategory-list">
+                            
+                            <li>
+                                <a href="#category-papers" 
+                                   class="subcategory-link" 
+                                   data-category="papers"
+                                   data-parent="publications">
+                                    
+                                    <span class="category-icon">📝</span>
+                                    
+                                    <span>Papers</span>
+                                </a>
+                            </li>
+                            
+                            <li>
+                                <a href="#category-books" 
+                                   class="subcategory-link" 
+                                   data-category="books"
+                                   data-parent="publications">
+                                    
+                                    <span class="category-icon">📚</span>
+                                    
+                                    <span>Books</span>
+                                </a>
+                            </li>
+                            
+                            <li>
+                                <a href="#category-articles" 
+                                   class="subcategory-link" 
+                                   data-category="articles"
+                                   data-parent="publications">
+                                    
+                                    <span class="category-icon">📰</span>
+                                    
+                                    <span>Articles</span>
+                                </a>
+                            </li>
+                            
+                            <li>
+                                <a href="#category-patents" 
+                                   class="subcategory-link" 
+                                   data-category="patents"
+                                   data-parent="publications">
+                                    
+                                    <span class="category-icon">ℹ️</span>
+                                    
+                                    <span>Patents</span>
+                                </a>
+                            </li>
+                            
+                        </ul>
+                        
+                    </li>
+                    
+                    <li class="category-item">
+                        <a href="#category-people" 
+                           class="category-link" 
+                           data-category="people"
+                           data-children="researchers">
+                            
+                            <span class="category-icon">👤</span>
+                            
+                            <span class="category-label">People</span>
+                        </a>
+                        
+                        <ul class="subcategory-list">
+                            
+                            <li>
+                                <a href="#category-researchers" 
+                                   class="subcategory-link" 
+                                   data-category="researchers"
+                                   data-parent="people">
+                                    
+                                    <span class="category-icon">🔬</span>
+                                    
+                                    <span>Researchers</span>
+                                </a>
+                            </li>
+                            
+                        </ul>
+                        
+                    </li>
+                    
+                    <li class="category-item">
+                        <a href="#category-organizations" 
+                           class="category-link" 
+                           data-category="organizations"
+                           data-children="labs,universities,companies">
+                            
+                            <span class="category-icon">🏢</span>
+                            
+                            <span class="category-label">Organizations</span>
+                        </a>
+                        
+                        <ul class="subcategory-list">
+                            
+                            <li>
+                                <a href="#category-labs" 
+                                   class="subcategory-link" 
+                                   data-category="labs"
+                                   data-parent="organizations">
+                                    
+                                    <span class="category-icon">🧪</span>
+                                    
+                                    <span>Research Labs</span>
+                                </a>
+                            </li>
+                            
+                            <li>
+                                <a href="#category-universities" 
+                                   class="subcategory-link" 
+                                   data-category="universities"
+                                   data-parent="organizations">
+                                    
+                                    <span class="category-icon">🎓</span>
+                                    
+                                    <span>Universities</span>
+                                </a>
+                            </li>
+                            
+                            <li>
+                                <a href="#category-companies" 
+                                   class="subcategory-link" 
+                                   data-category="companies"
+                                   data-parent="organizations">
+                                    
+                                    <span class="category-icon">💼</span>
+                                    
+                                    <span>Companies</span>
+                                </a>
+                            </li>
+                            
+                        </ul>
+                        
+                    </li>
+                    
+                    <li class="category-item">
+                        <a href="#category-resources" 
+                           class="category-link" 
+                           data-category="resources"
+                           data-children="datasets,tools,courses">
+                            
+                            <span class="category-icon">🛠️</span>
+                            
+                            <span class="category-label">Resources</span>
+                        </a>
+                        
+                        <ul class="subcategory-list">
+                            
+                            <li>
+                                <a href="#category-datasets" 
+                                   class="subcategory-link" 
+                                   data-category="datasets"
+                                   data-parent="resources">
+                                    
+                                    <span class="category-icon">📊</span>
+                                    
+                                    <span>Datasets</span>
+                                </a>
+                            </li>
+                            
+                            <li>
+                                <a href="#category-tools" 
+                                   class="subcategory-link" 
+                                   data-category="tools"
+                                   data-parent="resources">
+                                    
+                                    <span class="category-icon">⚙️</span>
+                                    
+                                    <span>Tools &amp; Libraries</span>
+                                </a>
+                            </li>
+                            
+                            <li>
+                                <a href="#category-courses" 
+                                   class="subcategory-link" 
+                                   data-category="courses"
+                                   data-parent="resources">
+                                    
+                                    <span class="category-icon">🎓</span>
+                                    
+                                    <span>Courses</span>
+                                </a>
+                            </li>
+                            
+                        </ul>
+                        
+                    </li>
+                    
+                </ul>
+            </nav>
+            
+            
+            <div class="sidebar-footer">
+                
+                <a href="mailto:submit@cvresearch.example.com" 
+                   class="menu-link"
+                   >
+                    Submit Resource
+                </a>
+                
+                <a href="https://github.com" 
+                   class="menu-link"
+                   target="_blank" rel="noopener">
+                    GitHub
+                </a>
+                
+                <a href="/about.html" 
+                   class="menu-link"
+                   >
+                    About
+                </a>
+                
+            </div>
+            
+        </aside>
+        
+        <main class="main-content">
+            <header class="main-header">
+                <div class="header-content">
+                    <div class="header-text">
+                        <h1>Computer Vision Research Hub</h1>
+                        
+                        <p class="subtitle">Discover papers, tools, datasets, and researchers shaping the future of visual intelligence.</p>
+                        
+                    </div>
+                    
+                    <a href="mailto:submit@cvresearch.example.com" class="cta-button">
+                        Suggest a Resource
+                    </a>
+                    
+                </div>
+                
+                
+                <div class="search-container">
+                    <input type="text" 
+                           id="searchInput" 
+                           class="search-input"
+                           placeholder="Search papers, tools, researchers, or tags..."
+                           aria-label="Search">
+                    <span class="search-icon">🔍</span>
+                </div>
+                
+                
+                
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                    <span class="theme-icon-light">☀️</span>
+                    <span class="theme-icon-dark">🌙</span>
+                </button>
+                
+            </header>
+            
+            <div class="content-wrapper">
+                
+<div class="links-container" id="linksContainer">
+    <div class="filter-bar" id="filterBar">
+        <div class="filter-group">
+            <label for="categoryFilter">Category:</label>
+            <select id="categoryFilter" class="filter-select">
+                <option value="">All Categories</option>
+                
+                <option value="publications">Publications</option>
+                
+                <option value="papers">  └ Papers</option>
+                
+                <option value="books">  └ Books</option>
+                
+                <option value="articles">  └ Articles</option>
+                
+                <option value="patents">  └ Patents</option>
+                
+                
+                <option value="people">People</option>
+                
+                <option value="researchers">  └ Researchers</option>
+                
+                
+                <option value="organizations">Organizations</option>
+                
+                <option value="labs">  └ Research Labs</option>
+                
+                <option value="universities">  └ Universities</option>
+                
+                <option value="companies">  └ Companies</option>
+                
+                
+                <option value="resources">Resources</option>
+                
+                <option value="datasets">  └ Datasets</option>
+                
+                <option value="tools">  └ Tools &amp; Libraries</option>
+                
+                <option value="courses">  └ Courses</option>
+                
+                
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label for="sortFilter">Sort:</label>
+            <select id="sortFilter" class="filter-select">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="alphabetical">Alphabetical</option>
+            </select>
+        </div>
+        
+        <div class="view-toggle">
+            <button class="view-btn active" data-view="grid" aria-label="Grid view">⊞</button>
+            <button class="view-btn" data-view="list" aria-label="List view">☰</button>
+        </div>
+    </div>
+    
+    <div class="links-grid" id="linksGrid">
+        
+        
+        <article class="link-card" 
+                 data-id="attention-is-all-you-need"
+                 data-category="papers"
+                 data-tags="transformer,attention,deep-learning,foundational"
+                 data-created="2017-06-12T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/papers/transformer.png" 
+                     alt="Attention Is All You Need"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+                <span class="featured-badge">Featured</span>
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">Attention Is All You Need</h3>
+                <p class="card-summary">Seminal paper introducing the Transformer architecture.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">papers</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="transformer">transformer</span>
+                    
+                    <span class="tag" data-tag="attention">attention</span>
+                    
+                    <span class="tag" data-tag="deep-learning">deep-learning</span>
+                    
+                    <span class="tag" data-tag="foundational">foundational</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://arxiv.org/abs/1706.03762" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://arxiv.org/abs/1706.03762"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="deep-learning-book"
+                 data-category="books"
+                 data-tags="textbook,deep-learning,foundational,theory"
+                 data-created="2016-11-10T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/books/deeplearning-book.jpg" 
+                     alt="Deep Learning Book"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+                <span class="featured-badge">Featured</span>
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">Deep Learning Book</h3>
+                <p class="card-summary">Comprehensive textbook by Ian Goodfellow, Yoshua Bengio, and Aaron Courville.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">books</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="textbook">textbook</span>
+                    
+                    <span class="tag" data-tag="deep-learning">deep-learning</span>
+                    
+                    <span class="tag" data-tag="foundational">foundational</span>
+                    
+                    <span class="tag" data-tag="theory">theory</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://www.deeplearningbook.org/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://www.deeplearningbook.org/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="pytorch"
+                 data-category="tools"
+                 data-tags="framework,python,deep-learning,gpu"
+                 data-created="2016-09-01T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/tools/pytorch.png" 
+                     alt="PyTorch"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+                <span class="featured-badge">Featured</span>
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">PyTorch</h3>
+                <p class="card-summary">Open source machine learning framework for Python.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">tools</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="framework">framework</span>
+                    
+                    <span class="tag" data-tag="python">python</span>
+                    
+                    <span class="tag" data-tag="deep-learning">deep-learning</span>
+                    
+                    <span class="tag" data-tag="gpu">gpu</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://pytorch.org/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://pytorch.org/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="imagenet"
+                 data-category="datasets"
+                 data-tags="dataset,classification,benchmark,images"
+                 data-created="2009-06-01T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/datasets/imagenet.jpg" 
+                     alt="ImageNet Dataset"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+                <span class="featured-badge">Featured</span>
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">ImageNet Dataset</h3>
+                <p class="card-summary">Large-scale visual recognition dataset with 14M+ images.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">datasets</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="dataset">dataset</span>
+                    
+                    <span class="tag" data-tag="classification">classification</span>
+                    
+                    <span class="tag" data-tag="benchmark">benchmark</span>
+                    
+                    <span class="tag" data-tag="images">images</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://www.image-net.org/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://www.image-net.org/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="yolov8"
+                 data-category="tools"
+                 data-tags="object-detection,real-time,yolo,production"
+                 data-created="2023-01-10T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/tools/yolov8.png" 
+                     alt="YOLOv8 by Ultralytics"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+                <span class="featured-badge">Featured</span>
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">YOLOv8 by Ultralytics</h3>
+                <p class="card-summary">State-of-the-art real-time object detection model.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">tools</span>
+                    
+                    <span class="card-pricing pricing-freemium">freemium</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="object-detection">object-detection</span>
+                    
+                    <span class="tag" data-tag="real-time">real-time</span>
+                    
+                    <span class="tag" data-tag="yolo">yolo</span>
+                    
+                    <span class="tag" data-tag="production">production</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://github.com/ultralytics/ultralytics" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://github.com/ultralytics/ultralytics"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="feifei-li"
+                 data-category="researchers"
+                 data-tags="stanford,imagenet,ethics,leadership"
+                 data-created="2020-03-15T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/people/feifei-li.jpg" 
+                     alt="Fei-Fei Li"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+                <span class="featured-badge">Featured</span>
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">Fei-Fei Li</h3>
+                <p class="card-summary">Professor at Stanford, co-director of Human-Centered AI Institute.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">researchers</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="stanford">stanford</span>
+                    
+                    <span class="tag" data-tag="imagenet">imagenet</span>
+                    
+                    <span class="tag" data-tag="ethics">ethics</span>
+                    
+                    <span class="tag" data-tag="leadership">leadership</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://profiles.stanford.edu/fei-fei-li" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://profiles.stanford.edu/fei-fei-li"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="mit-csail"
+                 data-category="labs"
+                 data-tags="mit,research-lab,robotics,vision"
+                 data-created="2019-08-20T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/labs/mit-csail.png" 
+                     alt="MIT CSAIL"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">MIT CSAIL</h3>
+                <p class="card-summary">MIT Computer Science and Artificial Intelligence Laboratory.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">labs</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="mit">mit</span>
+                    
+                    <span class="tag" data-tag="research-lab">research-lab</span>
+                    
+                    <span class="tag" data-tag="robotics">robotics</span>
+                    
+                    <span class="tag" data-tag="vision">vision</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://www.csail.mit.edu/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://www.csail.mit.edu/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="stanford-vision-lab"
+                 data-category="labs"
+                 data-tags="stanford,research-lab,imagenet,deep-learning"
+                 data-created="2018-05-10T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/labs/stanford-vision.png" 
+                     alt="Stanford Vision Lab"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+                <span class="featured-badge">Featured</span>
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">Stanford Vision Lab</h3>
+                <p class="card-summary">Leading computer vision research group at Stanford University.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">labs</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="stanford">stanford</span>
+                    
+                    <span class="tag" data-tag="research-lab">research-lab</span>
+                    
+                    <span class="tag" data-tag="imagenet">imagenet</span>
+                    
+                    <span class="tag" data-tag="deep-learning">deep-learning</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="http://vision.stanford.edu/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="http://vision.stanford.edu/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="cmu"
+                 data-category="universities"
+                 data-tags="cmu,education,research,phd-program"
+                 data-created="2019-01-05T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/universities/cmu.jpg" 
+                     alt="Carnegie Mellon University"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">Carnegie Mellon University</h3>
+                <p class="card-summary">Top-tier university with renowned computer vision program.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">universities</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="cmu">cmu</span>
+                    
+                    <span class="tag" data-tag="education">education</span>
+                    
+                    <span class="tag" data-tag="research">research</span>
+                    
+                    <span class="tag" data-tag="phd-program">phd-program</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://www.cmu.edu/computing/vision/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://www.cmu.edu/computing/vision/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="openai"
+                 data-category="companies"
+                 data-tags="openai,research,clip,multimodal"
+                 data-created="2020-06-15T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/companies/openai.png" 
+                     alt="OpenAI"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+                <span class="featured-badge">Featured</span>
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">OpenAI</h3>
+                <p class="card-summary">AI research company focused on safe AGI development.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">companies</span>
+                    
+                    <span class="card-pricing pricing-freemium">freemium</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="openai">openai</span>
+                    
+                    <span class="tag" data-tag="research">research</span>
+                    
+                    <span class="tag" data-tag="clip">clip</span>
+                    
+                    <span class="tag" data-tag="multimodal">multimodal</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://openai.com/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://openai.com/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="google-deepmind"
+                 data-category="companies"
+                 data-tags="google,deepmind,research,agi"
+                 data-created="2021-02-20T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/companies/deepmind.png" 
+                     alt="Google DeepMind"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+                <span class="featured-badge">Featured</span>
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">Google DeepMind</h3>
+                <p class="card-summary">AI research lab combining Google Brain and DeepMind.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">companies</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="google">google</span>
+                    
+                    <span class="tag" data-tag="deepmind">deepmind</span>
+                    
+                    <span class="tag" data-tag="research">research</span>
+                    
+                    <span class="tag" data-tag="agi">agi</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://deepmind.google/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://deepmind.google/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="coco-dataset"
+                 data-category="datasets"
+                 data-tags="dataset,object-detection,segmentation,benchmark"
+                 data-created="2014-04-01T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/datasets/coco.jpg" 
+                     alt="COCO Dataset"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">COCO Dataset</h3>
+                <p class="card-summary">Common Objects in Context - image recognition dataset.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">datasets</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="dataset">dataset</span>
+                    
+                    <span class="tag" data-tag="object-detection">object-detection</span>
+                    
+                    <span class="tag" data-tag="segmentation">segmentation</span>
+                    
+                    <span class="tag" data-tag="benchmark">benchmark</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://cocodataset.org/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://cocodataset.org/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="opencv"
+                 data-category="tools"
+                 data-tags="library,cpp,python,real-time"
+                 data-created="2000-01-01T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/tools/opencv.png" 
+                     alt="OpenCV"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">OpenCV</h3>
+                <p class="card-summary">Open source computer vision and machine learning library.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">tools</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="library">library</span>
+                    
+                    <span class="tag" data-tag="cpp">cpp</span>
+                    
+                    <span class="tag" data-tag="python">python</span>
+                    
+                    <span class="tag" data-tag="real-time">real-time</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://opencv.org/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://opencv.org/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="cs231n"
+                 data-category="courses"
+                 data-tags="course,stanford,cnn,education"
+                 data-created="2015-01-10T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/courses/cs231n.jpg" 
+                     alt="CS231n: CNN for Visual Recognition"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+                <span class="featured-badge">Featured</span>
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">CS231n: CNN for Visual Recognition</h3>
+                <p class="card-summary">Stanford&#39;s famous computer vision course.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">courses</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="course">course</span>
+                    
+                    <span class="tag" data-tag="stanford">stanford</span>
+                    
+                    <span class="tag" data-tag="cnn">cnn</span>
+                    
+                    <span class="tag" data-tag="education">education</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="http://cs231n.stanford.edu/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="http://cs231n.stanford.edu/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="mask-r-cnn"
+                 data-category="papers"
+                 data-tags="segmentation,instance-segmentation,rcnn,detection"
+                 data-created="2017-03-20T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <div class="image-placeholder">
+                    <span>🔗</span>
+                </div>
+                
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">Mask R-CNN</h3>
+                <p class="card-summary">Instance segmentation framework extending Faster R-CNN.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">papers</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="segmentation">segmentation</span>
+                    
+                    <span class="tag" data-tag="instance-segmentation">instance-segmentation</span>
+                    
+                    <span class="tag" data-tag="rcnn">rcnn</span>
+                    
+                    <span class="tag" data-tag="detection">detection</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://arxiv.org/abs/1703.06870" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://arxiv.org/abs/1703.06870"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="huggingface"
+                 data-category="tools"
+                 data-tags="platform,models,datasets,community"
+                 data-created="2018-09-01T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/tools/huggingface.png" 
+                     alt="Hugging Face"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+                <span class="featured-badge">Featured</span>
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">Hugging Face</h3>
+                <p class="card-summary">Platform for sharing and discovering ML models and datasets.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">tools</span>
+                    
+                    <span class="card-pricing pricing-freemium">freemium</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="platform">platform</span>
+                    
+                    <span class="tag" data-tag="models">models</span>
+                    
+                    <span class="tag" data-tag="datasets">datasets</span>
+                    
+                    <span class="tag" data-tag="community">community</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://huggingface.co/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://huggingface.co/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="nvidia-research"
+                 data-category="companies"
+                 data-tags="nvidia,gpu,generative-ai,autonomous"
+                 data-created="2019-11-15T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <img src="/static/images/companies/nvidia.png" 
+                     alt="NVIDIA Research"
+                     onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>';">
+                
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">NVIDIA Research</h3>
+                <p class="card-summary">NVIDIA&#39;s AI and computer vision research division.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">companies</span>
+                    
+                    <span class="card-pricing pricing-freemium">freemium</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="nvidia">nvidia</span>
+                    
+                    <span class="tag" data-tag="gpu">gpu</span>
+                    
+                    <span class="tag" data-tag="generative-ai">generative-ai</span>
+                    
+                    <span class="tag" data-tag="autonomous">autonomous</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://www.nvidia.com/en-us/research/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://www.nvidia.com/en-us/research/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        
+        
+        <article class="link-card" 
+                 data-id="patent-gan"
+                 data-category="patents"
+                 data-tags="gan,patent,generative,training"
+                 data-created="2019-07-22T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <div class="image-placeholder">
+                    <span>🔗</span>
+                </div>
+                
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">GAN Training Methods Patent</h3>
+                <p class="card-summary">US Patent for improved GAN training stability.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">patents</span>
+                    
+                    <span class="card-pricing pricing-paid">paid</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="gan">gan</span>
+                    
+                    <span class="tag" data-tag="patent">patent</span>
+                    
+                    <span class="tag" data-tag="generative">generative</span>
+                    
+                    <span class="tag" data-tag="training">training</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://patents.google.com/patent/US10234567" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://patents.google.com/patent/US10234567"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+        
+        <article class="link-card" 
+                 data-id="cvpr-2024-best-paper"
+                 data-category="papers"
+                 data-tags="cvpr,best-paper,neural-rendering,2024"
+                 data-created="2024-01-10T00:00:00Z">
+            
+            <div class="card-image">
+                
+                <div class="image-placeholder">
+                    <span>🔗</span>
+                </div>
+                
+                
+                <span class="featured-badge">Featured</span>
+                
+            </div>
+            
+            <div class="card-content">
+                <h3 class="card-title">CVPR 2024 Best Paper</h3>
+                <p class="card-summary">Award-winning paper on neural scene representation.</p>
+                
+                <div class="card-meta">
+                    <span class="card-category">papers</span>
+                    
+                    <span class="card-pricing pricing-free">free</span>
+                    
+                </div>
+                
+                <div class="card-tags">
+                    
+                    <span class="tag" data-tag="cvpr">cvpr</span>
+                    
+                    <span class="tag" data-tag="best-paper">best-paper</span>
+                    
+                    <span class="tag" data-tag="neural-rendering">neural-rendering</span>
+                    
+                    <span class="tag" data-tag="2024">2024</span>
+                    
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <a href="https://cvpr2024.thecvf.com/" 
+                   class="action-btn visit-btn"
+                   target="_blank"
+                   rel="noopener"
+                   title="Visit external website">
+                    Visit ↗
+                </a>
+                <button class="action-btn copy-btn"
+                        data-url="https://cvpr2024.thecvf.com/"
+                        title="Copy link to clipboard">
+                    📋
+                </button>
+            </div>
+        </article>
+        
+        
+    </div>
+    
+    <div class="no-results" id="noResults" style="display: none;">
+        <p>No resources matched your search criteria. Try different keywords or filters.</p>
+    </div>
+</div>
+
+            </div>
+            
+            <footer class="main-footer">
+                <div class="footer-content">
+                    <p class="copyright">© 2024 CV Research Hub. All rights reserved.</p>
+                    
+                    <p class="footer-text">Built for the computer vision community.</p>
+                    
+                    
+                    <div class="footer-links">
+                        
+                        <a href="/privacy.html">Privacy Policy</a>
+                        
+                        <a href="/terms.html">Terms of Service</a>
+                        
+                        <a href="mailto:hello@cvresearch.example.com">Contact</a>
+                        
+                    </div>
+                    
+                </div>
+            </footer>
+        </main>
+    </div>
+    
+    <script>
+        window.APP_CONFIG = {"content": {"errors": {"404": "Oops! We couldn\u0027t find that page.", "load_failed": "Failed to load resources. Please refresh the page.", "no_results": "No resources matched your search criteria. Try different keywords or filters."}, "footer": {"copyright": "\u00a9 2024 CV Research Hub. All rights reserved.", "links": [{"label": "Privacy Policy", "url": "/privacy.html"}, {"label": "Terms of Service", "url": "/terms.html"}, {"label": "Contact", "url": "mailto:hello@cvresearch.example.com"}], "text": "Built for the computer vision community."}, "header": {"cta_button": "Suggest a Resource", "cta_link": "mailto:submit@cvresearch.example.com", "subtitle": "Discover papers, tools, datasets, and researchers shaping the future of visual intelligence.", "title": "Computer Vision Research Hub"}, "placeholders": {"default_image_alt": "Resource thumbnail", "image_error_text": "Image unavailable", "search_bar": "Search papers, tools, researchers, or tags..."}, "tooltips": {"copy_link": "Copy link to clipboard", "filter_by_tag": "Filter by this tag", "visit_site": "Visit external website"}}, "features": {"analytics": {"id": "cvresearch.example.com", "provider": "plausible"}, "dark_mode": {"default": "system", "enabled": true}, "search": {"enabled": true, "min_chars": 2}, "social_share": true}, "navigation": {"categories": [{"children": [{"icon": "\ud83d\udcdd", "id": "papers", "label": "Papers"}, {"icon": "\ud83d\udcda", "id": "books", "label": "Books"}, {"icon": "\ud83d\udcf0", "id": "articles", "label": "Articles"}, {"icon": "\u2139\ufe0f", "id": "patents", "label": "Patents"}], "icon": "\ud83d\udcc4", "id": "publications", "label": "Publications"}, {"children": [{"icon": "\ud83d\udd2c", "id": "researchers", "label": "Researchers"}], "icon": "\ud83d\udc64", "id": "people", "label": "People"}, {"children": [{"icon": "\ud83e\uddea", "id": "labs", "label": "Research Labs"}, {"icon": "\ud83c\udf93", "id": "universities", "label": "Universities"}, {"icon": "\ud83d\udcbc", "id": "companies", "label": "Companies"}], "icon": "\ud83c\udfe2", "id": "organizations", "label": "Organizations"}, {"children": [{"icon": "\ud83d\udcca", "id": "datasets", "label": "Datasets"}, {"icon": "\u2699\ufe0f", "id": "tools", "label": "Tools \u0026 Libraries"}, {"icon": "\ud83c\udf93", "id": "courses", "label": "Courses"}], "icon": "\ud83d\udee0\ufe0f", "id": "resources", "label": "Resources"}], "menu_links": [{"label": "Submit Resource", "open_new_tab": false, "url": "mailto:submit@cvresearch.example.com"}, {"label": "GitHub", "open_new_tab": true, "url": "https://github.com"}, {"label": "About", "open_new_tab": false, "url": "/about.html"}]}, "site_info": {"description": "Curated resources for computer vision researchers, practitioners, and enthusiasts.", "favicon": "/static/images/favicon.ico", "logo": "/static/images/logo.svg", "name": "CV Research Hub", "url": "https://cvresearch.example.com"}, "social": {"email": "hello@cvresearch.example.com", "github": "https://github.com/cvresearchhub", "twitter": "https://twitter.com/cvresearchhub"}, "theme": {"colors": {"accent": "#7c3aed", "background": "#ffffff", "error": "#dc2626", "primary": "#bb6328", "secondary": "#8b7464", "success": "#16a34a", "surface": "#f8fafc", "text": "#0f172a", "text_muted": "#64748b"}, "layout": {"items_per_page": 24, "max_width": "1400px", "sidebar_enabled": true, "view_mode": "grid"}, "typography": {"font_family": "\u0027Inter\u0027, -apple-system, BlinkMacSystemFont, sans-serif", "font_size_base": "16px", "heading_font": "\u0027Poppins\u0027, sans-serif"}}};
+        window.LINKS_DATA = {"links": [{"category": "papers", "created_at": "2017-06-12T00:00:00Z", "description": "This paper proposes the Transformer, a model architecture eschewing recurrence and convolutions entirely, based solely on attention mechanisms. This work has fundamentally changed NLP and influenced computer vision.", "featured": true, "id": "attention-is-all-you-need", "image": "/static/images/papers/transformer.png", "language": "en", "pricing": "free", "status": "active", "summary": "Seminal paper introducing the Transformer architecture.", "tags": ["transformer", "attention", "deep-learning", "foundational"], "title": "Attention Is All You Need", "updated_at": "2023-12-01T00:00:00Z", "url": "https://arxiv.org/abs/1706.03762"}, {"category": "books", "created_at": "2016-11-10T00:00:00Z", "description": "The definitive textbook on deep learning, covering mathematical foundations, modern practices, and research perspectives. Essential reading for any CV researcher.", "featured": true, "id": "deep-learning-book", "image": "/static/images/books/deeplearning-book.jpg", "language": "en", "pricing": "free", "status": "active", "summary": "Comprehensive textbook by Ian Goodfellow, Yoshua Bengio, and Aaron Courville.", "tags": ["textbook", "deep-learning", "foundational", "theory"], "title": "Deep Learning Book", "url": "https://www.deeplearningbook.org/"}, {"category": "tools", "created_at": "2016-09-01T00:00:00Z", "description": "PyTorch is a Python package that provides tensor computation with strong GPU acceleration and deep neural networks built on a tape-based autograd system. Widely used in CV research.", "featured": true, "id": "pytorch", "image": "/static/images/tools/pytorch.png", "language": "en", "pricing": "free", "status": "active", "summary": "Open source machine learning framework for Python.", "tags": ["framework", "python", "deep-learning", "gpu"], "title": "PyTorch", "updated_at": "2024-01-10T00:00:00Z", "url": "https://pytorch.org/"}, {"category": "datasets", "created_at": "2009-06-01T00:00:00Z", "description": "ImageNet is an image database organized according to the WordNet hierarchy. Each node of the hierarchy is depicted by hundreds and thousands of images. Crucial for CV benchmarking.", "featured": true, "id": "imagenet", "image": "/static/images/datasets/imagenet.jpg", "language": "en", "pricing": "free", "status": "active", "summary": "Large-scale visual recognition dataset with 14M+ images.", "tags": ["dataset", "classification", "benchmark", "images"], "title": "ImageNet Dataset", "url": "https://www.image-net.org/"}, {"category": "tools", "created_at": "2023-01-10T00:00:00Z", "description": "YOLOv8 is the latest version of the YOLO family, offering improved accuracy and speed for object detection, segmentation, and classification tasks.", "featured": true, "id": "yolov8", "image": "/static/images/tools/yolov8.png", "language": "en", "pricing": "freemium", "status": "active", "summary": "State-of-the-art real-time object detection model.", "tags": ["object-detection", "real-time", "yolo", "production"], "title": "YOLOv8 by Ultralytics", "url": "https://github.com/ultralytics/ultralytics"}, {"category": "researchers", "created_at": "2020-03-15T00:00:00Z", "description": "Dr. Fei-Fei Li is a pioneer in computer vision and AI. She created ImageNet and is a leading voice in ethical AI development and human-centered AI research.", "featured": true, "id": "feifei-li", "image": "/static/images/people/feifei-li.jpg", "language": "en", "pricing": "free", "status": "active", "summary": "Professor at Stanford, co-director of Human-Centered AI Institute.", "tags": ["stanford", "imagenet", "ethics", "leadership"], "title": "Fei-Fei Li", "url": "https://profiles.stanford.edu/fei-fei-li"}, {"category": "labs", "created_at": "2019-08-20T00:00:00Z", "description": "CSAIL is the largest research laboratory at MIT and one of the world\u0027s most important centers of information technology research. Strong focus on computer vision and robotics.", "featured": false, "id": "mit-csail", "image": "/static/images/labs/mit-csail.png", "language": "en", "pricing": "free", "status": "active", "summary": "MIT Computer Science and Artificial Intelligence Laboratory.", "tags": ["mit", "research-lab", "robotics", "vision"], "title": "MIT CSAIL", "url": "https://www.csail.mit.edu/"}, {"category": "labs", "created_at": "2018-05-10T00:00:00Z", "description": "The Stanford Vision Lab conducts research in computer vision, machine learning, and graphics. Home to many influential papers and datasets including ImageNet.", "featured": true, "id": "stanford-vision-lab", "image": "/static/images/labs/stanford-vision.png", "language": "en", "pricing": "free", "status": "active", "summary": "Leading computer vision research group at Stanford University.", "tags": ["stanford", "research-lab", "imagenet", "deep-learning"], "title": "Stanford Vision Lab", "url": "http://vision.stanford.edu/"}, {"category": "universities", "created_at": "2019-01-05T00:00:00Z", "description": "CMU\u0027s Computer Vision Department is one of the oldest and most respected in the world. Strong industry connections and groundbreaking research output.", "featured": false, "id": "cmu", "image": "/static/images/universities/cmu.jpg", "language": "en", "pricing": "free", "status": "active", "summary": "Top-tier university with renowned computer vision program.", "tags": ["cmu", "education", "research", "phd-program"], "title": "Carnegie Mellon University", "url": "https://www.cmu.edu/computing/vision/"}, {"category": "companies", "created_at": "2020-06-15T00:00:00Z", "description": "OpenAI conducts cutting-edge research in computer vision, including CLIP, DALL-E, and GPT-4 Vision. Known for open research and safety-focused approach.", "featured": true, "id": "openai", "image": "/static/images/companies/openai.png", "language": "en", "pricing": "freemium", "status": "active", "summary": "AI research company focused on safe AGI development.", "tags": ["openai", "research", "clip", "multimodal"], "title": "OpenAI", "url": "https://openai.com/"}, {"category": "companies", "created_at": "2021-02-20T00:00:00Z", "description": "DeepMind produces influential CV research including AlphaFold, Perceiver, and Flamingo. Focus on general intelligence and scientific discovery.", "featured": true, "id": "google-deepmind", "image": "/static/images/companies/deepmind.png", "language": "en", "pricing": "free", "status": "active", "summary": "AI research lab combining Google Brain and DeepMind.", "tags": ["google", "deepmind", "research", "agi"], "title": "Google DeepMind", "url": "https://deepmind.google/"}, {"category": "datasets", "created_at": "2014-04-01T00:00:00Z", "description": "COCO is a large-scale object detection, segmentation, and captioning dataset. 330K images with 80 object categories and 5 captions per image.", "featured": false, "id": "coco-dataset", "image": "/static/images/datasets/coco.jpg", "language": "en", "pricing": "free", "status": "active", "summary": "Common Objects in Context - image recognition dataset.", "tags": ["dataset", "object-detection", "segmentation", "benchmark"], "title": "COCO Dataset", "url": "https://cocodataset.org/"}, {"category": "tools", "created_at": "2000-01-01T00:00:00Z", "description": "OpenCV was designed for computational efficiency and strong focus on real-time applications. Written in C++ with interfaces for Python, Java, and more.", "featured": false, "id": "opencv", "image": "/static/images/tools/opencv.png", "language": "en", "pricing": "free", "status": "active", "summary": "Open source computer vision and machine learning library.", "tags": ["library", "cpp", "python", "real-time"], "title": "OpenCV", "updated_at": "2024-01-05T00:00:00Z", "url": "https://opencv.org/"}, {"category": "courses", "created_at": "2015-01-10T00:00:00Z", "description": "This course teaches the details of implementing and training neural networks for visual recognition. Includes lectures, assignments, and comprehensive notes.", "featured": true, "id": "cs231n", "image": "/static/images/courses/cs231n.jpg", "language": "en", "pricing": "free", "status": "active", "summary": "Stanford\u0027s famous computer vision course.", "tags": ["course", "stanford", "cnn", "education"], "title": "CS231n: CNN for Visual Recognition", "url": "http://cs231n.stanford.edu/"}, {"category": "papers", "created_at": "2017-03-20T00:00:00Z", "description": "Mask R-CNN adds a branch for predicting segmentation masks on each Region of Interest, in parallel with existing branches for classification and bounding box regression.", "featured": false, "id": "mask-r-cnn", "language": "en", "pricing": "free", "status": "active", "summary": "Instance segmentation framework extending Faster R-CNN.", "tags": ["segmentation", "instance-segmentation", "rcnn", "detection"], "title": "Mask R-CNN", "url": "https://arxiv.org/abs/1703.06870"}, {"category": "tools", "created_at": "2018-09-01T00:00:00Z", "description": "Hugging Face hosts thousands of pre-trained computer vision models, datasets, and demos. Essential resource for practitioners and researchers.", "featured": true, "id": "huggingface", "image": "/static/images/tools/huggingface.png", "language": "en", "pricing": "freemium", "status": "active", "summary": "Platform for sharing and discovering ML models and datasets.", "tags": ["platform", "models", "datasets", "community"], "title": "Hugging Face", "url": "https://huggingface.co/"}, {"category": "companies", "created_at": "2019-11-15T00:00:00Z", "description": "NVIDIA Research produces cutting-edge work in generative AI, neural rendering, autonomous vehicles, and more. Strong industry-academia collaboration.", "featured": false, "id": "nvidia-research", "image": "/static/images/companies/nvidia.png", "language": "en", "pricing": "freemium", "status": "active", "summary": "NVIDIA\u0027s AI and computer vision research division.", "tags": ["nvidia", "gpu", "generative-ai", "autonomous"], "title": "NVIDIA Research", "url": "https://www.nvidia.com/en-us/research/"}, {"category": "datasets", "created_at": "2010-05-01T00:00:00Z", "description": "This project was deprecated in 2020. Please use COCO or ImageNet instead.", "id": "old-dataset-project", "language": "en", "pricing": "free", "status": "archived", "summary": "This dataset is no longer maintained.", "tags": ["deprecated", "legacy"], "title": "Legacy Vision Dataset", "url": "https://example.com/legacy"}, {"category": "patents", "created_at": "2019-07-22T00:00:00Z", "description": "This patent covers novel techniques for stabilizing Generative Adversarial Network training, including gradient penalty and spectral normalization methods.", "id": "patent-gan", "language": "en", "pricing": "paid", "status": "active", "summary": "US Patent for improved GAN training stability.", "tags": ["gan", "patent", "generative", "training"], "title": "GAN Training Methods Patent", "url": "https://patents.google.com/patent/US10234567"}, {"category": "papers", "created_at": "2024-01-10T00:00:00Z", "description": "This paper introduces a novel approach to neural scene representation that achieves state-of-the-art results on multiple benchmarks while reducing computational cost.", "featured": true, "id": "cvpr-2024-best-paper", "language": "en", "pricing": "free", "status": "active", "summary": "Award-winning paper on neural scene representation.", "tags": ["cvpr", "best-paper", "neural-rendering", "2024"], "title": "CVPR 2024 Best Paper", "url": "https://cvpr2024.thecvf.com/"}], "site_meta": {"last_updated": "2024-01-15T10:00:00Z", "title": "CV Research Hub", "version": "1.0.0"}};
+    </script>
+    <script src="static/js/main.js?v=1.0.0"></script>
+</body>
+</html>

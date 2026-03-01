@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Links Data",
+  "description": "Schema for link aggregation content",
+  "type": "object",
+  "required": ["site_meta", "links"],
+  "properties": {
+    "site_meta": {
+      "type": "object",
+      "required": ["title", "version"],
+      "properties": {
+        "title": { "type": "string" },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "last_updated": { "type": "string", "format": "date-time" }
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "summary", "url", "category", "tags"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "image": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "featured": {
+            "type": "boolean",
+            "default": false
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "archived", "broken"],
+            "default": "active"
+          },
+          "pricing": {
+            "type": "string",
+            "enum": ["free", "freemium", "paid", "unknown"],
+            "default": "unknown"
+          },
+          "language": {
+            "type": "string",
+            "pattern": "^[a-z]{2}$",
+            "default": "en"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ config.site_info.description }}">
+    <title>{{ config.site_info.name }}</title>
+    
+    {% if config.site_info.favicon %}
+    <link rel="icon" href="{{ config.site_info.favicon }}">
+    {% endif %}
+    
+    <link rel="stylesheet" href="static/css/style.css">
+    
+    {% if config.theme.typography.font_family %}
+    <style>
+        :root {
+            --font-family: {{ config.theme.typography.font_family }};
+            {% if config.theme.typography.heading_font %}
+            --heading-font: {{ config.theme.typography.heading_font }};
+            {% endif %}
+        }
+    </style>
+    {% endif %}
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                {% if config.site_info.logo %}
+                <img src="{{ config.site_info.logo }}" alt="{{ config.site_info.name }}" class="logo">
+                {% else %}
+                <h1 class="logo-text">{{ config.site_info.name }}</h1>
+                {% endif %}
+                <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+                    <span class="hamburger"></span>
+                </button>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <ul class="category-list">
+                    {% for category in config.navigation.categories %}
+                    <li class="category-item">
+                        <a href="#category-{{ category.id }}" 
+                           class="category-link" 
+                           data-category="{{ category.id }}"
+                           data-children="{{ category.children | map(attribute='id') | join(',') if category.children else '' }}">
+                            {% if category.icon %}
+                            <span class="category-icon">{{ category.icon }}</span>
+                            {% endif %}
+                            <span class="category-label">{{ category.label }}</span>
+                        </a>
+                        {% if category.children %}
+                        <ul class="subcategory-list">
+                            {% for child in category.children %}
+                            <li>
+                                <a href="#category-{{ child.id }}" 
+                                   class="subcategory-link" 
+                                   data-category="{{ child.id }}"
+                                   data-parent="{{ category.id }}">
+                                    {% if child.icon %}
+                                    <span class="category-icon">{{ child.icon }}</span>
+                                    {% endif %}
+                                    <span>{{ child.label }}</span>
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </nav>
+            
+            {% if config.navigation.menu_links %}
+            <div class="sidebar-footer">
+                {% for link in config.navigation.menu_links %}
+                <a href="{{ link.url }}" 
+                   class="menu-link"
+                   {% if link.open_new_tab %}target="_blank" rel="noopener"{% endif %}>
+                    {{ link.label }}
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </aside>
+        
+        <main class="main-content">
+            <header class="main-header">
+                <div class="header-content">
+                    <div class="header-text">
+                        <h1>{{ config.content.header.title }}</h1>
+                        {% if config.content.header.subtitle %}
+                        <p class="subtitle">{{ config.content.header.subtitle }}</p>
+                        {% endif %}
+                    </div>
+                    {% if config.content.header.cta_button %}
+                    <a href="{{ config.content.header.cta_link }}" class="cta-button">
+                        {{ config.content.header.cta_button }}
+                    </a>
+                    {% endif %}
+                </div>
+                
+                {% if config.features.search.enabled %}
+                <div class="search-container">
+                    <input type="text" 
+                           id="searchInput" 
+                           class="search-input"
+                           placeholder="{{ config.content.placeholders.search_bar }}"
+                           aria-label="Search">
+                    <span class="search-icon">🔍</span>
+                </div>
+                {% endif %}
+                
+                {% if config.features.dark_mode.enabled %}
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                    <span class="theme-icon-light">☀️</span>
+                    <span class="theme-icon-dark">🌙</span>
+                </button>
+                {% endif %}
+            </header>
+            
+            <div class="content-wrapper">
+                {% block content %}{% endblock %}
+            </div>
+            
+            <footer class="main-footer">
+                <div class="footer-content">
+                    <p class="copyright">{{ config.content.footer.copyright }}</p>
+                    {% if config.content.footer.text %}
+                    <p class="footer-text">{{ config.content.footer.text }}</p>
+                    {% endif %}
+                    {% if config.content.footer.links %}
+                    <div class="footer-links">
+                        {% for link in config.content.footer.links %}
+                        <a href="{{ link.url }}">{{ link.label }}</a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </footer>
+        </main>
+    </div>
+    
+    <script>
+        window.APP_CONFIG = {{ config | tojson }};
+        window.LINKS_DATA = {{ links | tojson }};
+    </script>
+    <script src="static/js/main.js?v={{ links.site_meta.version }}"></script>
+</body>
+</html>

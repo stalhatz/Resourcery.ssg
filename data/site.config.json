@@ -1,0 +1,133 @@
+{
+  "site_info": {
+    "name": "CV Research Hub",
+    "url": "https://cvresearch.example.com",
+    "logo": "/static/images/logo.svg",
+    "favicon": "/static/images/favicon.ico",
+    "description": "Curated resources for computer vision researchers, practitioners, and enthusiasts."
+  },
+  "theme": {
+    "colors": {
+      "primary": "#bb6328",
+      "secondary": "#8b7464",
+      "background": "#ffffff",
+      "surface": "#f8fafc",
+      "text": "#0f172a",
+      "text_muted": "#64748b",
+      "accent": "#7c3aed",
+      "error": "#dc2626",
+      "success": "#16a34a"
+    },
+    "typography": {
+      "font_family": "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+      "font_size_base": "16px",
+      "heading_font": "'Poppins', sans-serif"
+    },
+    "layout": {
+      "view_mode": "grid",
+      "items_per_page": 24,
+      "sidebar_enabled": true,
+      "max_width": "1400px"
+    }
+  },
+  "navigation": {
+    "categories": [
+      {
+        "id": "publications",
+        "label": "Publications",
+        "icon": "📄",
+        "children": [
+          { "id": "papers", "label": "Papers", "icon": "📝" },
+          { "id": "books", "label": "Books", "icon": "📚" },
+          { "id": "articles", "label": "Articles", "icon": "📰" },
+          { "id": "patents", "label": "Patents", "icon": "ℹ️" }
+        ]
+      },
+      {
+        "id": "people",
+        "label": "People",
+        "icon": "👤",
+        "children": [
+          { "id": "researchers", "label": "Researchers", "icon": "🔬" }
+        ]
+      },
+      {
+        "id": "organizations",
+        "label": "Organizations",
+        "icon": "🏢",
+        "children": [
+          { "id": "labs", "label": "Research Labs", "icon": "🧪" },
+          { "id": "universities", "label": "Universities", "icon": "🎓" },
+          { "id": "companies", "label": "Companies", "icon": "💼" }
+        ]
+      },
+      {
+        "id": "resources",
+        "label": "Resources",
+        "icon": "🛠️",
+        "children": [
+          { "id": "datasets", "label": "Datasets", "icon": "📊" },
+          { "id": "tools", "label": "Tools & Libraries", "icon": "⚙️" },
+          { "id": "courses", "label": "Courses", "icon": "🎓" }
+        ]
+      }
+    ],
+    "menu_links": [
+      { "label": "Submit Resource", "url": "mailto:submit@cvresearch.example.com", "open_new_tab": false },
+      { "label": "GitHub", "url": "https://github.com", "open_new_tab": true },
+      { "label": "About", "url": "/about.html", "open_new_tab": false }
+    ]
+  },
+  "content": {
+    "header": {
+      "title": "Computer Vision Research Hub",
+      "subtitle": "Discover papers, tools, datasets, and researchers shaping the future of visual intelligence.",
+      "cta_button": "Suggest a Resource",
+      "cta_link": "mailto:submit@cvresearch.example.com"
+    },
+    "footer": {
+      "copyright": "© 2024 CV Research Hub. All rights reserved.",
+      "text": "Built for the computer vision community.",
+      "links": [
+        { "label": "Privacy Policy", "url": "/privacy.html" },
+        { "label": "Terms of Service", "url": "/terms.html" },
+        { "label": "Contact", "url": "mailto:hello@cvresearch.example.com" }
+      ]
+    },
+    "errors": {
+      "404": "Oops! We couldn't find that page.",
+      "no_results": "No resources matched your search criteria. Try different keywords or filters.",
+      "load_failed": "Failed to load resources. Please refresh the page."
+    },
+    "placeholders": {
+      "search_bar": "Search papers, tools, researchers, or tags...",
+      "default_image_alt": "Resource thumbnail",
+      "image_error_text": "Image unavailable"
+    },
+    "tooltips": {
+      "copy_link": "Copy link to clipboard",
+      "visit_site": "Visit external website",
+      "filter_by_tag": "Filter by this tag"
+    }
+  },
+  "features": {
+    "search": {
+      "enabled": true,
+      "min_chars": 2
+    },
+    "dark_mode": {
+      "enabled": true,
+      "default": "system"
+    },
+    "analytics": {
+      "provider": "plausible",
+      "id": "cvresearch.example.com"
+    },
+    "social_share": true
+  },
+  "social": {
+    "twitter": "https://twitter.com/cvresearchhub",
+    "github": "https://github.com/cvresearchhub",
+    "email": "hello@cvresearch.example.com"
+  }
+}
