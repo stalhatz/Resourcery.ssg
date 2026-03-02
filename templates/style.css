@@ -1456,6 +1456,11 @@ ul, li {
 /* ============================================
    SEARCH SUGGESTIONS
    ============================================ */
+.suggestion-item.selected {
+    background-color: var(--color-primary);
+    color: white;
+}
+
 .search-container {
     position: relative !important;
 }

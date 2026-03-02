@@ -1,12 +1,11 @@
 /**
  * Main JavaScript for Static Link Aggregation Site
- * Complete File - Landing Page + Browse Page Support (FIXED v5)
+ * Complete File - Landing Page + Browse Page Support (FIXED v7)
  */
 
 // ==================== PAGE DETECTION ====================
 const isLandingPage = !window.location.pathname.includes('browse.html');
 const isBrowsePage = window.location.pathname.includes('browse.html');
-
 console.log('📄 Page:', isLandingPage ? 'Landing (index.html)' : 'Browse (browse.html)');
 
 // ==================== CATEGORY HIERARCHY ====================
@@ -28,7 +27,7 @@ const CategoryHierarchy = {
             }
         });
     },
-    
+
     getMatchingCategories: function(categoryId) {
         var children = this.map[categoryId] || [];
         if (children.length > 0) {
@@ -42,8 +41,10 @@ const CategoryHierarchy = {
 // ==================== TAG MANAGER ====================
 const TagManager = {
     activeTag: null,
+    activeSearch: null,
     allTags: [],
     isInitialized: false,
+    selectedSuggestionIndex: -1,
     
     init: function(linksData) {
         var tagSet = {};
@@ -65,7 +66,7 @@ const TagManager = {
         this.setupSearchSuggestions();
         this.isInitialized = true;
     },
-    
+
     slugify: function(text) {
         return text
             .toString()
@@ -77,9 +78,10 @@ const TagManager = {
             .replace(/[^\w\-]+/g, '')
             .replace(/\-\-+/g, '-');
     },
-    
+
     setActiveTag: function(tag, updateUrl) {
         this.activeTag = tag ? this.slugify(tag) : null;
+        this.activeSearch = null;
         
         if (updateUrl !== false) {
             if (this.activeTag) {
@@ -95,10 +97,30 @@ const TagManager = {
         }
         
         this.updateFilterHeader();
-        
         console.log('🏷️ Active tag:', this.activeTag);
     },
-    
+
+    setActiveSearch: function(searchTerm, updateUrl) {
+        this.activeSearch = searchTerm ? searchTerm.trim() : null;
+        this.activeTag = null;
+        
+        if (updateUrl !== false) {
+            if (this.activeSearch) {
+                window.location.hash = 'search-' + encodeURIComponent(this.activeSearch);
+            } else {
+                var categoryFilter = document.getElementById('categoryFilter');
+                if (categoryFilter && categoryFilter.value) {
+                    window.location.hash = 'category-' + categoryFilter.value;
+                } else {
+                    history.pushState('', '', window.location.pathname);
+                }
+            }
+        }
+        
+        this.updateFilterHeader();
+        console.log('🔍 Active search:', this.activeSearch);
+    },
+
     setCategoryDisplay: function(categoryName) {
         var categoryFilter = document.getElementById('categoryFilter');
         if (categoryFilter) {
@@ -106,12 +128,13 @@ const TagManager = {
         }
         this.updateFilterHeader();
     },
-    
+
     updateFilterHeader: function() {
         var filterText1 = document.getElementById('filterText1');
         var filterValue1 = document.getElementById('filterValue1');
         var filterText2 = document.getElementById('filterText2');
         var categoryTrigger = document.getElementById('categoryTrigger');
+        var searchValue = document.getElementById('searchValue');
         var filterIcon = categoryTrigger ? categoryTrigger.querySelector('.filter-icon') : null;
         
         if (!filterText1 || !filterValue1) {
@@ -119,31 +142,56 @@ const TagManager = {
             return;
         }
         
-        if (this.activeTag) {
+        if (this.activeSearch) {
+            filterText1.style.display = 'inline';
+            filterText1.textContent = 'Searching';
+            
+            if (categoryTrigger) {
+                categoryTrigger.style.display = 'none';
+            }
+            
+            if (searchValue) {
+                searchValue.style.display = 'inline';
+                searchValue.textContent = '"' + this.activeSearch + '"';
+            }
+            
+            if (filterText2) filterText2.style.display = 'none';
+            
+        } else if (this.activeTag) {
             filterText1.style.display = 'inline';
             filterText1.textContent = 'Showing';
-            filterValue1.style.display = 'inline';
-            filterValue1.textContent = '#' + this.activeTag;
-            if (filterText2) filterText2.style.display = 'inline';
             
             if (categoryTrigger) {
                 categoryTrigger.style.display = 'inline-flex';
                 categoryTrigger.style.pointerEvents = 'none';
                 categoryTrigger.style.opacity = '1';
             }
+            
+            filterValue1.style.display = 'inline';
+            filterValue1.textContent = '#' + this.activeTag;
+            
+            if (searchValue) {
+                searchValue.style.display = 'none';
+            }
+            
+            if (filterText2) filterText2.style.display = 'inline';
             if (filterIcon) filterIcon.style.display = 'none';
             
         } else {
             filterText1.style.display = 'inline';
             filterText1.textContent = 'Showing';
-            filterValue1.style.display = 'inline';
-            if (filterText2) filterText2.style.display = 'inline';
             
             if (categoryTrigger) {
                 categoryTrigger.style.display = 'inline-flex';
                 categoryTrigger.style.pointerEvents = 'auto';
                 categoryTrigger.style.opacity = '1';
             }
+            
+            if (searchValue) {
+                searchValue.style.display = 'none';
+            }
+            
+            if (filterText2) filterText2.style.display = 'inline';
             if (filterIcon) filterIcon.style.display = 'inline';
             
             var categoryFilter = document.getElementById('categoryFilter');
@@ -157,85 +205,193 @@ const TagManager = {
             }
         }
         
-        console.log('📝 Filter header:', this.activeTag ? '#' + this.activeTag : filterValue1.textContent);
+        console.log('📝 Filter header:', this.activeSearch ? '"' + this.activeSearch + '"' : (this.activeTag ? '#' + this.activeTag : filterValue1.textContent));
     },
-    
+
     getActiveTag: function() {
         return this.activeTag;
     },
-    
+
+    getActiveSearch: function() {
+        return this.activeSearch;
+    },
+
     clearActiveTag: function() {
         this.setActiveTag(null, true);
     },
-    
+
+    clearActiveSearch: function() {
+        this.setActiveSearch(null, true);
+    },
+
     clearSearchInput: function() {
         var searchInput = document.getElementById('searchInput');
         if (searchInput) {
             searchInput.value = '';
         }
     },
-    
+
     setupSearchSuggestions: function() {
+        var self = this;
         var searchInput = document.getElementById('searchInput');
         if (!searchInput) return;
         
         var suggestionsBox = document.createElement('div');
         suggestionsBox.className = 'search-suggestions';
         suggestionsBox.id = 'searchSuggestions';
+        suggestionsBox.setAttribute('role', 'listbox');
+        suggestionsBox.setAttribute('aria-label', 'Search suggestions');
         searchInput.parentNode.style.position = 'relative';
         searchInput.parentNode.appendChild(suggestionsBox);
         
-        searchInput.addEventListener('input', this.debounce(function() {
+        searchInput.setAttribute('role', 'combobox');
+        searchInput.setAttribute('aria-autocomplete', 'list');
+        searchInput.setAttribute('aria-controls', 'searchSuggestions');
+        searchInput.setAttribute('aria-expanded', 'false');
+
+        searchInput.addEventListener('input', self.debounce(function() {
             var value = searchInput.value.trim();
             
-            if (value.startsWith('#')) {
-                var query = value.substring(1).toLowerCase();
-                var matches = TagManager.allTags.filter(function(tag) {
+            if (value.length >= 1) {
+                var query = value.startsWith('#') ? value.substring(1).toLowerCase() : value.toLowerCase();
+                var matches = self.allTags.filter(function(tag) {
                     return tag.toLowerCase().includes(query);
-                }).slice(0, 5);
+                }).slice(0, 8);
                 
                 if (matches.length > 0) {
-                    suggestionsBox.innerHTML = '';
-                    matches.forEach(function(tag) {
-                        var item = document.createElement('div');
-                        item.className = 'suggestion-item';
-                        item.textContent = '#' + tag;
-                        item.addEventListener('click', function(e) {
-                            e.stopPropagation();
-                            searchInput.value = '#' + tag;
-                            suggestionsBox.classList.remove('active');
-                            
-                            if (isLandingPage) {
-                                window.location.href = 'browse.html#tag-' + TagManager.slugify(tag);
-                            } else {
-                                TagManager.setActiveTag(tag);
-                                filterCards();
-                            }
-                        });
-                        suggestionsBox.appendChild(item);
-                    });
-                    suggestionsBox.classList.add('active');
+                    self.renderSuggestions(matches, value.startsWith('#'), suggestionsBox, searchInput);
+                    searchInput.setAttribute('aria-expanded', 'true');
                 } else {
-                    suggestionsBox.classList.remove('active');
+                    self.hideSuggestions(suggestionsBox, searchInput);
                 }
             } else {
-                suggestionsBox.classList.remove('active');
+                self.hideSuggestions(suggestionsBox, searchInput);
             }
-        }, 300));
-        
-        document.addEventListener('click', function(e) {
-            if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
-                suggestionsBox.classList.remove('active');
+        }, 200));
+
+        searchInput.addEventListener('keydown', function(e) {
+            var suggestions = suggestionsBox.querySelectorAll('.suggestion-item');
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (suggestions.length > 0) {
+                    self.selectedSuggestionIndex = Math.min(self.selectedSuggestionIndex + 1, suggestions.length - 1);
+                    self.highlightSuggestion(suggestions, self.selectedSuggestionIndex);
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (suggestions.length > 0) {
+                    self.selectedSuggestionIndex = Math.max(self.selectedSuggestionIndex - 1, 0);
+                    self.highlightSuggestion(suggestions, self.selectedSuggestionIndex);
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (self.selectedSuggestionIndex >= 0 && suggestions[self.selectedSuggestionIndex]) {
+                    suggestions[self.selectedSuggestionIndex].click();
+                } else if (searchInput.value.trim().length > 0) {
+                    var value = searchInput.value.trim();
+                    self.hideSuggestions(suggestionsBox, searchInput);
+                    self.navigateToBrowse(value, searchInput);
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                self.hideSuggestions(suggestionsBox, searchInput);
+                searchInput.blur();
             }
         });
+
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+                self.hideSuggestions(suggestionsBox, searchInput);
+            }
+        });
+
+        searchInput.addEventListener('blur', function() {
+            setTimeout(function() {
+                self.hideSuggestions(suggestionsBox, searchInput);
+            }, 150);
+        });
+    },
+
+    renderSuggestions: function(matches, isTagSearch, suggestionsBox, searchInput) {
+        var self = this;
+        self.selectedSuggestionIndex = -1;
+        suggestionsBox.innerHTML = '';
         
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                suggestionsBox.classList.remove('active');
+        matches.forEach(function(tag, index) {
+            var item = document.createElement('div');
+            item.className = 'suggestion-item';
+            item.setAttribute('role', 'option');
+            item.setAttribute('aria-selected', 'false');
+            item.id = 'suggestion-' + index;
+            item.textContent = (isTagSearch ? '#' : '') + tag;
+            item.dataset.tag = tag;
+            
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                self.hideSuggestions(suggestionsBox, searchInput);
+                self.navigateToBrowse(tag, searchInput);
+            });
+            
+            item.addEventListener('mouseenter', function() {
+                self.selectedSuggestionIndex = index;
+                self.highlightSuggestion(suggestionsBox.querySelectorAll('.suggestion-item'), index);
+            });
+            
+            suggestionsBox.appendChild(item);
+        });
+        
+        suggestionsBox.classList.add('active');
+    },
+
+    highlightSuggestion: function(suggestions, index) {
+        suggestions.forEach(function(s, i) {
+            if (i === index) {
+                s.classList.add('selected');
+                s.setAttribute('aria-selected', 'true');
+                s.scrollIntoView({ block: 'nearest' });
+            } else {
+                s.classList.remove('selected');
+                s.setAttribute('aria-selected', 'false');
             }
         });
     },
-    
+
+    hideSuggestions: function(suggestionsBox, searchInput) {
+        suggestionsBox.classList.remove('active');
+        searchInput.setAttribute('aria-expanded', 'false');
+        this.selectedSuggestionIndex = -1;
+    },
+
+    navigateToBrowse: function(value, searchInput) {
+        var self = this;
+        
+        if (isLandingPage) {
+            if (value.startsWith('#')) {
+                var tag = value.substring(1).trim();
+                window.location.href = 'browse.html#tag-' + self.slugify(tag);
+            } else {
+                window.location.href = 'browse.html#search-' + encodeURIComponent(value);
+            }
+        } else {
+            if (value.startsWith('#')) {
+                var tag = value.substring(1).trim();
+                self.setActiveTag(tag, true);
+            } else {
+                self.setActiveSearch(value, true);
+            }
+            
+            searchInput.value = '';
+            
+            if (typeof filterCards === 'function') {
+                filterCards();
+            }
+        }
+    },
+
     debounce: function(func, wait) {
         var timeout;
         return function() {
@@ -253,7 +409,6 @@ const ModalManager = {
     open: function(card) {
         var overlay = document.getElementById('modalOverlay');
         var modal = document.getElementById('modal');
-        
         if (!overlay || !modal) {
             console.warn('⚠️ Modal elements not found');
             return;
@@ -320,7 +475,7 @@ const ModalManager = {
         
         console.log('📦 Modal opened for:', card.dataset.title);
     },
-    
+
     close: function() {
         var overlay = document.getElementById('modalOverlay');
         if (!overlay) return;
@@ -332,7 +487,7 @@ const ModalManager = {
             document.body.style.overflow = '';
         }, 300);
     },
-    
+
     init: function() {
         var self = this;
         var overlay = document.getElementById('modalOverlay');
@@ -392,7 +547,7 @@ const ThemeManager = {
     }
 };
 
-// ==================== SIDEBAR MANAGER (ACCORDION - SINGLE HANDLER) ====================
+// ==================== SIDEBAR MANAGER ====================
 const SidebarManager = {
     init: function() {
         var toggle = document.getElementById('sidebarToggle');
@@ -413,25 +568,21 @@ const SidebarManager = {
             overlay.classList.remove('active');
         });
         
-        // Category triggers - accordion behavior (browse page only)
         var categoryTriggers = document.querySelectorAll('.category-trigger');
         
         categoryTriggers.forEach(function(trigger) {
             trigger.addEventListener('click', function(e) {
                 e.stopPropagation();
                 
-                // If on landing page, redirect to browse.html
                 if (isLandingPage) {
                     var categoryId = trigger.dataset.categoryId;
                     window.location.href = 'browse.html#category-' + categoryId;
                     return;
                 }
                 
-                // Accordion: collapse all, then expand clicked if it wasn't expanded
                 var isExpanded = trigger.getAttribute('aria-expanded') === 'true';
                 var subcategoryList = document.getElementById(trigger.getAttribute('aria-controls'));
                 
-                // Collapse ALL categories
                 categoryTriggers.forEach(function(t) {
                     t.setAttribute('aria-expanded', 'false');
                     var list = document.getElementById(t.getAttribute('aria-controls'));
@@ -440,7 +591,6 @@ const SidebarManager = {
                     }
                 });
                 
-                // Expand clicked if it wasn't already
                 if (!isExpanded && subcategoryList) {
                     trigger.setAttribute('aria-expanded', 'true');
                     subcategoryList.classList.add('expanded');
@@ -448,7 +598,6 @@ const SidebarManager = {
             });
         });
         
-        // Subcategory links
         var subcategoryLinks = document.querySelectorAll('.subcategory-link');
         
         subcategoryLinks.forEach(function(link) {
@@ -463,7 +612,6 @@ const SidebarManager = {
                     return;
                 }
                 
-                // Update filter
                 var dropdown = document.getElementById('categoryFilter');
                 if (category && dropdown) {
                     dropdown.value = category;
@@ -484,7 +632,6 @@ const SidebarManager = {
                     filterCards();
                 }
                 
-                // Update sidebar active state
                 document.querySelectorAll('.subcategory-link').forEach(function(l) {
                     l.classList.remove('active');
                 });
@@ -494,9 +641,6 @@ const SidebarManager = {
                     t.classList.remove('active');
                 });
                 
-                // Close mobile sidebar
-                var sidebar = document.getElementById('sidebar');
-                var overlay = document.querySelector('.sidebar-overlay');
                 if (window.innerWidth <= 1023) {
                     sidebar.classList.remove('active');
                     overlay.classList.remove('active');
@@ -506,7 +650,7 @@ const SidebarManager = {
     }
 };
 
-// ==================== CARD MANAGER (Works on BOTH pages) ====================
+// ==================== CARD MANAGER ====================
 const CardManager = {
     init: function() {
         document.querySelectorAll('.link-card').forEach(function(card) {
@@ -540,7 +684,7 @@ const CardManager = {
     }
 };
 
-// ==================== FILTER MANAGER (Browse page only) ====================
+// ==================== FILTER MANAGER ====================
 const FilterManager = {
     dropdowns: {},
     
@@ -555,16 +699,13 @@ const FilterManager = {
         var sortFilter = document.getElementById('sortFilter');
         var sortValue = document.getElementById('sortValue');
         
-        var searchInput = document.getElementById('searchInput');
-        
         console.log('🔧 FilterManager elements:', {
             categoryTrigger: !!categoryTrigger,
             categoryFilter: !!categoryFilter,
             categoryValue: !!categoryValue,
             sortTrigger: !!sortTrigger,
             sortFilter: !!sortFilter,
-            sortValue: !!sortValue,
-            searchInput: !!searchInput
+            sortValue: !!sortValue
         });
         
         if (categoryTrigger && categoryFilter && categoryValue) {
@@ -575,58 +716,14 @@ const FilterManager = {
             this.createDropdown(sortTrigger, sortFilter, sortValue, 'sort');
         }
         
-        if (searchInput) {
-            searchInput.addEventListener('input', this.debounce(function() {
-                var value = searchInput.value.trim();
-                
-                if (isLandingPage && value.length > 0) {
-                    if (value.startsWith('#')) {
-                        var tag = value.substring(1).trim();
-                        window.location.href = 'browse.html#tag-' + TagManager.slugify(tag);
-                    } else {
-                        window.location.href = 'browse.html#search-' + encodeURIComponent(value);
-                    }
-                    return;
-                }
-                
-                if (value.startsWith('#')) {
-                    var tag = value.substring(1).trim();
-                    TagManager.setActiveTag(tag, false);
-                } else {
-                    TagManager.clearActiveTag();
-                }
-                
-                filterCards();
-            }, 300));
-            
-            searchInput.addEventListener('keydown', function(e) {
-                var value = searchInput.value.trim();
-                if (e.key === 'Enter') {
-                    if (isLandingPage && value.length > 0) {
-                        if (value.startsWith('#')) {
-                            var tag = value.substring(1).trim();
-                            window.location.href = 'browse.html#tag-' + TagManager.slugify(tag);
-                        } else {
-                            window.location.href = 'browse.html#search-' + encodeURIComponent(value);
-                        }
-                        return;
-                    }
-                    if (value.startsWith('#')) {
-                        TagManager.setActiveTag(value.substring(1).trim(), true);
-                    }
-                    searchInput.blur();
-                }
-                if (e.key === 'Escape' && searchInput.value === '') {
-                    TagManager.clearActiveTag();
-                    filterCards();
-                }
-            });
-        }
-        
-        // NOTE: Category triggers are handled by SidebarManager (no duplicate handlers)
-        // NOTE: Subcategory links are handled by SidebarManager (no duplicate handlers)
+        window.addEventListener('clearFilters', function() {
+            TagManager.clearActiveSearch();
+            TagManager.clearActiveTag();
+            if (categoryFilter) categoryFilter.value = '';
+            filterCards();
+        });
     },
-    
+
     createDropdown: function(trigger, nativeSelect, valueDisplay, type) {
         var self = this;
         var dropdown = document.createElement('div');
@@ -648,8 +745,6 @@ const FilterManager = {
                 e.preventDefault();
                 e.stopPropagation();
                 
-                console.log('🖱️ Dropdown option clicked:', option.textContent);
-                
                 nativeSelect.value = option.value;
                 valueDisplay.textContent = option.textContent;
                 
@@ -661,11 +756,11 @@ const FilterManager = {
                 self.closeAllDropdowns();
                 
                 if (type === 'category') {
+                    TagManager.clearActiveSearch();
                     TagManager.clearActiveTag();
-                    TagManager.clearSearchInput();
                     TagManager.setCategoryDisplay(option.textContent);
                     
-                    if (option.value) {
+                    if (option.value) { 
                         window.location.hash = 'category-' + option.value;
                     } else {
                         history.pushState('', '', window.location.pathname);
@@ -700,7 +795,7 @@ const FilterManager = {
             }
         });
     },
-    
+
     toggleDropdown: function(type) {
         var dropdown = this.dropdowns[type];
         if (!dropdown) return;
@@ -713,7 +808,7 @@ const FilterManager = {
             dropdown.trigger.classList.add('active');
         }
     },
-    
+
     closeDropdown: function(type) {
         var dropdown = this.dropdowns[type];
         if (!dropdown) return;
@@ -721,23 +816,12 @@ const FilterManager = {
         dropdown.dropdown.classList.remove('active');
         dropdown.trigger.classList.remove('active');
     },
-    
+
     closeAllDropdowns: function() {
         var self = this;
         Object.keys(this.dropdowns).forEach(function(type) {
             self.closeDropdown(type);
         });
-    },
-    
-    debounce: function(func, wait) {
-        var timeout;
-        return function() {
-            var args = arguments;
-            clearTimeout(timeout);
-            timeout = setTimeout(function() {
-                func.apply(this, args);
-            }, wait);
-        };
     }
 };
 
@@ -747,48 +831,40 @@ function filterCards() {
         return;
     }
     
-    var searchInput = document.getElementById('searchInput');
     var categoryFilter = document.getElementById('categoryFilter');
     var cards = document.querySelectorAll('.link-card');
     var noResults = document.getElementById('noResults');
     var resultsCount = document.getElementById('resultsCount');
-    
-    var searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
-    var category = categoryFilter ? categoryFilter.value : '';
+
     var activeTag = TagManager.getActiveTag();
-    
-    var tagOnlySearch = searchTerm.startsWith('#');
-    if (tagOnlySearch) {
-        searchTerm = searchTerm.substring(1).trim();
-    }
-    
+    var activeSearch = TagManager.getActiveSearch();
+    var category = categoryFilter ? categoryFilter.value : '';
+
     var matchingCategories = CategoryHierarchy.getMatchingCategories(category);
-    
+
     var visibleCount = 0;
-    
-    cards.forEach(function(card) {
+
+    cards.forEach(function(card) { 
         var title = card.dataset.title ? card.dataset.title.toLowerCase() : '';
         var summary = card.dataset.summary ? card.dataset.summary.toLowerCase() : '';
         var tags = card.dataset.tags ? card.dataset.tags.toLowerCase() : '';
         var cardCategory = card.dataset.category || '';
         var cardTagsArray = card.dataset.tags ? card.dataset.tags.split(',').map(function(t) { return t.trim().toLowerCase(); }) : [];
         
-        var matchesTag = !activeTag || cardTagsArray.indexOf(activeTag) !== -1;
+        var matchesFilter = true;
         
-        var matchesSearch = true;
-        if (searchTerm) {
-            if (tagOnlySearch) {
-                matchesSearch = tags.includes(searchTerm);
-            } else {
-                matchesSearch = title.includes(searchTerm) || 
-                                summary.includes(searchTerm) || 
-                                tags.includes(searchTerm);
-            }
+        if (activeSearch) {
+            var searchLower = activeSearch.toLowerCase();
+            matchesFilter = title.includes(searchLower) || 
+                           summary.includes(searchLower) || 
+                           tags.includes(searchLower);
+        
+        } else if (activeTag) {
+            matchesFilter = cardTagsArray.indexOf(activeTag) !== -1;
+        
+        } else if (category) {
+            matchesFilter = matchingCategories.indexOf(cardCategory) !== -1;
         }
-        
-        var matchesCategory = !category || matchingCategories.indexOf(cardCategory) !== -1;
-        
-        var matchesFilter = matchesSearch && matchesTag && (activeTag ? true : matchesCategory);
         
         if (matchesFilter) {
             card.style.display = '';
@@ -797,11 +873,11 @@ function filterCards() {
             card.style.display = 'none';
         }
     });
-    
+
     if (noResults) {
         noResults.style.display = visibleCount === 0 ? 'block' : 'none';
     }
-    
+
     if (resultsCount) {
         resultsCount.textContent = visibleCount + ' item' + (visibleCount !== 1 ? 's' : '');
     }
@@ -815,7 +891,7 @@ function sortCards() {
     
     var sortValue = sortFilter.value;
     var cards = Array.from(grid.querySelectorAll('.link-card'));
-    
+
     cards.sort(function(a, b) {
         if (sortValue === 'newest') {
             return new Date(b.dataset.created || 0) - new Date(a.dataset.created || 0);
@@ -826,7 +902,7 @@ function sortCards() {
         }
         return 0;
     });
-    
+
     cards.forEach(function(card) {
         grid.appendChild(card);
     });
@@ -839,7 +915,26 @@ function handleHashChange() {
     }
     
     var hash = window.location.hash;
-    
+
+    if (hash.startsWith('#search-')) {
+        var searchTerm = decodeURIComponent(hash.replace('#search-', ''));
+        
+        TagManager.setActiveSearch(searchTerm, false);
+        // REMOVED: TagManager.clearActiveTag(); - setActiveSearch already clears activeTag
+        
+        var categoryFilter = document.getElementById('categoryFilter');
+        if (categoryFilter) {
+            categoryFilter.value = '';
+        }
+        
+        document.querySelectorAll('.category-trigger, .subcategory-link').forEach(function(el) {
+            el.classList.remove('active');
+        });
+        
+        filterCards();
+        return;
+    }
+
     if (hash.startsWith('#category-')) {
         var category = hash.replace('#category-', '');
         var categoryFilter = document.getElementById('categoryFilter');
@@ -848,7 +943,7 @@ function handleHashChange() {
             categoryFilter.value = category;
             
             TagManager.clearActiveTag();
-            TagManager.clearSearchInput();
+            TagManager.clearActiveSearch();
             TagManager.updateFilterHeader();
             
             var foundSubcategory = false;
@@ -888,15 +983,15 @@ function handleHashChange() {
             }
             
             filterCards();
+            return;
         }
     }
-    
+
     if (hash.startsWith('#tag-')) {
         var tag = hash.replace('#tag-', '');
         
-        TagManager.activeTag = TagManager.slugify(tag);
-        TagManager.clearSearchInput();
-        TagManager.updateFilterHeader();
+        TagManager.setActiveTag(tag, false);
+        // REMOVED: TagManager.clearActiveSearch(); - setActiveTag already clears activeSearch
         
         var categoryFilter = document.getElementById('categoryFilter');
         if (categoryFilter) {
@@ -908,10 +1003,12 @@ function handleHashChange() {
         });
         
         filterCards();
+        return;
     }
-    
+
     if (!hash || hash === '') {
         TagManager.activeTag = null;
+        TagManager.activeSearch = null;
         TagManager.updateFilterHeader();
     }
 }
@@ -932,23 +1029,17 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.APP_CONFIG) {
         CategoryHierarchy.init(window.APP_CONFIG);
     }
-    
+
     if (window.LINKS_DATA) {
         TagManager.init(window.LINKS_DATA);
     }
-    
+
     ThemeManager.init();
-    SidebarManager.init();  // Handles sidebar accordion (single handler)
-    
+    SidebarManager.init();
     CardManager.init();
-    
+
     if (isBrowsePage) {
-        FilterManager.init();  // Handles filter dropdowns only (no sidebar handlers)
-    }
-    
-    ModalManager.init();
-    
-    if (isBrowsePage) {
+        FilterManager.init();
         handleHashChange();
         
         window.addEventListener('hashchange', function() {
@@ -957,7 +1048,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         updateResultsCount();
     }
-    
+
+    ModalManager.init();
+
     console.log('✅ Initialization complete');
     console.log('📄 Page type:', isLandingPage ? 'Landing' : 'Browse');
 });
