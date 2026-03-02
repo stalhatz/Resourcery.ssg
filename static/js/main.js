@@ -1,8 +1,9 @@
 /**
  * Main JavaScript for Static Link Aggregation Site
- * Compact Cards + Modal Version
+ * Complete File - Search Functionality Fixed
  */
 
+// ==================== CATEGORY HIERARCHY ====================
 const CategoryHierarchy = {
     map: {},
     
@@ -32,12 +33,14 @@ const CategoryHierarchy = {
     }
 };
 
+// ==================== MODAL MANAGER ====================
 const ModalManager = {
     open: function(card) {
         var overlay = document.getElementById('modalOverlay');
         var modal = document.getElementById('modal');
         
-        // Populate modal data
+        if (!overlay || !modal) return;
+        
         document.getElementById('modalTitle').textContent = card.dataset.title;
         document.getElementById('modalSummary').textContent = card.dataset.summary;
         document.getElementById('modalDescription').textContent = card.dataset.description || card.dataset.summary;
@@ -46,28 +49,29 @@ const ModalManager = {
         document.getElementById('modalLanguage').textContent = card.dataset.language;
         document.getElementById('modalVisit').href = card.dataset.url;
         
-        // Set modal image
         var modalImage = document.getElementById('modalImage');
-        if (card.dataset.image) {
-            modalImage.style.backgroundImage = 'url(' + card.dataset.image + ')';
-        } else {
-            modalImage.style.backgroundImage = 'url(/static/images/placeholders/' + card.dataset.category + '.jpg)';
+        if (modalImage) {
+            if (card.dataset.image) {
+                modalImage.style.backgroundImage = 'url(' + card.dataset.image + ')';
+            } else {
+                modalImage.style.backgroundImage = 'url(/static/images/placeholders/' + card.dataset.category + '.jpg)';
+            }
         }
         
-        // Populate tags
         var tagsContainer = document.getElementById('modalTags');
-        tagsContainer.innerHTML = '';
-        var tags = card.dataset.tags.split(',');
-        tags.forEach(function(tag) {
-            if (tag.trim()) {
-                var tagEl = document.createElement('span');
-                tagEl.className = 'modal-tag';
-                tagEl.textContent = tag.trim();
-                tagsContainer.appendChild(tagEl);
-            }
-        });
+        if (tagsContainer) {
+            tagsContainer.innerHTML = '';
+            var tags = card.dataset.tags.split(',');
+            tags.forEach(function(tag) {
+                if (tag.trim()) {
+                    var tagEl = document.createElement('span');
+                    tagEl.className = 'modal-tag';
+                    tagEl.textContent = tag.trim();
+                    tagsContainer.appendChild(tagEl);
+                }
+            });
+        }
         
-        // Setup share links
         var shareUrl = encodeURIComponent(card.dataset.url);
         var shareTitle = encodeURIComponent(card.dataset.title);
         var twitterLink = document.getElementById('shareTwitter');
@@ -75,21 +79,19 @@ const ModalManager = {
             twitterLink.href = 'https://twitter.com/intent/tweet?url=' + shareUrl + '&text=' + shareTitle;
         }
         
-        // Show modal
         overlay.style.display = 'flex';
         setTimeout(function() {
             overlay.classList.add('active');
         }, 10);
         
-        // Prevent body scroll
         document.body.style.overflow = 'hidden';
-        
-        // Focus trap
         modal.focus();
     },
     
     close: function() {
         var overlay = document.getElementById('modalOverlay');
+        if (!overlay) return;
+        
         overlay.classList.remove('active');
         
         setTimeout(function() {
@@ -117,14 +119,12 @@ const ModalManager = {
             });
         }
         
-        // Close on escape
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && overlay.style.display !== 'none') {
+            if (e.key === 'Escape' && overlay && overlay.style.display !== 'none') {
                 self.close();
             }
         });
         
-        // Share button
         var shareBtn = document.getElementById('modalShare');
         if (shareBtn) {
             shareBtn.addEventListener('click', function() {
@@ -140,27 +140,8 @@ const ModalManager = {
     }
 };
 
-document.addEventListener('DOMContentLoaded', function() {
-    if (window.APP_CONFIG) {
-        CategoryHierarchy.init(window.APP_CONFIG);
-    }
-    
-    ThemeManager.init();
-    SidebarManager.init();
-    FilterManager.init();
-    ModalManager.init();
-    
-    handleHashChange();
-    
-    window.addEventListener('hashchange', function() {
-        handleHashChange();
-    });
-    
-    // Update results count
-    updateResultsCount();
-});
-
-var ThemeManager = {
+// ==================== THEME MANAGER ====================
+const ThemeManager = {
     init: function() {
         var toggle = document.getElementById('themeToggle');
         if (!toggle) return;
@@ -177,13 +158,13 @@ var ThemeManager = {
     }
 };
 
+// ==================== SIDEBAR MANAGER ====================
 const SidebarManager = {
     init: function() {
         var toggle = document.getElementById('sidebarToggle');
         var sidebar = document.getElementById('sidebar');
         if (!toggle || !sidebar) return;
         
-        // Create overlay
         var overlay = document.createElement('div');
         overlay.className = 'sidebar-overlay';
         document.body.appendChild(overlay);
@@ -198,7 +179,6 @@ const SidebarManager = {
             overlay.classList.remove('active');
         });
         
-        // Category collapsible behavior (visual only)
         var categoryTriggers = document.querySelectorAll('.category-trigger');
         
         categoryTriggers.forEach(function(trigger) {
@@ -218,21 +198,25 @@ const SidebarManager = {
     }
 };
 
+// ==================== FILTER MANAGER ====================
 const FilterManager = {
     dropdowns: {},
     
     init: function() {
         var self = this;
         
-        // Category trigger
+        // Category dropdown
         var categoryTrigger = document.getElementById('categoryTrigger');
         var categoryFilter = document.getElementById('categoryFilter');
         var categoryValue = document.getElementById('categoryValue');
         
-        // Sort trigger
+        // Sort dropdown
         var sortTrigger = document.getElementById('sortTrigger');
         var sortFilter = document.getElementById('sortFilter');
         var sortValue = document.getElementById('sortValue');
+        
+        // Search input - SEARCH FUNCTIONALITY STARTS HERE
+        var searchInput = document.getElementById('searchInput');
         
         // Initialize dropdowns
         if (categoryTrigger && categoryFilter) {
@@ -243,14 +227,23 @@ const FilterManager = {
             this.createDropdown(sortTrigger, sortFilter, sortValue, 'sort');
         }
         
-        // Sidebar category triggers (parent categories)
+        // Initialize search - CRITICAL FOR SEARCH TO WORK
+        if (searchInput) {
+            console.log('🔍 Search input found, attaching listener');
+            searchInput.addEventListener('input', this.debounce(function() {
+                console.log('🔍 Search input changed, filtering...');
+                filterCards();
+            }, 300));
+        } else {
+            console.warn('⚠️ Search input NOT found');
+        }
+        
+        // Sidebar category triggers
         var categoryTriggers = document.querySelectorAll('.category-trigger');
         
         categoryTriggers.forEach(function(trigger) {
             trigger.addEventListener('click', function() {
                 var categoryId = trigger.dataset.categoryId;
-                
-                console.log('🖱️ Category trigger clicked:', categoryId);
                 
                 var dropdown = document.getElementById('categoryFilter');
                 var categoryValueEl = document.getElementById('categoryValue');
@@ -277,13 +270,11 @@ const FilterManager = {
                     filterCards();
                 }
                 
-                // Highlight active category
                 document.querySelectorAll('.category-trigger').forEach(function(t) {
                     t.classList.remove('active');
                 });
                 trigger.classList.add('active');
                 
-                // Clear subcategory highlights
                 document.querySelectorAll('.subcategory-link').forEach(function(l) {
                     l.classList.remove('active');
                 });
@@ -297,8 +288,6 @@ const FilterManager = {
             link.addEventListener('click', function(e) {
                 e.preventDefault();
                 var category = link.dataset.category;
-                
-                console.log('🖱️ Subcategory clicked:', category);
                 
                 var dropdown = document.getElementById('categoryFilter');
                 if (category && dropdown) {
@@ -324,18 +313,15 @@ const FilterManager = {
                     filterCards();
                 }
                 
-                // Highlight active subcategory
                 document.querySelectorAll('.subcategory-link').forEach(function(l) {
                     l.classList.remove('active');
                 });
                 link.classList.add('active');
                 
-                // Clear category highlights
                 document.querySelectorAll('.category-trigger').forEach(function(t) {
                     t.classList.remove('active');
                 });
                 
-                // Close mobile sidebar
                 var sidebar = document.getElementById('sidebar');
                 var overlay = document.querySelector('.sidebar-overlay');
                 if (window.innerWidth <= 1023) {
@@ -366,7 +352,6 @@ const FilterManager = {
         dropdown.className = 'filter-dropdown';
         dropdown.id = type + 'Dropdown';
         
-        // Create options from native select
         Array.from(nativeSelect.options).forEach(function(option) {
             var btn = document.createElement('button');
             btn.className = 'filter-dropdown-option';
@@ -381,16 +366,13 @@ const FilterManager = {
                 nativeSelect.value = option.value;
                 valueDisplay.textContent = option.textContent;
                 
-                // Update dropdown UI
                 dropdown.querySelectorAll('.filter-dropdown-option').forEach(function(opt) {
                     opt.classList.remove('selected');
                 });
                 btn.classList.add('selected');
                 
-                // Close dropdown
                 self.closeAllDropdowns();
                 
-                // Trigger filter
                 if (type === 'category') {
                     if (option.value) {
                         window.location.hash = 'category-' + option.value;
@@ -405,17 +387,14 @@ const FilterManager = {
             dropdown.appendChild(btn);
         });
         
-        // Position dropdown
         trigger.style.position = 'relative';
         trigger.appendChild(dropdown);
         
-        // Toggle dropdown
         trigger.addEventListener('click', function(e) {
             e.stopPropagation();
             self.toggleDropdown(type);
         });
         
-        // Store reference
         this.dropdowns[type] = {
             trigger: trigger,
             dropdown: dropdown,
@@ -423,7 +402,6 @@ const FilterManager = {
             display: valueDisplay
         };
         
-        // Close on outside click
         document.addEventListener('click', function(e) {
             if (!trigger.contains(e.target)) {
                 self.closeDropdown(type);
@@ -459,37 +437,41 @@ const FilterManager = {
         });
     },
     
-    updateDisplay: function(type, value) {
-        var dropdown = this.dropdowns[type];
-        if (!dropdown) return;
-        
-        var option = Array.from(dropdown.native.options).find(function(opt) {
-            return opt.value === value;
-        });
-        
-        if (option) {
-            dropdown.display.textContent = option.textContent;
-        }
+    debounce: function(func, wait) {
+        var timeout;
+        return function() {
+            var args = arguments;
+            clearTimeout(timeout);
+            timeout = setTimeout(function() {
+                func.apply(this, args);
+            }, wait);
+        };
     }
 };
 
+// ==================== FILTER CARDS FUNCTION ====================
 function filterCards() {
+    console.log('🔄 filterCards() called');
+    
     var searchInput = document.getElementById('searchInput');
     var categoryFilter = document.getElementById('categoryFilter');
     var cards = document.querySelectorAll('.link-card');
     var noResults = document.getElementById('noResults');
+    var resultsCount = document.getElementById('resultsCount');
     
-    var searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+    var searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
     var category = categoryFilter ? categoryFilter.value : '';
+    
+    console.log('🔑 Search term:', searchTerm, '| Category:', category);
     
     var matchingCategories = CategoryHierarchy.getMatchingCategories(category);
     
     var visibleCount = 0;
     
     cards.forEach(function(card) {
-        var title = card.dataset.title.toLowerCase();
-        var summary = card.dataset.summary.toLowerCase();
-        var tags = card.dataset.tags.toLowerCase();
+        var title = card.dataset.title ? card.dataset.title.toLowerCase() : '';
+        var summary = card.dataset.summary ? card.dataset.summary.toLowerCase() : '';
+        var tags = card.dataset.tags ? card.dataset.tags.toLowerCase() : '';
         var cardCategory = card.dataset.category || '';
         
         var matchesSearch = !searchTerm || 
@@ -507,13 +489,18 @@ function filterCards() {
         }
     });
     
+    console.log('✅ Visible:', visibleCount, '/', cards.length);
+    
     if (noResults) {
         noResults.style.display = visibleCount === 0 ? 'block' : 'none';
     }
     
-    updateResultsCount(visibleCount);
+    if (resultsCount) {
+        resultsCount.textContent = visibleCount + ' item' + (visibleCount !== 1 ? 's' : '');
+    }
 }
 
+// ==================== SORT CARDS FUNCTION ====================
 function sortCards() {
     var sortFilter = document.getElementById('sortFilter');
     var grid = document.getElementById('linksGrid');
@@ -538,7 +525,7 @@ function sortCards() {
     });
 }
 
-// After hash change, mark active subcategory
+// ==================== HANDLE HASH CHANGE ====================
 function handleHashChange() {
     var hash = window.location.hash;
     
@@ -558,7 +545,6 @@ function handleHashChange() {
                 categoryValue.textContent = option.textContent;
             }
             
-            // Highlight in sidebar - try subcategory first
             var foundSubcategory = false;
             document.querySelectorAll('.subcategory-link').forEach(function(link) {
                 link.classList.remove('active');
@@ -566,7 +552,6 @@ function handleHashChange() {
                     link.classList.add('active');
                     foundSubcategory = true;
                     
-                    // Auto-expand parent
                     var parentList = link.closest('.subcategory-list');
                     if (parentList) {
                         parentList.classList.add('expanded');
@@ -580,7 +565,6 @@ function handleHashChange() {
                 }
             });
             
-            // If no subcategory matched, highlight parent category
             if (!foundSubcategory) {
                 document.querySelectorAll('.category-trigger').forEach(function(trigger) {
                     trigger.classList.remove('active');
@@ -602,24 +586,36 @@ function handleHashChange() {
     }
 }
 
-function updateResultsCount(visibleCount) {
+// ==================== UPDATE RESULTS COUNT ====================
+function updateResultsCount() {
     var countEl = document.getElementById('resultsCount');
     if (!countEl) return;
     
-    if (visibleCount === undefined) {
-        visibleCount = document.querySelectorAll('.link-card[style=""]').length;
-    }
-    
+    var visibleCount = document.querySelectorAll('.link-card[style=""]').length;
     countEl.textContent = visibleCount + ' item' + (visibleCount !== 1 ? 's' : '');
 }
 
-function debounce(func, wait) {
-    var timeout;
-    return function() {
-        var args = arguments;
-        clearTimeout(timeout);
-        timeout = setTimeout(function() {
-            func.apply(this, args);
-        }, wait);
-    };
-}
+// ==================== DOM CONTENT LOADED ====================
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 DOMContentLoaded fired');
+    
+    if (window.APP_CONFIG) {
+        CategoryHierarchy.init(window.APP_CONFIG);
+    }
+    
+    ThemeManager.init();
+    SidebarManager.init();
+    FilterManager.init();
+    ModalManager.init();
+    
+    handleHashChange();
+    
+    window.addEventListener('hashchange', function() {
+        handleHashChange();
+    });
+    
+    updateResultsCount();
+    
+    console.log('✅ Initialization complete');
+    console.log('🔍 Search functionality: ACTIVE');
+});
