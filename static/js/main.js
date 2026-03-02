@@ -1,7 +1,13 @@
 /**
  * Main JavaScript for Static Link Aggregation Site
- * Complete File - Simplified Filter Header (Tag OR Category, not both)
+ * Complete File - Landing Page + Browse Page Support (FIXED v5)
  */
+
+// ==================== PAGE DETECTION ====================
+const isLandingPage = !window.location.pathname.includes('browse.html');
+const isBrowsePage = window.location.pathname.includes('browse.html');
+
+console.log('📄 Page:', isLandingPage ? 'Landing (index.html)' : 'Browse (browse.html)');
 
 // ==================== CATEGORY HIERARCHY ====================
 const CategoryHierarchy = {
@@ -37,6 +43,7 @@ const CategoryHierarchy = {
 const TagManager = {
     activeTag: null,
     allTags: [],
+    isInitialized: false,
     
     init: function(linksData) {
         var tagSet = {};
@@ -56,6 +63,7 @@ const TagManager = {
         console.log('🏷️ TagManager initialized with', this.allTags.length, 'tags');
         
         this.setupSearchSuggestions();
+        this.isInitialized = true;
     },
     
     slugify: function(text) {
@@ -92,8 +100,6 @@ const TagManager = {
     },
     
     setCategoryDisplay: function(categoryName) {
-        if (this.isUpdating) return;
-        
         var categoryFilter = document.getElementById('categoryFilter');
         if (categoryFilter) {
             categoryFilter.value = categoryName || '';
@@ -114,32 +120,28 @@ const TagManager = {
         }
         
         if (this.activeTag) {
-            // TAG MODE: "Showing #tagname by..."
             filterText1.style.display = 'inline';
             filterText1.textContent = 'Showing';
             filterValue1.style.display = 'inline';
             filterValue1.textContent = '#' + this.activeTag;
             if (filterText2) filterText2.style.display = 'inline';
             
-            // Keep button visible but hide dropdown arrow (not clickable for tags)
             if (categoryTrigger) {
                 categoryTrigger.style.display = 'inline-flex';
-                categoryTrigger.style.pointerEvents = 'none';  // Disable clicks
+                categoryTrigger.style.pointerEvents = 'none';
                 categoryTrigger.style.opacity = '1';
             }
             if (filterIcon) filterIcon.style.display = 'none';
             
         } else {
-            // CATEGORY MODE: "Showing CategoryName by..."
             filterText1.style.display = 'inline';
             filterText1.textContent = 'Showing';
             filterValue1.style.display = 'inline';
             if (filterText2) filterText2.style.display = 'inline';
             
-            // Show button with dropdown arrow (clickable for categories)
             if (categoryTrigger) {
                 categoryTrigger.style.display = 'inline-flex';
-                categoryTrigger.style.pointerEvents = 'auto';  // Enable clicks
+                categoryTrigger.style.pointerEvents = 'auto';
                 categoryTrigger.style.opacity = '1';
             }
             if (filterIcon) filterIcon.style.display = 'inline';
@@ -183,7 +185,7 @@ const TagManager = {
         searchInput.parentNode.style.position = 'relative';
         searchInput.parentNode.appendChild(suggestionsBox);
         
-        searchInput.addEventListener('input', function() {
+        searchInput.addEventListener('input', this.debounce(function() {
             var value = searchInput.value.trim();
             
             if (value.startsWith('#')) {
@@ -198,11 +200,17 @@ const TagManager = {
                         var item = document.createElement('div');
                         item.className = 'suggestion-item';
                         item.textContent = '#' + tag;
-                        item.addEventListener('click', function() {
+                        item.addEventListener('click', function(e) {
+                            e.stopPropagation();
                             searchInput.value = '#' + tag;
                             suggestionsBox.classList.remove('active');
-                            TagManager.setActiveTag(tag);
-                            filterCards();
+                            
+                            if (isLandingPage) {
+                                window.location.href = 'browse.html#tag-' + TagManager.slugify(tag);
+                            } else {
+                                TagManager.setActiveTag(tag);
+                                filterCards();
+                            }
                         });
                         suggestionsBox.appendChild(item);
                     });
@@ -213,7 +221,7 @@ const TagManager = {
             } else {
                 suggestionsBox.classList.remove('active');
             }
-        });
+        }, 300));
         
         document.addEventListener('click', function(e) {
             if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
@@ -226,6 +234,17 @@ const TagManager = {
                 suggestionsBox.classList.remove('active');
             }
         });
+    },
+    
+    debounce: function(func, wait) {
+        var timeout;
+        return function() {
+            var args = arguments;
+            clearTimeout(timeout);
+            timeout = setTimeout(function() {
+                func.apply(this, args);
+            }, wait);
+        };
     }
 };
 
@@ -235,7 +254,10 @@ const ModalManager = {
         var overlay = document.getElementById('modalOverlay');
         var modal = document.getElementById('modal');
         
-        if (!overlay || !modal) return;
+        if (!overlay || !modal) {
+            console.warn('⚠️ Modal elements not found');
+            return;
+        }
         
         document.getElementById('modalTitle').textContent = card.dataset.title;
         document.getElementById('modalSummary').textContent = card.dataset.summary;
@@ -266,9 +288,15 @@ const ModalManager = {
                     tagEl.style.cursor = 'pointer';
                     tagEl.addEventListener('click', function(e) {
                         e.stopPropagation();
-                        TagManager.setActiveTag(tag.trim());
-                        ModalManager.close();
-                        filterCards();
+                        var tagName = tag.trim();
+                        
+                        if (isLandingPage) {
+                            window.location.href = 'browse.html#tag-' + TagManager.slugify(tagName);
+                        } else {
+                            TagManager.setActiveTag(tagName);
+                            ModalManager.close();
+                            filterCards();
+                        }
                     });
                     tagsContainer.appendChild(tagEl);
                 }
@@ -289,6 +317,8 @@ const ModalManager = {
         
         document.body.style.overflow = 'hidden';
         modal.focus();
+        
+        console.log('📦 Modal opened for:', card.dataset.title);
     },
     
     close: function() {
@@ -330,7 +360,8 @@ const ModalManager = {
         
         var shareBtn = document.getElementById('modalShare');
         if (shareBtn) {
-            shareBtn.addEventListener('click', function() {
+            shareBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
                 var url = document.getElementById('modalVisit').href;
                 navigator.clipboard.writeText(url).then(function() {
                     shareBtn.textContent = '✓';
@@ -361,7 +392,7 @@ const ThemeManager = {
     }
 };
 
-// ==================== SIDEBAR MANAGER (ACCORDION) ====================
+// ==================== SIDEBAR MANAGER (ACCORDION - SINGLE HANDLER) ====================
 const SidebarManager = {
     init: function() {
         var toggle = document.getElementById('sidebarToggle');
@@ -382,15 +413,25 @@ const SidebarManager = {
             overlay.classList.remove('active');
         });
         
+        // Category triggers - accordion behavior (browse page only)
         var categoryTriggers = document.querySelectorAll('.category-trigger');
         
         categoryTriggers.forEach(function(trigger) {
-            trigger.addEventListener('click', function() {
-                var isExpanded = trigger.getAttribute('aria-expanded') === 'true';
-                var subcategoryList = document.getElementById(
-                    trigger.getAttribute('aria-controls')
-                );
+            trigger.addEventListener('click', function(e) {
+                e.stopPropagation();
                 
+                // If on landing page, redirect to browse.html
+                if (isLandingPage) {
+                    var categoryId = trigger.dataset.categoryId;
+                    window.location.href = 'browse.html#category-' + categoryId;
+                    return;
+                }
+                
+                // Accordion: collapse all, then expand clicked if it wasn't expanded
+                var isExpanded = trigger.getAttribute('aria-expanded') === 'true';
+                var subcategoryList = document.getElementById(trigger.getAttribute('aria-controls'));
+                
+                // Collapse ALL categories
                 categoryTriggers.forEach(function(t) {
                     t.setAttribute('aria-expanded', 'false');
                     var list = document.getElementById(t.getAttribute('aria-controls'));
@@ -399,18 +440,107 @@ const SidebarManager = {
                     }
                 });
                 
-                if (!isExpanded) {
+                // Expand clicked if it wasn't already
+                if (!isExpanded && subcategoryList) {
                     trigger.setAttribute('aria-expanded', 'true');
-                    if (subcategoryList) {
-                        subcategoryList.classList.add('expanded');
+                    subcategoryList.classList.add('expanded');
+                }
+            });
+        });
+        
+        // Subcategory links
+        var subcategoryLinks = document.querySelectorAll('.subcategory-link');
+        
+        subcategoryLinks.forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var category = link.dataset.category;
+                
+                if (isLandingPage) {
+                    window.location.href = 'browse.html#category-' + category;
+                    return;
+                }
+                
+                // Update filter
+                var dropdown = document.getElementById('categoryFilter');
+                if (category && dropdown) {
+                    dropdown.value = category;
+                    
+                    var categoryValueEl = document.getElementById('filterValue1');
+                    if (categoryValueEl) {
+                        var option = Array.from(dropdown.options).find(function(opt) {
+                            return opt.value === category;
+                        });
+                        
+                        if (option) {
+                            categoryValueEl.textContent = option.textContent;
+                            TagManager.setCategoryDisplay(option.textContent);
+                        }
                     }
+                    
+                    window.location.hash = 'category-' + category;
+                    filterCards();
+                }
+                
+                // Update sidebar active state
+                document.querySelectorAll('.subcategory-link').forEach(function(l) {
+                    l.classList.remove('active');
+                });
+                link.classList.add('active');
+                
+                document.querySelectorAll('.category-trigger').forEach(function(t) {
+                    t.classList.remove('active');
+                });
+                
+                // Close mobile sidebar
+                var sidebar = document.getElementById('sidebar');
+                var overlay = document.querySelector('.sidebar-overlay');
+                if (window.innerWidth <= 1023) {
+                    sidebar.classList.remove('active');
+                    overlay.classList.remove('active');
                 }
             });
         });
     }
 };
 
-// ==================== FILTER MANAGER ====================
+// ==================== CARD MANAGER (Works on BOTH pages) ====================
+const CardManager = {
+    init: function() {
+        document.querySelectorAll('.link-card').forEach(function(card) {
+            card.addEventListener('click', function(e) {
+                e.stopPropagation();
+                ModalManager.open(card);
+            });
+            
+            card.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    ModalManager.open(card);
+                }
+            });
+        });
+        
+        document.querySelectorAll('.card-tags .tag').forEach(function(tag) {
+            tag.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var tagName = tag.dataset.tag || tag.textContent.trim();
+                
+                if (isLandingPage) {
+                    window.location.href = 'browse.html#tag-' + TagManager.slugify(tagName);
+                    return;
+                }
+                
+                TagManager.setActiveTag(tagName, true);
+                filterCards();
+            });
+        });
+    }
+};
+
+// ==================== FILTER MANAGER (Browse page only) ====================
 const FilterManager = {
     dropdowns: {},
     
@@ -419,7 +549,7 @@ const FilterManager = {
         
         var categoryTrigger = document.getElementById('categoryTrigger');
         var categoryFilter = document.getElementById('categoryFilter');
-        var categoryValue = document.getElementById('categoryValue');
+        var categoryValue = document.getElementById('filterValue1');
         
         var sortTrigger = document.getElementById('sortTrigger');
         var sortFilter = document.getElementById('sortFilter');
@@ -427,17 +557,37 @@ const FilterManager = {
         
         var searchInput = document.getElementById('searchInput');
         
-        if (categoryTrigger && categoryFilter) {
+        console.log('🔧 FilterManager elements:', {
+            categoryTrigger: !!categoryTrigger,
+            categoryFilter: !!categoryFilter,
+            categoryValue: !!categoryValue,
+            sortTrigger: !!sortTrigger,
+            sortFilter: !!sortFilter,
+            sortValue: !!sortValue,
+            searchInput: !!searchInput
+        });
+        
+        if (categoryTrigger && categoryFilter && categoryValue) {
             this.createDropdown(categoryTrigger, categoryFilter, categoryValue, 'category');
         }
         
-        if (sortTrigger && sortFilter) {
+        if (sortTrigger && sortFilter && sortValue) {
             this.createDropdown(sortTrigger, sortFilter, sortValue, 'sort');
         }
         
         if (searchInput) {
             searchInput.addEventListener('input', this.debounce(function() {
                 var value = searchInput.value.trim();
+                
+                if (isLandingPage && value.length > 0) {
+                    if (value.startsWith('#')) {
+                        var tag = value.substring(1).trim();
+                        window.location.href = 'browse.html#tag-' + TagManager.slugify(tag);
+                    } else {
+                        window.location.href = 'browse.html#search-' + encodeURIComponent(value);
+                    }
+                    return;
+                }
                 
                 if (value.startsWith('#')) {
                     var tag = value.substring(1).trim();
@@ -450,8 +600,17 @@ const FilterManager = {
             }, 300));
             
             searchInput.addEventListener('keydown', function(e) {
+                var value = searchInput.value.trim();
                 if (e.key === 'Enter') {
-                    var value = searchInput.value.trim();
+                    if (isLandingPage && value.length > 0) {
+                        if (value.startsWith('#')) {
+                            var tag = value.substring(1).trim();
+                            window.location.href = 'browse.html#tag-' + TagManager.slugify(tag);
+                        } else {
+                            window.location.href = 'browse.html#search-' + encodeURIComponent(value);
+                        }
+                        return;
+                    }
                     if (value.startsWith('#')) {
                         TagManager.setActiveTag(value.substring(1).trim(), true);
                     }
@@ -464,132 +623,8 @@ const FilterManager = {
             });
         }
         
-        // Sidebar category triggers
-        var categoryTriggers = document.querySelectorAll('.category-trigger');
-        
-        categoryTriggers.forEach(function(trigger) {
-            trigger.addEventListener('click', function() {
-                var categoryId = trigger.dataset.categoryId;
-                
-                TagManager.clearActiveTag();
-                TagManager.clearSearchInput();
-                
-                var dropdown = document.getElementById('categoryFilter');
-                var categoryValueEl = document.getElementById('categoryValue');
-                
-                if (categoryId && dropdown) {
-                    dropdown.value = categoryId;
-                    
-                    if (categoryValueEl) {
-                        var option = Array.from(dropdown.options).find(function(opt) {
-                            return opt.value === categoryId;
-                        });
-                        
-                        if (option) {
-                            categoryValueEl.textContent = option.textContent;
-                            TagManager.setCategoryDisplay(option.textContent);
-                        } else {
-                            var nameEl = trigger.querySelector('.category-name');
-                            if (nameEl) {
-                                categoryValueEl.textContent = nameEl.textContent.trim();
-                                TagManager.setCategoryDisplay(nameEl.textContent.trim());
-                            }
-                        }
-                    }
-                    
-                    window.location.hash = 'category-' + categoryId;
-                    filterCards();
-                }
-                
-                document.querySelectorAll('.category-trigger').forEach(function(t) {
-                    t.classList.remove('active');
-                });
-                trigger.classList.add('active');
-                
-                document.querySelectorAll('.subcategory-link').forEach(function(l) {
-                    l.classList.remove('active');
-                });
-            });
-        });
-        
-        // Sidebar subcategory links
-        var subcategoryLinks = document.querySelectorAll('.subcategory-link');
-        
-        subcategoryLinks.forEach(function(link) {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                var category = link.dataset.category;
-                
-                TagManager.clearActiveTag();
-                TagManager.clearSearchInput();
-                
-                var dropdown = document.getElementById('categoryFilter');
-                if (category && dropdown) {
-                    dropdown.value = category;
-                    
-                    var categoryValueEl = document.getElementById('categoryValue');
-                    if (categoryValueEl) {
-                        var option = Array.from(dropdown.options).find(function(opt) {
-                            return opt.value === category;
-                        });
-                        
-                        if (option) {
-                            categoryValueEl.textContent = option.textContent;
-                            TagManager.setCategoryDisplay(option.textContent);
-                        } else {
-                            var nameEl = link.querySelector('.subcategory-name');
-                            if (nameEl) {
-                                categoryValueEl.textContent = nameEl.textContent.trim();
-                                TagManager.setCategoryDisplay(nameEl.textContent.trim());
-                            }
-                        }
-                    }
-                    
-                    window.location.hash = 'category-' + category;
-                    filterCards();
-                }
-                
-                document.querySelectorAll('.subcategory-link').forEach(function(l) {
-                    l.classList.remove('active');
-                });
-                link.classList.add('active');
-                
-                document.querySelectorAll('.category-trigger').forEach(function(t) {
-                    t.classList.remove('active');
-                });
-                
-                var sidebar = document.getElementById('sidebar');
-                var overlay = document.querySelector('.sidebar-overlay');
-                if (window.innerWidth <= 1023) {
-                    sidebar.classList.remove('active');
-                    overlay.classList.remove('active');
-                }
-            });
-        });
-        
-        // Card tag clicks
-        document.querySelectorAll('.card-tags .tag, .modal-tag').forEach(function(tag) {
-            tag.addEventListener('click', function(e) {
-                e.stopPropagation();
-                var tagName = tag.dataset.tag || tag.textContent.trim();
-                TagManager.setActiveTag(tagName, true);
-                filterCards();
-            });
-        });
-        
-        // Card click handlers
-        document.querySelectorAll('.link-card').forEach(function(card) {
-            card.addEventListener('click', function() {
-                ModalManager.open(card);
-            });
-            
-            card.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    ModalManager.open(card);
-                }
-            });
-        });
+        // NOTE: Category triggers are handled by SidebarManager (no duplicate handlers)
+        // NOTE: Subcategory links are handled by SidebarManager (no duplicate handlers)
     },
     
     createDropdown: function(trigger, nativeSelect, valueDisplay, type) {
@@ -601,6 +636,7 @@ const FilterManager = {
         Array.from(nativeSelect.options).forEach(function(option) {
             var btn = document.createElement('button');
             btn.className = 'filter-dropdown-option';
+            btn.type = 'button';
             btn.textContent = option.textContent;
             btn.dataset.value = option.value;
             
@@ -608,7 +644,12 @@ const FilterManager = {
                 btn.classList.add('selected');
             }
             
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('🖱️ Dropdown option clicked:', option.textContent);
+                
                 nativeSelect.value = option.value;
                 valueDisplay.textContent = option.textContent;
                 
@@ -641,6 +682,7 @@ const FilterManager = {
         trigger.appendChild(dropdown);
         
         trigger.addEventListener('click', function(e) {
+            e.preventDefault();
             e.stopPropagation();
             self.toggleDropdown(type);
         });
@@ -701,6 +743,10 @@ const FilterManager = {
 
 // ==================== FILTER CARDS FUNCTION ====================
 function filterCards() {
+    if (isLandingPage) {
+        return;
+    }
+    
     var searchInput = document.getElementById('searchInput');
     var categoryFilter = document.getElementById('categoryFilter');
     var cards = document.querySelectorAll('.link-card');
@@ -788,6 +834,10 @@ function sortCards() {
 
 // ==================== HANDLE HASH CHANGE ====================
 function handleHashChange() {
+    if (isLandingPage) {
+        return;
+    }
+    
     var hash = window.location.hash;
     
     if (hash.startsWith('#category-')) {
@@ -797,8 +847,7 @@ function handleHashChange() {
         if (categoryFilter) {
             categoryFilter.value = category;
             
-            // Clear tag state directly (NO hash write)
-            TagManager.activeTag = null;
+            TagManager.clearActiveTag();
             TagManager.clearSearchInput();
             TagManager.updateFilterHeader();
             
@@ -845,7 +894,6 @@ function handleHashChange() {
     if (hash.startsWith('#tag-')) {
         var tag = hash.replace('#tag-', '');
         
-        // Set state directly (NO hash write - don't call setActiveTag!)
         TagManager.activeTag = TagManager.slugify(tag);
         TagManager.clearSearchInput();
         TagManager.updateFilterHeader();
@@ -877,12 +925,6 @@ function updateResultsCount() {
     countEl.textContent = visibleCount + ' item' + (visibleCount !== 1 ? 's' : '');
 }
 
-// ==================== HANDLE HASH CHANGE EVENT ====================
-function onHashChange() {
-    console.log('🔔 hashchange event fired');
-    handleHashChange();
-}
-
 // ==================== DOM CONTENT LOADED ====================
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 DOMContentLoaded fired');
@@ -896,19 +938,26 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     ThemeManager.init();
-    SidebarManager.init();
-    FilterManager.init();
+    SidebarManager.init();  // Handles sidebar accordion (single handler)
+    
+    CardManager.init();
+    
+    if (isBrowsePage) {
+        FilterManager.init();  // Handles filter dropdowns only (no sidebar handlers)
+    }
+    
     ModalManager.init();
     
-    // REMOVED: TagManager.updateFilterHeader(); ← This was the problem
-
-    handleHashChange();  // ← This calls updateFilterHeader() after reading hash
-    
-    
-
-    window.addEventListener('hashchange', onHashChange);
-    
-    updateResultsCount();
+    if (isBrowsePage) {
+        handleHashChange();
+        
+        window.addEventListener('hashchange', function() {
+            handleHashChange();
+        });
+        
+        updateResultsCount();
+    }
     
     console.log('✅ Initialization complete');
+    console.log('📄 Page type:', isLandingPage ? 'Landing' : 'Browse');
 });

@@ -75,6 +75,10 @@
             <header class="main-header">
                 <div class="header-row">
                     <div class="header-title">
+                        <!-- Show home link on browse page -->
+                        {% if request and request.path == '/browse.html' %}
+                        <a href="index.html" class="home-link">← Home</a>
+                        {% endif %}
                         <h1>{{ config.content.header.title }}</h1>
                         {% if config.content.header.subtitle %}
                         <p class="subtitle">{{ config.content.header.subtitle }}</p>

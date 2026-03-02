@@ -5,6 +5,7 @@ Renders Jinja2 templates with JSON data.
 """
 
 import json
+import random
 import os
 import shutil
 import sys
@@ -36,6 +37,13 @@ def validate_data(config, links):
         if key not in links:
             raise ValueError(f"Missing required links key: {key}")
 
+# ==================== CUSTOM JINJA2 FILTERS ====================
+def shuffle_filter(value):
+    """Shuffle a list randomly."""
+    value_list = list(value)
+    random.shuffle(value_list)
+    return value_list
+
 def build():
     """Build the static site."""
     print("🔨 Building static site...")
@@ -49,57 +57,63 @@ def build():
     config = load_json(DATA_DIR / 'site.config.json')
     links = load_json(DATA_DIR / 'links.json')
     
-    # Validate
-    validate_data(config, links)
-    print("✓ Data validation passed")
-    
     # Setup Jinja2
-    env = Environment(
-        loader=FileSystemLoader(TEMPLATES_DIR),
-        autoescape=True
-    )
+    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=True)
     
-    # Render index.html
+    # Register custom filters
+    env.filters['shuffle'] = shuffle_filter
+    
+    # ==================== RENDER TEMPLATES ====================
+    
+    # Render index.html (landing page)
     template = env.get_template('index.html')
     output = template.render(config=config, links=links)
-    
     with open(OUTPUT_DIR / 'index.html', 'w', encoding='utf-8') as f:
         f.write(output)
-    print("✓ index.html rendered")
+    print("✓ index.html rendered (landing page)")
     
-    # Render style.css (NEW)
-    css_template = env.get_template('style.css')
-    css_output = css_template.render(config=config, links=links)
+    # Render browse.html (full browse)
+    template = env.get_template('browse.html')
+    output = template.render(config=config, links=links)
+    with open(OUTPUT_DIR / 'browse.html', 'w', encoding='utf-8') as f:
+        f.write(output)
+    print("✓ browse.html rendered (full browse)")
     
+    # Render style.css (THEMED CSS - CRITICAL!)
+    template = env.get_template('style.css')
+    output = template.render(config=config, links=links)
+    
+    # Create css directory in output
     css_dir = OUTPUT_DIR / 'static' / 'css'
     css_dir.mkdir(parents=True, exist_ok=True)
     
     with open(css_dir / 'style.css', 'w', encoding='utf-8') as f:
-        f.write(css_output)
-    print("✓ style.css rendered")
+        f.write(output)
+    print("✓ style.css rendered (themed)")
     
-    # Copy other static files (JS, images, etc.)
-    for item in STATIC_DIR.iterdir():
-        if item.name != 'css':  # Skip css folder, we rendered it
-            dest = OUTPUT_DIR / 'static' / item.name
-            if item.is_dir():
-                shutil.copytree(item, dest)
-            else:
-                shutil.copy2(item, dest)
-    print("✓ Other static files copied")
+    # ==================== COPY STATIC FILES ====================
     
-    # Copy data files
-    data_output = OUTPUT_DIR / 'data'
-    data_output.mkdir()
-    shutil.copy(DATA_DIR / 'site.config.json', data_output)
-    shutil.copy(DATA_DIR / 'links.json', data_output)
-    print("✓ Data files copied")
+    # Copy only images and js (NOT css)
+    static_output = OUTPUT_DIR / 'static'
+    
+    # Copy images
+    images_src = STATIC_DIR / 'images'
+    if images_src.exists():
+        shutil.copytree(images_src, static_output / 'images')
+        print("✓ Images copied")
+    
+    # Copy JS
+    js_src = STATIC_DIR / 'js'
+    if js_src.exists():
+        shutil.copytree(js_src, static_output / 'js')
+        print("✓ JavaScript copied")
     
     print("\n✅ Build complete!")
     print(f"\n📁 Output directory: {OUTPUT_DIR.absolute()}")
     print("\n🌐 To view the site:")
     print(f"   cd {OUTPUT_DIR} && python -m http.server 8000")
-    print("   Then open: http://localhost:8000")
-
+    print("   Landing page: http://localhost:8000/")
+    print("   Browse page:  http://localhost:8000/browse.html")
+    
 if __name__ == '__main__':
     build()

@@ -1,51 +1,35 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="links-container" id="linksContainer">
-    <!-- Sentence-Style Filter Header -->
-    <div class="filter-header" id="filterHeader">
-        <span class="filter-text" id="filterText1">Showing</span>
+<!-- Landing Page Intro -->
+<section class="landing-intro">
+    <div class="intro-content">
+        <h2 class="intro-title">{{ config.content.landing.intro_title }}</h2>
+        <p class="intro-text">{{ config.content.landing.intro_text }}</p>
         
-        <button class="filter-trigger" id="categoryTrigger" type="button">
-            <span class="filter-value" id="filterValue1">All Categories</span>
-            <span class="filter-icon">▾</span>
-        </button>
-        
-        <span class="filter-text" id="filterText2">by</span>
-        
-        <button class="filter-trigger" id="sortTrigger" type="button">
-            <span class="filter-value" id="sortValue">newest first</span>
-            <span class="filter-icon">▾</span>
-        </button>
-        
-        <span class="results-count" id="resultsCount">0 items</span>
-        
-        <!-- Hidden Selects -->
-        <select id="categoryFilter" class="hidden-select" aria-hidden="true">
-            <option value="">All Categories</option>
-            {% for category in config.navigation.categories %}
-            <option value="{{ category.id }}">{{ category.label }}</option>
-            {% for child in category.children %}
-            <option value="{{ child.id }}">  └ {{ child.label }}</option>
-            {% endfor %}
-            {% endfor %}
-        </select>
-        
-        <select id="sortFilter" class="hidden-select" aria-hidden="true">
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-            <option value="alphabetical">Alphabetical</option>
-        </select>
+        <a href="browse.html" class="browse-all-btn">
+            <span>Browse All Resources</span>
+            <span class="btn-arrow">→</span>
+        </a>
+    </div>
+</section>
+
+<!-- Featured Cards Section -->
+<section class="featured-section">
+    <div class="featured-header">
+        <h3 class="featured-title">Featured Resources</h3>
+        <p class="featured-subtitle">A selection of {{ config.content.landing.featured_count | default(6) }} resources to get you started. Browse all to see more.</p>
     </div>
     
+    {% set active_links = links.links | selectattr('status', 'equalto', 'active') | list | shuffle %}
+    
     <div class="links-grid" id="linksGrid">
-        {% for link in links.links %}
-        {% if link.status == 'active' %}
+        {% for link in active_links %}
+        {% if loop.index <= config.content.landing.featured_count | default(6) %}
         <article class="link-card" 
                  data-id="{{ link.id }}"
                  data-category="{{ link.category }}"
                  data-tags="{{ link.tags | join(',') }}"
-                 data-created="{{ link.created_at }}"
                  data-title="{{ link.title }}"
                  data-summary="{{ link.summary }}"
                  data-description="{{ link.description }}"
@@ -53,10 +37,8 @@
                  data-image="{{ link.image if link.image else '' }}"
                  data-pricing="{{ link.pricing if link.pricing else 'unknown' }}"
                  data-language="{{ link.language if link.language else 'en' }}"
-                 data-featured="{{ 'true' if link.featured else 'false' }}"
                  tabindex="0"
-                 role="button"
-                 aria-label="View details for {{ link.title }}">
+                 role="button">
             
             <div class="card-bg" style="background-image: url('{{ link.image if link.image else '/static/images/placeholders/' + link.category + '.jpg' }}');"></div>
             <div class="card-overlay"></div>
@@ -77,72 +59,16 @@
                     <span class="meta-item language">{{ link.language if link.language else 'en' }}</span>
                 </div>
             </div>
+            
+            <div class="card-footer">
+                <span class="view-details">View Details →</span>
+            </div>
         </article>
         {% endif %}
         {% endfor %}
     </div>
-    
-    <div class="no-results" id="noResults" style="display: none;">
-        <p>{{ config.content.errors.no_results }}</p>
-    </div>
-</div>
+</section>
 
-<!-- Modal Dialog -->
-<div class="modal-overlay" id="modalOverlay" style="display: none;">
-    <div class="modal" id="modal" role="dialog" aria-modal="true">
-        <button class="modal-close" id="modalClose" aria-label="Close modal">×</button>
-        
-        <div class="modal-header">
-            <div class="modal-image" id="modalImage"></div>
-            <div class="modal-title-section">
-                <h2 class="modal-title" id="modalTitle"></h2>
-                <div class="modal-badges">
-                    <span class="modal-category" id="modalCategory"></span>
-                    <span class="modal-pricing" id="modalPricing"></span>
-                    <span class="modal-language" id="modalLanguage"></span>
-                    {% if config.features.social_share %}
-                    <button class="modal-share" id="modalShare" title="Share">🔗</button>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        
-        <div class="modal-body">
-            <div class="modal-section">
-                <h4>Summary</h4>
-                <p id="modalSummary"></p>
-            </div>
-            
-            <div class="modal-section">
-                <h4>Description</h4>
-                <p id="modalDescription"></p>
-            </div>
-            
-            <div class="modal-section">
-                <h4>Tags</h4>
-                <div class="modal-tags" id="modalTags"></div>
-            </div>
-            
-            {% if config.social %}
-            <div class="modal-section">
-                <h4>Share</h4>
-                <div class="modal-share-links">
-                    {% if config.social.twitter %}
-                    <a href="#" class="share-link twitter" id="shareTwitter" target="_blank" rel="noopener">Twitter</a>
-                    {% endif %}
-                    {% if config.social.github %}
-                    <a href="#" class="share-link github" id="shareGithub" target="_blank" rel="noopener">GitHub</a>
-                    {% endif %}
-                </div>
-            </div>
-            {% endif %}
-        </div>
-        
-        <div class="modal-footer">
-            <a href="#" class="modal-visit-btn" id="modalVisit" target="_blank" rel="noopener">
-                Visit Website ↗
-            </a>
-        </div>
-    </div>
-</div>
+<!-- Modal -->
+{% include "modal.html" %}
 {% endblock %}

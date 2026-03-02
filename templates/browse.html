@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Filter Header -->
+<div class="filter-header" id="filterHeader">
+    <span class="filter-text" id="filterText1">Showing</span>
+    
+    <button class="filter-trigger" id="categoryTrigger" type="button">
+        <span class="filter-value" id="filterValue1">All Categories</span>
+        <span class="filter-icon">▾</span>
+    </button>
+    
+    <span class="filter-text" id="filterText2">by</span>
+    
+    <button class="filter-trigger" id="sortTrigger" type="button">
+        <span class="filter-value" id="sortValue">newest first</span>
+        <span class="filter-icon">▾</span>
+    </button>
+    
+    <span class="results-count" id="resultsCount">0 items</span>
+    
+    <!-- Hidden Selects -->
+    <select id="categoryFilter" class="hidden-select" aria-hidden="true">
+        <option value="">All Categories</option>
+        {% for category in config.navigation.categories %}
+        <option value="{{ category.id }}">{{ category.label }}</option>
+        {% for child in category.children %}
+        <option value="{{ child.id }}">  └ {{ child.label }}</option>
+        {% endfor %}
+        {% endfor %}
+    </select>
+    
+    <select id="sortFilter" class="hidden-select" aria-hidden="true">
+        <option value="newest">Newest First</option>
+        <option value="oldest">Oldest First</option>
+        <option value="alphabetical">Alphabetical</option>
+    </select>
+</div>
+
+<!-- All Cards -->
+<div class="links-grid" id="linksGrid">
+    {% for link in links.links %}
+    {% if link.status == 'active' %}
+    <article class="link-card" 
+             data-id="{{ link.id }}"
+             data-category="{{ link.category }}"
+             data-tags="{{ link.tags | join(',') }}"
+             data-created="{{ link.created_at }}"
+             data-title="{{ link.title }}"
+             data-summary="{{ link.summary }}"
+             data-description="{{ link.description }}"
+             data-url="{{ link.url }}"
+             data-image="{{ link.image if link.image else '' }}"
+             data-pricing="{{ link.pricing if link.pricing else 'unknown' }}"
+             data-language="{{ link.language if link.language else 'en' }}"
+             data-featured="{{ 'true' if link.featured else 'false' }}"
+             tabindex="0"
+             role="button">
+        
+        <div class="card-bg" style="background-image: url('{{ link.image if link.image else '/static/images/placeholders/' + link.category + '.jpg' }}');"></div>
+        <div class="card-overlay"></div>
+        
+        <div class="card-content">
+            {% if link.featured %}
+            <span class="featured-badge">★</span>
+            {% endif %}
+            
+            <span class="card-category">{{ link.category }}</span>
+            <h3 class="card-title">{{ link.title }}</h3>
+            <p class="card-summary">{{ link.summary }}</p>
+            
+            <div class="card-meta">
+                <span class="meta-item pricing-{{ link.pricing if link.pricing else 'unknown' }}">
+                    {{ link.pricing if link.pricing else 'unknown' }}
+                </span>
+                <span class="meta-item language">{{ link.language if link.language else 'en' }}</span>
+            </div>
+        </div>
+        
+        <div class="card-footer">
+            <span class="view-details">View Details →</span>
+        </div>
+    </article>
+    {% endif %}
+    {% endfor %}
+</div>
+
+<!-- No Results -->
+<div class="no-results" id="noResults" style="display: none;">
+    <p>{{ config.content.errors.no_results }}</p>
+</div>
+
+<!-- Modal (same as index.html) -->
+{% include "modal.html" %}
+{% endblock %}
