@@ -1445,3 +1445,88 @@ ul, li {
     clip: rect(0, 0, 0, 0);
     border: 0;
 }
+
+/* ============================================
+   SEARCH SUGGESTIONS
+   ============================================ */
+.search-container {
+    position: relative !important;
+}
+
+.search-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: var(--color-background);
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+    display: none;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.search-suggestions.active {
+    display: block;
+}
+
+.suggestion-item {
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    color: var(--color-text);
+    font-size: 0.9rem;
+    transition: var(--transition);
+}
+
+.suggestion-item:hover {
+    background-color: var(--color-surface);
+    color: var(--color-primary);
+}
+
+/* ============================================
+   CARD TAGS (CLICKABLE)
+   ============================================ */
+.card-tags {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.card-tags .tag {
+    padding: 0.25rem 0.5rem;
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    font-size: 0.7rem;
+    color: white;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.card-tags .tag:hover {
+    background-color: var(--color-primary);
+    transform: translateY(-1px);
+}
+
+/* ============================================
+   MODAL TAGS (CLICKABLE)
+   ============================================ */
+.modal-tag {
+    padding: 0.25rem 0.5rem;
+    background-color: var(--color-surface);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.modal-tag:hover {
+    background-color: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
