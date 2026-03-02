@@ -25,6 +25,7 @@ data/
 output/
 *.jpg
 *.png
+*.sh
 
 # Virtual Environment
 .venv/
