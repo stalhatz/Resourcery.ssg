@@ -1,6 +1,6 @@
 /**
  * Main JavaScript for Static Link Aggregation Site
- * Complete File - Search Functionality Fixed
+ * Complete File - Accordion Sidebar (Single Expand)
  */
 
 // ==================== CATEGORY HIERARCHY ====================
@@ -158,7 +158,7 @@ const ThemeManager = {
     }
 };
 
-// ==================== SIDEBAR MANAGER ====================
+// ==================== SIDEBAR MANAGER (ACCORDION) ====================
 const SidebarManager = {
     init: function() {
         var toggle = document.getElementById('sidebarToggle');
@@ -179,6 +179,7 @@ const SidebarManager = {
             overlay.classList.remove('active');
         });
         
+        // Accordion behavior: Only one category expanded at a time
         var categoryTriggers = document.querySelectorAll('.category-trigger');
         
         categoryTriggers.forEach(function(trigger) {
@@ -188,10 +189,21 @@ const SidebarManager = {
                     trigger.getAttribute('aria-controls')
                 );
                 
-                trigger.setAttribute('aria-expanded', !isExpanded);
+                // Collapse ALL categories first
+                categoryTriggers.forEach(function(t) {
+                    t.setAttribute('aria-expanded', 'false');
+                    var list = document.getElementById(t.getAttribute('aria-controls'));
+                    if (list) {
+                        list.classList.remove('expanded');
+                    }
+                });
                 
-                if (subcategoryList) {
-                    subcategoryList.classList.toggle('expanded', !isExpanded);
+                // If it wasn't expanded before, expand it now
+                if (!isExpanded) {
+                    trigger.setAttribute('aria-expanded', 'true');
+                    if (subcategoryList) {
+                        subcategoryList.classList.add('expanded');
+                    }
                 }
             });
         });
@@ -215,7 +227,7 @@ const FilterManager = {
         var sortFilter = document.getElementById('sortFilter');
         var sortValue = document.getElementById('sortValue');
         
-        // Search input - SEARCH FUNCTIONALITY STARTS HERE
+        // Search input
         var searchInput = document.getElementById('searchInput');
         
         // Initialize dropdowns
@@ -227,15 +239,11 @@ const FilterManager = {
             this.createDropdown(sortTrigger, sortFilter, sortValue, 'sort');
         }
         
-        // Initialize search - CRITICAL FOR SEARCH TO WORK
+        // Initialize search
         if (searchInput) {
-            console.log('🔍 Search input found, attaching listener');
             searchInput.addEventListener('input', this.debounce(function() {
-                console.log('🔍 Search input changed, filtering...');
                 filterCards();
             }, 300));
-        } else {
-            console.warn('⚠️ Search input NOT found');
         }
         
         // Sidebar category triggers
@@ -451,8 +459,6 @@ const FilterManager = {
 
 // ==================== FILTER CARDS FUNCTION ====================
 function filterCards() {
-    console.log('🔄 filterCards() called');
-    
     var searchInput = document.getElementById('searchInput');
     var categoryFilter = document.getElementById('categoryFilter');
     var cards = document.querySelectorAll('.link-card');
@@ -461,8 +467,6 @@ function filterCards() {
     
     var searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
     var category = categoryFilter ? categoryFilter.value : '';
-    
-    console.log('🔑 Search term:', searchTerm, '| Category:', category);
     
     var matchingCategories = CategoryHierarchy.getMatchingCategories(category);
     
@@ -488,8 +492,6 @@ function filterCards() {
             card.style.display = 'none';
         }
     });
-    
-    console.log('✅ Visible:', visibleCount, '/', cards.length);
     
     if (noResults) {
         noResults.style.display = visibleCount === 0 ? 'block' : 'none';
@@ -597,8 +599,6 @@ function updateResultsCount() {
 
 // ==================== DOM CONTENT LOADED ====================
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 DOMContentLoaded fired');
-    
     if (window.APP_CONFIG) {
         CategoryHierarchy.init(window.APP_CONFIG);
     }
@@ -615,7 +615,4 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     updateResultsCount();
-    
-    console.log('✅ Initialization complete');
-    console.log('🔍 Search functionality: ACTIVE');
 });
