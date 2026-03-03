@@ -121,10 +121,10 @@ const TagManager = {
         console.log('🔍 Active search:', this.activeSearch);
     },
 
-    setCategoryDisplay: function(categoryName) {
+    setCategoryDisplay: function(categoryId) {
         var categoryFilter = document.getElementById('categoryFilter');
         if (categoryFilter) {
-            categoryFilter.value = categoryName || '';
+            categoryFilter.value = categoryId || ''; // ✅ ID matches option.value
         }
         this.updateFilterHeader();
     },
@@ -623,8 +623,7 @@ const SidebarManager = {
                         });
                         
                         if (option) {
-                            categoryValueEl.textContent = option.textContent;
-                            TagManager.setCategoryDisplay(option.textContent);
+                            TagManager.setCategoryDisplay(category); // ✅ passes the ID already in scope
                         }
                     }
                     
@@ -758,7 +757,7 @@ const FilterManager = {
                 if (type === 'category') {
                     TagManager.clearActiveSearch();
                     TagManager.clearActiveTag();
-                    TagManager.setCategoryDisplay(option.textContent);
+                    TagManager.setCategoryDisplay(option.value);
                     
                     if (option.value) { 
                         window.location.hash = 'category-' + option.value;
