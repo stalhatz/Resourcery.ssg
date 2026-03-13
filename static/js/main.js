@@ -6,37 +6,6 @@
 // ==================== PAGE DETECTION ====================
 const isLandingPage = !window.location.pathname.includes('browse.html');
 const isBrowsePage = window.location.pathname.includes('browse.html');
-console.log('📄 Page:', isLandingPage ? 'Landing (index.html)' : 'Browse (browse.html)');
-
-// ==================== CATEGORY HIERARCHY ====================
-const CategoryHierarchy = {
-    map: {},
-    
-    init: function(config) {
-        var categories = config.navigation?.categories || [];
-        var self = this;
-        
-        categories.forEach(function(cat) {
-            self.map[cat.id] = cat.children ? cat.children.map(function(c) { return c.id; }) : [];
-            
-            if (cat.children) {
-                cat.children.forEach(function(child) {
-                    self.map[child.id] = [child.id];
-                    self.map[child.id + '_parent'] = cat.id;
-                });
-            }
-        });
-    },
-
-    getMatchingCategories: function(categoryId) {
-        var children = this.map[categoryId] || [];
-        if (children.length > 0) {
-            return children.concat([categoryId]);
-        } else {
-            return [categoryId];
-        }
-    }
-};
 
 // ==================== TAG MANAGER ====================
 const TagManager = {
@@ -46,23 +15,9 @@ const TagManager = {
     isInitialized: false,
     selectedSuggestionIndex: -1,
     
-    init: function(linksData) {
-        var tagSet = {};
-        if (linksData && linksData.links) {
-            linksData.links.forEach(function(link) {
-                if (link.tags && Array.isArray(link.tags)) {
-                    link.tags.forEach(function(tag) {
-                        if (tag && tag.trim()) {
-                            tagSet[tag.trim().toLowerCase()] = tag.trim();
-                        }
-                    });
-                }
-            });
-        }
-        
-        this.allTags = Object.values(tagSet).sort();
-        console.log('🏷️ TagManager initialized with', this.allTags.length, 'tags');
-        
+    // No longer needs linksData — tags pre-computed by build.py
+    init: function() {
+        this.allTags = window.ALL_TAGS || [];
         this.setupSearchSuggestions();
         this.isInitialized = true;
     },
@@ -97,7 +52,6 @@ const TagManager = {
         }
         
         this.updateFilterHeader();
-        console.log('🏷️ Active tag:', this.activeTag);
     },
 
     setActiveSearch: function(searchTerm, updateUrl) {
@@ -118,7 +72,6 @@ const TagManager = {
         }
         
         this.updateFilterHeader();
-        console.log('🔍 Active search:', this.activeSearch);
     },
 
     setCategoryDisplay: function(categoryId) {
@@ -203,9 +156,7 @@ const TagManager = {
             } else {
                 filterValue1.textContent = 'All Categories';
             }
-        }
-        
-        console.log('📝 Filter header:', this.activeSearch ? '"' + this.activeSearch + '"' : (this.activeTag ? '#' + this.activeTag : filterValue1.textContent));
+        }       
     },
 
     getActiveTag: function() {
@@ -471,9 +422,7 @@ const ModalManager = {
         }, 10);
         
         document.body.style.overflow = 'hidden';
-        modal.focus();
-        
-        console.log('📦 Modal opened for:', card.dataset.title);
+        modal.focus();       
     },
 
     close: function() {
@@ -685,151 +634,129 @@ const CardManager = {
 
 // ==================== FILTER MANAGER ====================
 const FilterManager = {
-    dropdowns: {},
-    
-    init: function() {
-        var self = this;
-        
-        var categoryTrigger = document.getElementById('categoryTrigger');
-        var categoryFilter = document.getElementById('categoryFilter');
-        var categoryValue = document.getElementById('filterValue1');
-        
-        var sortTrigger = document.getElementById('sortTrigger');
-        var sortFilter = document.getElementById('sortFilter');
-        var sortValue = document.getElementById('sortValue');
-        
-        console.log('🔧 FilterManager elements:', {
-            categoryTrigger: !!categoryTrigger,
-            categoryFilter: !!categoryFilter,
-            categoryValue: !!categoryValue,
-            sortTrigger: !!sortTrigger,
-            sortFilter: !!sortFilter,
-            sortValue: !!sortValue
-        });
-        
-        if (categoryTrigger && categoryFilter && categoryValue) {
-            this.createDropdown(categoryTrigger, categoryFilter, categoryValue, 'category');
-        }
-        
-        if (sortTrigger && sortFilter && sortValue) {
-            this.createDropdown(sortTrigger, sortFilter, sortValue, 'sort');
-        }
-        
-        window.addEventListener('clearFilters', function() {
-            TagManager.clearActiveSearch();
-            TagManager.clearActiveTag();
-            if (categoryFilter) categoryFilter.value = '';
-            filterCards();
-        });
-    },
+  dropdowns: {},
 
-    createDropdown: function(trigger, nativeSelect, valueDisplay, type) {
-        var self = this;
-        var dropdown = document.createElement('div');
-        dropdown.className = 'filter-dropdown';
-        dropdown.id = type + 'Dropdown';
-        
-        Array.from(nativeSelect.options).forEach(function(option) {
-            var btn = document.createElement('button');
-            btn.className = 'filter-dropdown-option';
-            btn.type = 'button';
-            btn.textContent = option.textContent;
-            btn.dataset.value = option.value;
-            
-            if (option.value === nativeSelect.value) {
-                btn.classList.add('selected');
-            }
-            
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                nativeSelect.value = option.value;
-                valueDisplay.textContent = option.textContent;
-                
-                dropdown.querySelectorAll('.filter-dropdown-option').forEach(function(opt) {
-                    opt.classList.remove('selected');
-                });
-                btn.classList.add('selected');
-                
-                self.closeAllDropdowns();
-                
-                if (type === 'category') {
-                    TagManager.clearActiveSearch();
-                    TagManager.clearActiveTag();
-                    TagManager.setCategoryDisplay(option.value);
-                    
-                    if (option.value) { 
-                        window.location.hash = 'category-' + option.value;
-                    } else {
-                        history.pushState('', '', window.location.pathname);
-                    }
-                }
-                
-                filterCards();
-            });
-            
-            dropdown.appendChild(btn);
-        });
-        
-        trigger.style.position = 'relative';
-        trigger.appendChild(dropdown);
-        
-        trigger.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            self.toggleDropdown(type);
-        });
-        
-        this.dropdowns[type] = {
-            trigger: trigger,
-            dropdown: dropdown,
-            native: nativeSelect,
-            display: valueDisplay
-        };
-        
-        document.addEventListener('click', function(e) {
-            if (!trigger.contains(e.target)) {
-                self.closeDropdown(type);
-            }
-        });
-    },
+  init: function() {
 
-    toggleDropdown: function(type) {
-        var dropdown = this.dropdowns[type];
-        if (!dropdown) return;
-        
-        var isActive = dropdown.dropdown.classList.contains('active');
-        this.closeAllDropdowns();
-        
-        if (!isActive) {
-            dropdown.dropdown.classList.add('active');
-            dropdown.trigger.classList.add('active');
-        }
-    },
+    var self = this;
 
-    closeDropdown: function(type) {
-        var dropdown = this.dropdowns[type];
-        if (!dropdown) return;
-        
-        dropdown.dropdown.classList.remove('active');
-        dropdown.trigger.classList.remove('active');
-    },
+    var categoryTrigger  = document.getElementById('categoryTrigger');
+    var categoryFilter   = document.getElementById('categoryFilter');
+    var categoryDropdown = document.getElementById('categoryDropdown');
 
-    closeAllDropdowns: function() {
-        var self = this;
-        Object.keys(this.dropdowns).forEach(function(type) {
-            self.closeDropdown(type);
-        });
+    var sortTrigger  = document.getElementById('sortTrigger');
+    var sortFilter   = document.getElementById('sortFilter');
+    var sortDropdown = document.getElementById('sortDropdown');
+
+    if (categoryTrigger && categoryFilter && categoryDropdown) {
+      this.bindDropdown(categoryTrigger, categoryFilter, categoryDropdown, 'category');
     }
+    if (sortTrigger && sortFilter && sortDropdown) {
+      this.bindDropdown(sortTrigger, sortFilter, sortDropdown, 'sort');
+    }
+
+    window.addEventListener('clearFilters', function() {
+      TagManager.clearActiveSearch();
+      TagManager.clearActiveTag();
+      if (categoryFilter) categoryFilter.value = '';
+      self.syncSelection('category', '');
+      filterCards();
+    });
+  },
+
+  bindDropdown: function(trigger, nativeSelect, dropdown, type) {
+    var self = this;
+
+    // Attach click handlers to pre-rendered option buttons
+    dropdown.querySelectorAll('.filter-dropdown-option').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var value = btn.dataset.value;
+        nativeSelect.value = value;
+        self.syncSelection(type, value);
+        self.closeAllDropdowns();
+
+        if (type === 'category') {
+          TagManager.clearActiveSearch();
+          TagManager.clearActiveTag();
+          TagManager.setCategoryDisplay(value);
+          if (value) {
+            window.location.hash = 'category-' + value;
+          } else {
+            history.pushState('', '', window.location.pathname);
+          }
+          filterCards();
+        } else if (type === 'sort') {
+          sortCards();
+        }
+      });
+    });
+
+    // Toggle open/close
+    trigger.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      self.toggleDropdown(type);
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!trigger.contains(e.target)) {
+        self.closeDropdown(type);
+      }
+    });
+
+    this.dropdowns[type] = {
+      trigger:  trigger,
+      dropdown: dropdown,
+      native:   nativeSelect,
+    };
+  },
+
+  // Mark the button matching `value` as selected, clear others
+  syncSelection: function(type, value) {
+    var entry = this.dropdowns[type];
+    if (!entry) return;
+    entry.dropdown.querySelectorAll('.filter-dropdown-option').forEach(function(btn) {
+      btn.classList.toggle('selected', btn.dataset.value === value);
+    });
+  },
+
+  toggleDropdown: function(type) {
+    var entry = this.dropdowns[type];
+    if (!entry) return;
+    var isActive = entry.dropdown.classList.contains('active');
+    this.closeAllDropdowns();
+    if (!isActive) {
+      entry.dropdown.classList.add('active');
+      entry.trigger.setAttribute('aria-expanded', 'true');
+    }
+  },
+
+  closeDropdown: function(type) {
+    var entry = this.dropdowns[type];
+    if (!entry) return;
+    entry.dropdown.classList.remove('active');
+    entry.trigger.setAttribute('aria-expanded', 'false');
+  },
+
+  closeAllDropdowns: function() {
+    var self = this;
+    Object.keys(this.dropdowns).forEach(function(type) {
+      self.closeDropdown(type);
+    });
+  },
 };
+
 
 // ==================== FILTER CARDS FUNCTION ====================
 function filterCards() {
+
     if (isLandingPage) {
         return;
     }
-    
+
     var categoryFilter = document.getElementById('categoryFilter');
     var cards = document.querySelectorAll('.link-card');
     var noResults = document.getElementById('noResults');
@@ -839,7 +766,7 @@ function filterCards() {
     var activeSearch = TagManager.getActiveSearch();
     var category = categoryFilter ? categoryFilter.value : '';
 
-    var matchingCategories = CategoryHierarchy.getMatchingCategories(category);
+    var matchingCategories = category ? (window.CATEGORY_MAP[category] || [category]) : [];
 
     var visibleCount = 0;
 
@@ -944,7 +871,8 @@ function handleHashChange() {
             TagManager.clearActiveTag();
             TagManager.clearActiveSearch();
             TagManager.updateFilterHeader();
-            
+            FilterManager.syncSelection('category', category);
+
             var foundSubcategory = false;
             document.querySelectorAll('.subcategory-link').forEach(function(link) {
                 link.classList.remove('active');
@@ -1023,15 +951,8 @@ function updateResultsCount() {
 
 // ==================== DOM CONTENT LOADED ====================
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 DOMContentLoaded fired');
-    
-    if (window.APP_CONFIG) {
-        CategoryHierarchy.init(window.APP_CONFIG);
-    }
-
-    if (window.LINKS_DATA) {
-        TagManager.init(window.LINKS_DATA);
-    }
+   
+    TagManager.init();
 
     ThemeManager.init();
     SidebarManager.init();
@@ -1045,11 +966,8 @@ document.addEventListener('DOMContentLoaded', function() {
             handleHashChange();
         });
         
-        updateResultsCount();
+        // updateResultsCount();
     }
 
     ModalManager.init();
-
-    console.log('✅ Initialization complete');
-    console.log('📄 Page type:', isLandingPage ? 'Landing' : 'Browse');
 });

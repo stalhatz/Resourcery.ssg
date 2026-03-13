@@ -132,6 +132,8 @@
     <script>
         window.APP_CONFIG = {{ config | tojson }};
         window.LINKS_DATA = {{ links | tojson }};
+        window.CATEGORY_MAP = {{ category_map | tojson }};
+        window.ALL_TAGS     = {{ all_tags | tojson }};
     </script>
     <script src="static/js/main.js?v={{ links.site_meta.version }}"></script>
 </body>

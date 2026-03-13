@@ -1,95 +1,146 @@
 {% extends "base.html" %}
 
 {% block content %}
+
+<!-- ==================== FILTER BAR ==================== -->
 <div class="filter-header">
-    <span id="filterText1" class="filter-text">Showing</span>
-    
-    <!-- Category filter (button with dropdown) -->
-    <button id="categoryTrigger" class="filter-trigger">
-        <span id="filterValue1" class="filter-value">All Categories</span>
-        <span class="filter-icon">▾</span>
+
+  <span id="filterText1" class="filter-text">Showing</span>
+
+  <!-- Category trigger + dropdown (wrapper needed: button cannot contain button) -->
+  <div style="position: relative; display: inline-flex;">
+    <button class="filter-trigger" id="categoryTrigger" type="button"
+            aria-haspopup="listbox" aria-expanded="false" aria-label="Filter by category">
+      <span id="filterValue1" class="filter-value">All Categories</span>
+      <span class="filter-icon">▾</span>
     </button>
-    
-    <!-- Search filter value (SEPARATE element, shown when search active) -->
-    <span id="searchValue" class="filter-value" style="display: none;"></span>
-    
-    <span id="filterText2" class="filter-text">by</span>
-    
-    <!-- Sort filter (button with dropdown) -->
-    <button id="sortTrigger" class="filter-trigger">
-        <span id="sortValue" class="filter-value">newest first</span>
-        <span class="filter-icon">▾</span>
+
+    <div class="filter-dropdown" id="categoryDropdown" role="listbox">
+      <button class="filter-dropdown-option selected" data-value=""
+              type="button" role="option" aria-selected="true">
+        All Categories
+      </button>
+      {% for cat in config.navigation.categories %}
+      <button class="filter-dropdown-option" data-value="{{ cat.id }}"
+              type="button" role="option" aria-selected="false">
+        {{ cat.label }}
+      </button>
+        {% for child in cat.children %}
+      <button class="filter-dropdown-option filter-dropdown-child" data-value="{{ child.id }}"
+              type="button" role="option" aria-selected="false">
+          {{ child.label }}
+      </button>
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <span id="filterText2" class="filter-text">links</span>
+  <span id="searchValue" style="display:none;"></span>
+
+  <!-- Results count pushed right via CSS margin-left: auto -->
+  <span class="results-count" id="resultsCount">
+    {{ links.links | length }} items
+  </span>
+
+  <!-- Sort trigger + dropdown -->
+  <div style="position: relative; display: inline-flex;">
+    <button class="filter-trigger" id="sortTrigger" type="button"
+            aria-haspopup="listbox" aria-expanded="false" aria-label="Sort links">
+      <span id="sortValue" class="filter-value">Newest</span>
+      <span class="filter-icon">▾</span>
     </button>
-    
-    <span id="resultsCount" class="results-count">0 items</span>
+
+    <div class="filter-dropdown" id="sortDropdown" role="listbox">
+      <button class="filter-dropdown-option selected" data-value="newest"
+              type="button" role="option" aria-selected="true">
+        Newest
+      </button>
+      <button class="filter-dropdown-option" data-value="oldest"
+              type="button" role="option" aria-selected="false">
+        Oldest
+      </button>
+      <button class="filter-dropdown-option" data-value="alphabetical"
+              type="button" role="option" aria-selected="false">
+        Alphabetical
+      </button>
+    </div>
+  </div>
+
 </div>
 
-<!-- Hidden native selects for functionality -->
-<select id="categoryFilter" class="hidden-select">
-    <option value="">All Categories</option>
-    {% for category in config.navigation.categories %}
-    <option value="{{ category.id }}">{{ category.label }}</option>
-    {% for child in category.children %}
-    <option value="{{ child.id }}">└ {{ child.label }}</option>
+<!-- Hidden state holders -->
+<select id="categoryFilter" class="visually-hidden" aria-hidden="true" tabindex="-1">
+  <option value="">All Categories</option>
+  {% for cat in config.navigation.categories %}
+  <option value="{{ cat.id }}">{{ cat.label }}</option>
+    {% for child in cat.children %}
+  <option value="{{ child.id }}">{{ child.label }}</option>
     {% endfor %}
-    {% endfor %}
+  {% endfor %}
 </select>
 
-<select id="sortFilter" class="hidden-select">
-    <option value="newest">Newest First</option>
-    <option value="oldest">Oldest First</option>
-    <option value="alphabetical">Alphabetical</option>
+<select id="sortFilter" class="visually-hidden" aria-hidden="true" tabindex="-1">
+  <option value="newest">Newest</option>
+  <option value="oldest">Oldest</option>
+  <option value="alphabetical">Alphabetical</option>
 </select>
 
+<!-- ==================== LINKS GRID ==================== -->
 <div class="content-wrapper">
-    <div id="linksGrid" class="links-grid">
+  <div class="links-grid" id="linksGrid">
     {% for link in links.links %}
-    {% if link.status == 'active' %}
-        <div class="link-card" 
+    <article class="link-card{% if link.featured %} link-card--featured{% endif %}"
+             role="button"
              tabindex="0"
+             aria-label="{{ link.title }}"
              data-title="{{ link.title }}"
              data-summary="{{ link.summary }}"
-             data-description="{{ link.description }}"
+             data-description="{{ link.description | default(link.summary) }}"
              data-url="{{ link.url }}"
-             data-image="{{ link.image }}"
              data-category="{{ link.category }}"
              data-tags="{{ link.tags | join(',') }}"
-             data-pricing="{{ link.pricing }}"
-             data-language="{{ link.language }}"
-             data-created="{{ link.created_at }}">
-            
-            {% if link.featured %}
-            <span class="featured-badge">★</span>
-            {% endif %}
-            
-            <div class="card-bg" style="background-image: url('{{ link.image }}');"></div>
-            <div class="card-overlay"></div>
-            
-            <div class="card-content">
-                <span class="card-category">{{ link.category }}</span>
-                <h3 class="card-title">{{ link.title }}</h3>
-                <p class="card-summary">{{ link.summary }}</p>
-                
-                <div class="card-meta">
-                    <span class="meta-item pricing-{{ link.pricing if link.pricing else 'unknown' }}">{{ link.pricing if link.pricing else 'unknown' }}</span>
-                    <span class="meta-item language">{{ link.language if link.language else 'en' }}</span>
-                </div>
-                
-                <div class="card-tags">
-                {% for tag in link.tags %}
-                    <span class="tag" data-tag="{{ tag }}">{{ tag }}</span>
-                {% endfor %}
-                </div>
-            </div>
+             data-pricing="{{ link.pricing | default('unknown') }}"
+             data-language="{{ link.language | default('en') }}"
+             data-created="{{ link.created | default('') }}"
+             {% if link.image %}data-image="{{ link.image }}"{% endif %}>
+
+      <div class="card-bg" style="background-image: url('{% if link.image %}{{ link.image }}{% else %}/static/images/placeholders/{{ link.category }}.jpg{% endif %}');"></div>
+      <div class="card-overlay"></div>
+
+      {% if link.featured %}
+      <div class="featured-badge" aria-label="Featured">★</div>
+      {% endif %}
+
+      <div class="card-content">
+        <span class="card-category">{{ link.category }}</span>
+        <h2 class="card-title">{{ link.title }}</h2>
+        <p class="card-summary">{{ link.summary }}</p>
+
+        <div class="card-meta">
+          <span class="meta-item pricing-{{ link.pricing | default('unknown') | lower }}">
+            {{ link.pricing | default('unknown') }}
+          </span>
+          <span class="meta-item language">
+            {{ link.language | default('en') }}
+          </span>
         </div>
-    {% endif %}
+
+    </article>
     {% endfor %}
-    </div>
-    
-    <div id="noResults" class="no-results" style="display: none;">
-        {{ config.content.errors.no_results }}
-    </div>
+  </div>
+
+  <div class="no-results" id="noResults" style="display:none;" aria-live="polite">
+    <p class="no-results-title">No links found</p>
+    <p class="no-results-text">Try a different filter or search term.</p>
+    <button class="no-results-reset" type="button"
+            onclick="window.dispatchEvent(new Event('clearFilters'))">
+      Clear filters
+    </button>
+  </div>
 </div>
 
+<!-- ==================== MODAL ==================== -->
 {% include "modal.html" %}
+
 {% endblock %}
