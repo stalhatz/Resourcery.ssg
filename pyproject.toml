@@ -1,8 +1,8 @@
 [tool.poetry]
-name = "static-link-aggregator"
-version = "1.0.0"
+name = "Resourcery.ssg"
+version = "0.1.0"
 description = "A static link aggregation website with JSON schema validation"
-authors = ["Your Name <you@example.com>"]
+authors = ["stalhatz@gmail.com"]
 license = "MIT"
 
 [tool.poetry.dependencies]
