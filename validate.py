@@ -64,6 +64,37 @@ class DataValidator:
         
         return True
     
+    def validate_effects(self):
+        effects = self.config_data.get('theme', {}).get('effects', {})
+        if not effects:
+            return  # all defaults, always fine
+
+        card_style       = effects.get('card_style', 'image-overlay')
+        shadow_intensity = effects.get('shadow_intensity', 'subtle')
+        hover_effect     = effects.get('hover_effect', 'lift')
+        border_treatment = effects.get('border_treatment', 'hairline')
+
+        # elevated card_style with no shadows defeats the entire point
+        if card_style == 'elevated' and shadow_intensity == 'none':
+            self.warnings.append(
+                "⚠️ effects: card_style 'elevated' with shadow_intensity 'none' "
+                "will render identically to 'flat' — consider 'medium' or 'dramatic'."
+            )
+
+        # outlined card_style overrides its own border, border_treatment is irrelevant
+        if card_style == 'outlined' and border_treatment in ('none', 'hairline'):
+            self.warnings.append(
+                "⚠️ effects: card_style 'outlined' uses its own primary-color border — "
+                "border_treatment 'none'/'hairline' has no visible effect on cards."
+            )
+
+        # image-overlay with hover 'outline' is low contrast (outline on image)
+        if card_style == 'image-overlay' and hover_effect == 'outline':
+            self.warnings.append(
+                "⚠️ effects: hover_effect 'outline' on card_style 'image-overlay' "
+                "may have poor contrast against dark card backgrounds — consider 'glow'."
+            )
+
     def validate_schema(self, data: Dict, schema: Dict, name: str) -> bool:
         """Validate data against a JSON schema."""
         try:
@@ -211,6 +242,7 @@ class DataValidator:
         if config_valid and links_valid:
             print("🔗 Running cross-validation checks...")
             cross_valid = self.cross_validate()
+            self.validate_effects()
             print()
         else:
             cross_valid = False

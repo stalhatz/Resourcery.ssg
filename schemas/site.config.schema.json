@@ -4,6 +4,7 @@
   "description": "Configuration for theme, layout, content, and navigation",
   "type": "object",
   "required": ["site_info", "theme", "navigation", "content"],
+  "additionalProperties": false,
   "properties": {
     "site_info": {
       "type": "object",
@@ -19,37 +20,89 @@
     "theme": {
       "type": "object",
       "required": ["colors", "layout"],
+      "additionalProperties": false,
       "properties": {
         "colors": {
           "type": "object",
           "required": ["primary", "background", "text"],
+          "additionalProperties": false,
           "properties": {
-            "primary": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-            "secondary": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-            "background": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-            "surface": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-            "text": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-            "text_muted": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-            "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-            "error": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-            "success": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+            "primary":     { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "secondary": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "description": "Interaction color — used for hovers, focus states, and active transitions. Should be visually distinct from primary but harmonious (e.g. a darker/lighter shade, complementary hue, or analogous color). Default: #64748b."
+          },
+            "background":  { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "surface":     { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "text":        { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "text_muted":  { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "accent":      { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "error":       { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+            "success":     { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
           }
         },
         "typography": {
           "type": "object",
+          "additionalProperties": false,
           "properties": {
-            "font_family": { "type": "string" },
+            "font_family":    { "type": "string" },
             "font_size_base": { "type": "string" },
-            "heading_font": { "type": "string" }
+            "heading_font":   { "type": "string" }
           }
         },
         "layout": {
           "type": "object",
+          "additionalProperties": false,
           "properties": {
-            "view_mode": { "type": "string", "enum": ["grid", "list", "masonry"] },
-            "items_per_page": { "type": "integer", "minimum": 1 },
+            "view_mode":       { "type": "string", "enum": ["grid", "list", "masonry"] },
+            "items_per_page":  { "type": "integer", "minimum": 1 },
             "sidebar_enabled": { "type": "boolean", "default": true },
-            "max_width": { "type": "string" }
+            "sidebar_width":   { "type": "string" },
+            "max_width":       { "type": "string" }
+          }
+        },
+        "effects": {
+          "type": "object",
+          "description": "Visual personality of the site. All fields are optional; omitting any field applies its default. Combine these to produce distinct styles — see description of each value for guidance.",
+          "additionalProperties": false,
+          "properties": {
+            "card_style": {
+              "type": "string",
+              "enum": ["image-overlay", "flat", "outlined", "elevated"],
+              "default": "image-overlay",
+              "description": "Dominant visual treatment of link cards. 'image-overlay': dark gradient over thumbnail image, white text — cinematic, editorial, media/inspiration boards. 'flat': solid surface background, no shadow, dark text — clean, academic, documentation, professional directories. 'outlined': bold primary-color border, no shadow, dark text — editorial, developer tools, zines, technical references. 'elevated': strong drop shadow, no border, dark text — product directories, SaaS tools, dashboards."
+            },
+            "shadow_intensity": {
+              "type": "string",
+              "enum": ["none", "subtle", "medium", "dramatic"],
+              "default": "subtle",
+              "description": "Global shadow depth applied to cards, modals, and dropdowns. 'none': completely flat, zero elevation — brutalist, ultra-minimal, print-inspired. 'subtle': barely perceptible lift — light and clean, suits most sites. 'medium': clear depth — professional, balanced. 'dramatic': strong, deep shadows — rich and bold, pairs well with 'elevated' card_style."
+            },
+            "border_radius": {
+              "type": "string",
+              "enum": ["sharp", "standard", "soft", "round"],
+              "default": "standard",
+              "description": "Corner rounding applied globally to cards, buttons, inputs, modals, tags, and badges. 'sharp': 0px — structured, technical, brutalist, newspaper-style. 'standard': 8px — neutral and professional, suits most domains. 'soft': 16px — friendly, approachable, modern consumer feel. 'round': 24px — playful, lifestyle, children's content, social platforms."
+            },
+            "border_treatment": {
+              "type": "string",
+              "enum": ["none", "hairline", "bold", "accent"],
+              "default": "hairline",
+              "description": "Style of structural dividers: sidebar border, header underline, footer top border, and card borders in non-overlay card styles. 'none': no visible borders, separation by spacing and shadow only — airy and modern. 'hairline': barely visible 1px lines — clean neutral default. 'bold': 2px dark borders — assertive, editorial, high-contrast. 'accent': 2px borders using the primary color — strongly branded, high visual identity."
+            },
+            "hover_effect": {
+              "type": "string",
+              "enum": ["none", "lift", "glow", "outline"],
+              "default": "lift",
+              "description": "Animation feedback when hovering over link cards. 'none': no animation — static, document-like, suitable for accessibility-first or print-inspired designs. 'lift': card rises slightly with translateY — default tactile feel. 'glow': colored halo using the primary color — vivid, creative, gaming, entertainment. 'outline': crisp border appears on hover — sharp and keyboard-navigation-friendly, suits technical and developer-focused sites."
+            },
+            "heading_style": {
+              "type": "string",
+              "enum": ["natural", "editorial", "elegant", "uppercase"],
+              "default": "natural",
+              "description": "Typographic personality of all headings and prominent labels (site title, card titles, intro title, modal title). 'natural': standard weight and spacing — neutral and versatile, good default. 'editorial': tight negative letter-spacing, heavy weight — bold, modern, journalistic. 'elegant': wide letter-spacing, light weight — refined, cultural institutions, high-end collections, art. 'uppercase': all-caps with tracked spacing, strong weight — structured, institutional, signage-like, technical directories."
+            }
           }
         }
       }
@@ -64,18 +117,18 @@
             "type": "object",
             "required": ["id", "label"],
             "properties": {
-              "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+              "id":    { "type": "string", "pattern": "^[a-z0-9-]+$" },
               "label": { "type": "string" },
-              "icon": { "type": "string" },
+              "icon":  { "type": "string" },
               "children": {
                 "type": "array",
                 "items": {
                   "type": "object",
                   "required": ["id", "label"],
                   "properties": {
-                    "id": { "type": "string" },
+                    "id":    { "type": "string" },
                     "label": { "type": "string" },
-                    "icon": { "type": "string" }
+                    "icon":  { "type": "string" }
                   }
                 }
               }
@@ -88,8 +141,8 @@
             "type": "object",
             "required": ["label", "url"],
             "properties": {
-              "label": { "type": "string" },
-              "url": { "type": "string" },
+              "label":        { "type": "string" },
+              "url":          { "type": "string" },
               "open_new_tab": { "type": "boolean", "default": false }
             }
           }
@@ -103,49 +156,33 @@
         "landing": {
           "type": "object",
           "properties": {
-            "enabled": {
-              "type": "boolean",
-              "default": true
-            },
-            "intro_title": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100
-            },
-            "intro_text": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 500
-            },
-            "featured_count": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 20,
-              "default": 6
-            }
+            "enabled":       { "type": "boolean", "default": true },
+            "intro_title":   { "type": "string", "minLength": 1, "maxLength": 100 },
+            "intro_text":    { "type": "string", "minLength": 1, "maxLength": 500 },
+            "featured_count":{ "type": "integer", "minimum": 1, "maximum": 20, "default": 6 }
           }
         },
         "header": {
           "type": "object",
           "properties": {
-            "title": { "type": "string" },
-            "subtitle": { "type": "string" },
+            "title":      { "type": "string" },
+            "subtitle":   { "type": "string" },
             "cta_button": { "type": "string" },
-            "cta_link": { "type": "string" }
+            "cta_link":   { "type": "string" }
           }
         },
         "footer": {
           "type": "object",
           "properties": {
             "copyright": { "type": "string" },
-            "text": { "type": "string" },
+            "text":      { "type": "string" },
             "links": {
               "type": "array",
               "items": {
                 "type": "object",
                 "properties": {
                   "label": { "type": "string" },
-                  "url": { "type": "string" }
+                  "url":   { "type": "string" }
                 }
               }
             }
@@ -154,25 +191,25 @@
         "errors": {
           "type": "object",
           "properties": {
-            "404": { "type": "string" },
-            "no_results": { "type": "string" },
+            "404":         { "type": "string" },
+            "no_results":  { "type": "string" },
             "load_failed": { "type": "string" }
           }
         },
         "placeholders": {
           "type": "object",
           "properties": {
-            "search_bar": { "type": "string" },
+            "search_bar":        { "type": "string" },
             "default_image_alt": { "type": "string" },
-            "image_error_text": { "type": "string" }
+            "image_error_text":  { "type": "string" }
           }
         },
         "tooltips": {
           "type": "object",
           "properties": {
-            "copy_link": { "type": "string" },
-            "visit_site": { "type": "string" },
-            "filter_by_tag": { "type": "string" }
+            "copy_link":    { "type": "string" },
+            "visit_site":   { "type": "string" },
+            "filter_by_tag":{ "type": "string" }
           }
         }
       }
@@ -183,7 +220,7 @@
         "search": {
           "type": "object",
           "properties": {
-            "enabled": { "type": "boolean", "default": true },
+            "enabled":   { "type": "boolean", "default": true },
             "min_chars": { "type": "integer", "default": 2 }
           }
         },
@@ -198,7 +235,7 @@
           "type": "object",
           "properties": {
             "provider": { "type": "string" },
-            "id": { "type": "string" }
+            "id":        { "type": "string" }
           }
         },
         "social_share": { "type": "boolean", "default": true }
@@ -208,8 +245,8 @@
       "type": "object",
       "properties": {
         "twitter": { "type": "string", "format": "uri" },
-        "github": { "type": "string", "format": "uri" },
-        "email": { "type": "string", "format": "email" }
+        "github":  { "type": "string", "format": "uri" },
+        "email":   { "type": "string", "format": "email" }
       }
     }
   }

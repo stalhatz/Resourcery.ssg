@@ -96,6 +96,7 @@ Based on the **tone and subject matter** of the attached content, make design de
 - **Typography:** Choose fonts that match the content style.
 - **Navigation:** Structure the `categories` hierarchy logically based on the extracted data.
 - **Content:** Write compelling header titles, subtitles, and footer text that match the site's purpose.
+- **Effects** control the visual personality of the site (card style, shadows, borders, hover behaviour, typography) — choose values that match the domain and tone of the content.
 
 ### 3. Populate Links (`links.json`)
 - Map every extracted resource to a link object.
