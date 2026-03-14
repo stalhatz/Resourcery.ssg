@@ -1,6 +1,33 @@
-# Static Link Aggregation Site
+# Resourcery.ssg
 
-A modern, static link aggregation website built with Python, Jinja2, and vanilla JavaScript. Features a responsive metro-style sidebar, sentence-style filtering, compact card layout with modals, and dark mode.
+A static link collection site generator powered by Python, Jinja2, and vanilla JavaScript. Comes with a structured JSON schema and a ready-made LLM prompt to extract and enrich your existing links — wherever you've stored them — into the required format. From there, one build command produces a fully navigable, responsive site with a hierarchical category sidebar, tag-based discovery, full-text search, card modals, and dark mode. No platform, no auth, no runtime dependencies.
+
+## Who Is This For
+
+People who:
+- Have accumulated links, resources, or references in notes or bookmarks and want to give them a proper home
+- Need to share a curated collection with a group without setting up a platform, managing accounts, or writing any frontend code
+- Want something more structured than a text file but quicker to build than a purpose-built web app
+- Appreciate that the output is just static HTML/CSS/JS — hostable anywhere, works offline, no dependencies at runtime
+
+## Use Cases
+
+**Education & Research**
+- Sharing a course bibliography or reading list with students
+- Curating sources around a research topic for a team or collaborator
+
+**Community & Culture**
+- Introducing friends to a fandom, genre, or subculture through a guided collection
+- Building a living resource hub for a community (tools, references, further reading)
+
+**Professional**
+- Onboarding resources for a new team member
+- A public-facing list of tools, services, or references relevant to your domain
+
+**Personal**
+- Turning years of saved links into something navigable and shareable
+- A digital garden of references without the overhead of a CMS
+
 
 ## Architecture
 
@@ -10,35 +37,8 @@ A modern, static link aggregation website built with Python, Jinja2, and vanilla
 | **Data** | JSON | site.config.json + links.json |
 | **Validation** | JSON Schema | Enforced via jsonschema library |
 | **Styling** | CSS Variables | Theming via CSS custom properties |
-| **Interactivity** | Vanilla JS | No framework (FilterManager, ModalManager, etc.) |
+| **Interactivity** | Vanilla JS | No framework |
 | **Build** | Python Script | build.py renders and copies assets |
-
-## Project Structure
-
-```
-project/
-├── data/
-│   ├── site.config.json       # Site configuration (theme, nav, content)
-│   └── links.json             # Link entries (validated against schema)
-├── schemas/
-│   ├── site.config.schema.json
-│   └── links.schema.json
-├── templates/
-│   ├── base.html              # Base layout + sidebar + header
-│   ├── index.html             # Main content (cards + modal)
-│   └── style.css              # Templated CSS (colors/fonts from config)
-├── static/
-│   ├── js/
-│   │   └── main.js            # All client-side logic
-│   └── images/
-│       ├── placeholders/      # Category fallback images
-│       └── acquired/          # Images fetched via image_acquirer.py
-├── build.py                   # Main build script
-├── validate.py                # JSON schema validation
-├── image_acquirer.py          # Optional: fetch images from URLs
-├── pyproject.toml             # Poetry dependencies
-└── output/                    # Generated static site (gitignored)
-```
 
 ## Quick Start
 
@@ -117,44 +117,7 @@ Based on the **tone and subject matter** of the attached content, make design de
 Provide exactly two JSON code blocks. Do not add markdown formatting inside the JSON.
 ```
 
-
-### Scenario A: "I have a folder of bookmarks"
-1. Export bookmarks to HTML or Markdown.
-2. Attach the file.
-3. **Add this note to the prompt:**
-   > "These are my browser bookmarks. Please group them into logical categories and use a 'Developer Dashboard' theme (dark mode, monospace fonts)."
-
-### Scenario B: "I have a research paper PDF"
-1. Attach the PDF.
-2. **Add this note:**
-   > "This is a research paper. Extract all URLs cited in the bibliography as 'Papers'. Create a site theme suitable for an academic repository (serif fonts, conservative colors)."
-
-### Scenario C: "I have a screenshot of a website list"
-1. Attach the screenshot.
-2. **Add this note:**
-   > "Extract the links visible in this screenshot. Use OCR if necessary. Categorize them based on the visible headings."
-
-### Scenario D: "I have a messy Word doc"
-1. Attach the `.docx`.
-2. **Add this note:**
-   > "This document contains a curated list of resources. Clean up the formatting, extract the links, and design a 'Modern Tech Blog' theme."
-
----
-
-## Context for AI Assistants
-
-If continuing this project in a new chat session, provide this README plus the specific file(s) being modified. Key modules in main.js:
-
-- CategoryHierarchy: Maps parent/child category relationships
-- FilterManager: Handles sidebar clicks, dropdowns, filtering logic
-- ModalManager: Opens/closes detail modals
-- SidebarManager: Handles mobile toggle + collapsible categories
-- filterCards(): Core filtering function (search + category)
-- handleHashChange(): Syncs URL hash with filter state
-
 ## Acknowledgments
-This project was vibe-coded with the assistance of **Alibaba Qwen (v3.5)**.
-
-Learn more about Qwen: https://github.com/QwenLM/Qwen
+This project was vibe-coded with the assistance of **Alibaba Qwen (v3.5)** and **Claude Sonnet (v4.6)**
 
 Built with ☕, 🐍, and ✨
