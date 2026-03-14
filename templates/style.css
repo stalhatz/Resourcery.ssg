@@ -58,6 +58,8 @@ ul, li {
   /* Fonts */
   --font-family:   {{ config.theme.typography.font_family  | default("'Inter', -apple-system, BlinkMacSystemFont, sans-serif", true) }};
   --heading-font:  {{ config.theme.typography.heading_font | default("'Poppins', var(--font-family)", true) }};
+  --heading-size-scale:  {{ config.theme.typography.heading_size_scale | default(1, true) }};
+
 
   /* Layout */
   --sidebar-width: {{ config.theme.layout.sidebar_width | default('280px', true) }};
@@ -105,20 +107,9 @@ ul, li {
   --border-color: rgba(0,0,0,0.09);
   {% endif %}
 
-  /* ── Heading style (from effects.heading_style) ── */
-  {% if heading_style == 'editorial' %}
-  --heading-weight:         800;
-  --heading-letter-spacing: -0.03em;
-  {% elif heading_style == 'elegant' %}
-  --heading-weight:         300;
-  --heading-letter-spacing: 0.07em;
-  {% elif heading_style == 'uppercase' %}
-  --heading-weight:         700;
-  --heading-letter-spacing: 0.10em;
-  {% else %}
-  --heading-weight:         700;
-  --heading-letter-spacing: 0;
-  {% endif %}
+  /* ── Heading style (from effects.heading_style, resolved by build.py) ── */
+  --heading-weight:         {{ heading_weight }};
+  --heading-letter-spacing: {{ heading_letter_spacing }};
 }
 
 [data-theme="dark"] {
@@ -168,7 +159,7 @@ ul, li {
 
 .logo-text {
   font-family: var(--heading-font);
-  font-size: 1.25rem;
+  font-size: calc(1.25rem * var(--heading-size-scale));
   font-weight: var(--heading-weight);
   letter-spacing: var(--heading-letter-spacing);
   color: var(--color-primary);
@@ -409,7 +400,7 @@ ul, li {
 
 .header-title h1 {
   font-family: var(--heading-font);
-  font-size: 1.25rem;
+  font-size: calc(1.45rem * var(--heading-size-scale));
   font-weight: var(--heading-weight);
   letter-spacing: var(--heading-letter-spacing);
   margin-bottom: 0.15rem;
@@ -765,7 +756,7 @@ ul, li {
 
 .card-title {
   font-family: var(--heading-font);
-  font-size: 1.1rem;
+  font-size: calc(1.2rem * var(--heading-size-scale));
   font-weight: var(--heading-weight);
   letter-spacing: var(--heading-letter-spacing);
   margin-bottom: 0.3rem;
@@ -971,7 +962,7 @@ ul, li {
 
 .modal-title {
   font-family: var(--heading-font);
-  font-size: 1.5rem;
+  font-size: calc(1.5rem * var(--heading-size-scale));
   font-weight: var(--heading-weight);
   letter-spacing: var(--heading-letter-spacing);
   margin-bottom: 0.5rem;
@@ -1023,7 +1014,7 @@ ul, li {
 
 .modal-section h4 {
   font-family: var(--heading-font);
-  font-size: 0.85rem;
+  font-size: calc(0.85rem * var(--heading-size-scale));
   font-weight: 600;
   color: var(--color-text-muted);
   text-transform: uppercase;
@@ -1305,7 +1296,7 @@ ul, li {
 
 .intro-title {
   font-family: var(--heading-font);
-  font-size: 2.25rem;
+  font-size: calc(2.25rem * var(--heading-size-scale));
   font-weight: var(--heading-weight);
   letter-spacing: var(--heading-letter-spacing);
   color: var(--color-text);
@@ -1367,7 +1358,7 @@ ul, li {
 
 .featured-title {
   font-family: var(--heading-font);
-  font-size: 1.5rem;
+  font-size: calc(1.5rem * var(--heading-size-scale));
   font-weight: 600;
   color: var(--color-text);
   margin-bottom: 0.5rem;

@@ -109,6 +109,32 @@ class DataValidator:
             self.errors.append(f"   Path: {' -> '.join(str(p) for p in e.path)}")
             return False
     
+    def validate_fonts(self):
+        from font_acquirer import find_first_downloadable, extract_google_font_candidates
+        from theme_constants import get_required_weights, weights_to_api_param
+
+        typography   = self.config_data.get('theme', {}).get('typography', {})
+        font_family  = typography.get('font_family',  '')
+        heading_font = typography.get('heading_font', '')
+
+        heading_style = self.config_data.get('theme', {}).get('effects', {}).get('heading_style', 'natural')
+        weights_param = weights_to_api_param(get_required_weights(heading_style))
+
+        for field, stack in [('font_family', font_family), ('heading_font', heading_font)]:
+            if not stack or not extract_google_font_candidates(stack):
+                continue
+
+            print(f"  Checking {field}...")
+            font_name, _ = find_first_downloadable(stack, weights_param)
+
+            if font_name is None:
+                self.errors.append(
+                    f"❌ typography.{field}: no valid Google Font found in stack '{stack}'. "
+                    f"Verify font names at fonts.google.com"
+                )
+            else:
+                print(f"  ✓ '{font_name}' found on Google Fonts")
+
     def extract_valid_categories(self) -> Set[str]:
         """Extract all valid category IDs from config (including children)."""
         valid_categories = set()
@@ -243,6 +269,7 @@ class DataValidator:
             print("🔗 Running cross-validation checks...")
             cross_valid = self.cross_validate()
             self.validate_effects()
+            self.validate_fonts()
             print()
         else:
             cross_valid = False

@@ -11,6 +11,7 @@ import shutil
 import sys
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
+from theme_constants import get_heading_weight, get_heading_letter_spacing
 
 # Directories
 ROOT_DIR      = Path(__file__).parent
@@ -103,6 +104,15 @@ def build():
     config     = load_json(DATA_DIR / 'site.config.json')
     links_data = load_json(DATA_DIR / 'links.json')
 
+    # Resolve heading style values from theme_constants (single source of truth)
+    heading_style = config.get('theme', {}).get('effects', {}).get('heading_style', 'natural')
+
+    # Guard: fonts must be acquired before building
+    fonts_css_path = STATIC_DIR / 'css' / 'fonts.css'
+    if not fonts_css_path.exists():
+        print("⚠️  static/css/fonts.css not found — run font_acquirer.py first")
+        sys.exit(1)
+
     # Pre-compute derived data
     category_map = build_category_map(config)
     all_tags     = build_all_tags(links_data)
@@ -164,6 +174,18 @@ def build():
     if js_src.exists():
         shutil.copytree(js_src, static_output / 'js')
         print("✓ JavaScript copied")
+
+    # Copy fonts
+    fonts_src = STATIC_DIR / 'fonts'
+    if fonts_src.exists():
+        shutil.copytree(fonts_src, static_output / 'fonts')
+        print("✓ Fonts copied")
+
+    # Copy fonts.css
+    css_out = static_output / 'css'
+    css_out.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(fonts_css_path, css_out / 'fonts.css')
+    print("✓ fonts.css copied")
 
     print("\n✅ Build complete!")
     print(f"\n📁 Output directory: {OUTPUT_DIR.absolute()}")

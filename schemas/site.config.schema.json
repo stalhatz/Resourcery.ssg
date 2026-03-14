@@ -48,7 +48,14 @@
           "properties": {
             "font_family":    { "type": "string" },
             "font_size_base": { "type": "string" },
-            "heading_font":   { "type": "string" }
+            "heading_font":   { "type": "string" },
+            "heading_size_scale": {
+              "type": "number",
+              "minimum": 0.8,
+              "maximum": 1.5,
+              "default": 1.0,
+              "description": "Optical size correction factor for the heading font. Fonts with a small x-height (e.g. Playfair Display, Cormorant Garamond) typically need 1.1–1.15. Fonts with a large x-height (e.g. Oswald, Raleway) may need 0.9–0.95."
+            }
           }
         },
         "layout": {

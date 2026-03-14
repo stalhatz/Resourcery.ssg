@@ -21,6 +21,8 @@ wheels/
 .installed.cfg
 *.egg
 
+fonts.css
+static/fonts/
 data/
 output/
 *.jpg
