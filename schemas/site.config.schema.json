@@ -11,7 +11,6 @@
       "required": ["name", "url"],
       "properties": {
         "name": { "type": "string" },
-        "url": { "type": "string", "format": "uri" },
         "logo": { "type": "string" },
         "favicon": { "type": "string" },
         "description": { "type": "string" }
