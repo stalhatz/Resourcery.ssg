@@ -113,10 +113,15 @@ ul, li {
 }
 
 [data-theme="dark"] {
-  --color-background: #0f172a;
-  --color-surface:    #1e293b;
-  --color-text:       #f1f5f9;
-  --color-text-muted: #94a3b8;
+  --color-primary:    {{ config.theme.colours.dark.primary | default(config.theme.colours.primary, true) }};
+  --color-secondary:  {{ config.theme.colours.dark.secondary | default(config.theme.colours.secondary, true) }};
+  --color-background: {{ config.theme.colours.dark.background | default(config.theme.colours.background, true) }};
+  --color-surface:    {{ config.theme.colours.dark.surface | default(config.theme.colours.surface, true) }};
+  --color-text:       {{ config.theme.colours.dark.text | default(config.theme.colours.text, true) }};
+  --color-text-muted: {{ config.theme.colours.dark.text_muted | default(config.theme.colours.text_muted, true) }};
+  --color-accent:     {{ config.theme.colours.dark.accent | default(config.theme.colours.accent, true) }};
+  --color-error:      {{ config.theme.colours.dark.error | default(config.theme.colours.error, true) }};
+  --color-success:    {{ config.theme.colours.dark.success | default(config.theme.colours.success, true) }};
 }
 
 /* ============================================
