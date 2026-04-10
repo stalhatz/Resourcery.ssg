@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "Resourcery.ssg"
-version = "0.1.0"
+version = "0.1.1"
 description = "A static link aggregation website with JSON schema validation"
 authors = ["stalhatz@gmail.com"]
 license = "MIT"
