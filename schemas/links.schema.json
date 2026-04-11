@@ -9,9 +9,20 @@
       "type": "object",
       "required": ["title", "version"],
       "properties": {
-        "title": { "type": "string" },
-        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
-        "last_updated": { "type": "string", "format": "date-time" }
+        "title": { 
+          "type": "string",
+          "description": "Name of the website/resource collection (should reflect the specific focus/purpose of this site)"
+        },
+        "version": { 
+          "type": "string", 
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Schema version of the links data following semantic versioning (MAJOR.MINOR.PATCH)"
+        },
+        "last_updated": { 
+          "type": "string", 
+          "format": "date-time",
+          "description": "Timestamp indicating when the links data was last modified (ISO 8601 format)"
+        }
       }
     },
     "links": {
@@ -20,67 +31,81 @@
         "type": "object",
         "required": ["id", "title", "summary", "url", "category", "tags"],
         "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^[a-z0-9-]+$"
-          },
-          "title": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 100
-          },
-          "summary": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 150
-          },
-          "description": {
-            "type": "string",
-            "minLength": 1
-          },
-          "url": {
-            "type": "string",
-            "format": "uri"
-          },
-          "image": {
-            "type": "string"
-          },
-          "category": {
-            "type": "string",
-            "minLength": 1
-          },
-          "tags": {
-            "type": "array",
-            "items": { "type": "string" },
-            "minItems": 1
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "featured": {
-            "type": "boolean",
-            "default": false
-          },
-          "status": {
-            "type": "string",
-            "enum": ["active", "archived", "broken"],
-            "default": "active"
-          },
-          "pricing": {
-            "type": "string",
-            "enum": ["free", "freemium", "paid", "unknown"],
-            "default": "unknown"
-          },
-          "language": {
-            "type": "string",
-            "pattern": "^[a-z]{2}$",
-            "default": "en"
-          }
+           "id": {
+             "type": "string",
+             "description": "Unique identifier for the link entry (lowercase alphanumeric characters and hyphens only)",
+             "pattern": "^[a-z0-9-]+$"
+           },
+           "title": {
+             "type": "string",
+             "description": "Name of the resource/service as it should appear on this site (must be context-specific, not generic)",
+             "minLength": 1,
+             "maxLength": 100
+           },
+           "summary": {
+             "type": "string",
+             "description": "Brief overview of what the resource offers (must be tailored to this site's audience and purpose, avoid generic descriptions)",
+             "minLength": 1,
+             "maxLength": 150
+           },
+           "description": {
+             "type": "string",
+             "description": "Detailed explanation of the resource and its relevance to this site's specific audience/purpose (should explain what this resource offers to the intended audience)",
+             "minLength": 1
+           },
+           "url": {
+             "type": "string",
+             "description": "Direct URL to the resource (must be a valid, accessible link)",
+             "format": "uri"
+           },
+           "image": {
+             "type": "string",
+             "description": "URL to logo, screenshot, or visual representation of the resource (optional)"
+           },
+           "category": {
+             "type": "string",
+             "description": "Broad classification grouping similar resources (should align with site's taxonomy)",
+             "minLength": 1
+           },
+           "tags": {
+             "type": "array",
+             "description": "Array of specific keywords for finer-grained classification (must reflect site-specific taxonomy, not generic tags)",
+             "items": { "type": "string" },
+             "minItems": 1
+           },
+           "created_at": {
+             "type": "string",
+             "description": "Timestamp when this link entry was first added to the collection (ISO 8601 format)",
+             "format": "date-time"
+           },
+           "updated_at": {
+             "type": "string",
+             "description": "Timestamp when this link entry was last modified (ISO 8601 format)",
+             "format": "date-time"
+           },
+           "featured": {
+             "type": "boolean",
+             "description": "Boolean indicating whether this resource should be highlighted/promoted on the site (default: false)",
+             "default": false
+           },
+           "status": {
+             "type": "string",
+             "description": "Current validity/availability status of the resource (options: active, archived, broken)",
+             "enum": ["active", "archived", "broken"],
+             "default": "active"
+           },
+           "pricing": {
+             "type": "string",
+             "description": "Cost model for accessing the resource (options: free, freemium, paid, unknown)",
+             "enum": ["free", "freemium", "paid", "unknown"],
+             "default": "unknown"
+           },
+           "language": {
+             "type": "string",
+             "description": "Primary language of the resource content (ISO 639-1 two-letter code, default: en)",
+             "pattern": "^[a-z]{2}$",
+             "default": "en"
+           }
         }
       }
     }
