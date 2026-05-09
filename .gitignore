@@ -39,3 +39,9 @@ ENV/
 .idea/
 *.swp
 *.swo
+
+#Agents
+.kilo/
+.opencode
+plans/
+AGENTS.local.md
