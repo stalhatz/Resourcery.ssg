@@ -19,6 +19,15 @@ pyppeteer = "^1.0.2"
 pytest = "^7.0.0"
 black = "^23.0.0"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+markers = [
+    "unit: pure unit tests, no I/O or network",
+    "integration: end-to-end workflow action tests",
+    "network: tests that make real network calls (skipped by default)",
+]
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
