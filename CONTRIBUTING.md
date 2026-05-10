@@ -141,19 +141,39 @@ Global functions (`filterCards()`, `sortCards()`, `handleHashChange()`) coordina
 
 - **Module-level docstring:** Triple-quoted string at top of file describing the module's purpose.
 - **Class docstring:** Triple-quoted string describing class responsibility.
-- **Function docstring:** Triple-quoted for nontrivial functions, describing what the function does and what it returns. No reStructuredText or Google-style parameter docs.
+- **Function docstring:** All functions use the following strict format.
 - **Inline comments:** Used sparingly for non-obvious logic.
 
 ```python
-"""
-Build script for static link aggregation site.
-Renders Jinja2 templates with JSON data.
-"""
+def my_function(param: str) -> bool:
+    """Short description of what the function does.
 
+    param: description of the parameter.
 
-def extract_google_font_candidates(stack: str) -> list:
-    """Return all non-system font names from a CSS font-family stack, in order."""
-    ...
+    Returns: description of the return value.
+
+    ExceptionName1: condition that triggers the error. (omitted if none)
+    ExceptionName2: condition that triggers the error. (omitted if none)
+
+    Side-effects: description of side-effects. (omitted if none)
+    """
+```
+
+Rules:
+- `param:` — one line per parameter, repeating the parameter name verbatim.
+- `Returns:` — always included; use `None` for void functions.
+- `ExceptionName:` — omitted entirely if the function raises no documented exceptions.
+- `Side-effects:` — omitted entirely if none.
+- Blank lines between sections are required.
+
+Class and module-level docstrings follow the same structure at their respective scope.
+
+```python
+"""
+Module docstring: short description of the module's purpose.
+
+Side-effects: any notable module-level side-effects on import. (omitted if none)
+"""
 ```
 
 ### JavaScript
