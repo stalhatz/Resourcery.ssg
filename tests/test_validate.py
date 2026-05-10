@@ -76,13 +76,13 @@ class TestValidateSchema:
 class TestValidateEffects:
     @pytest.mark.unit
     def test_no_effects_no_warnings(self, validator):
-        validator.config_data = {"theme": {"colors": {}}}
+        validator.design_data = {"theme": {"colors": {}}}
         validator.validate_effects()
         assert len(validator.warnings) == 0
 
     @pytest.mark.unit
     def test_elevated_with_no_shadow_warns(self, validator):
-        validator.config_data = {
+        validator.design_data = {
             "theme": {
                 "effects": {
                     "card_style": "elevated",
@@ -95,7 +95,7 @@ class TestValidateEffects:
 
     @pytest.mark.unit
     def test_image_overlay_with_outline_warns(self, validator):
-        validator.config_data = {
+        validator.design_data = {
             "theme": {
                 "effects": {
                     "card_style": "image-overlay",
@@ -110,7 +110,7 @@ class TestValidateEffects:
 class TestValidateFonts:
     @pytest.mark.unit
     def test_no_fonts_no_error(self, validator, monkeypatch):
-        validator.config_data = {
+        validator.design_data = {
             "theme": {
                 "typography": {
                     "font_family": "system-ui, sans-serif",
@@ -149,7 +149,6 @@ class TestCrossValidate:
     @pytest.mark.unit
     def test_bad_category_warns(self, validator):
         validator.config_data = {
-            "theme": {"colors": {}},
             "navigation": {
                 "categories": [{"id": "tech", "label": "Tech", "children": []}],
                 "menu_links": [],
@@ -172,7 +171,6 @@ class TestCrossValidate:
     @pytest.mark.unit
     def test_duplicate_ids_errors(self, validator):
         validator.config_data = {
-            "theme": {"colors": {}},
             "navigation": {"categories": [], "menu_links": []},
         }
         validator.links_data = {
@@ -199,7 +197,6 @@ class TestCrossValidate:
     @pytest.mark.unit
     def test_inactive_link_can_omit_url(self, validator):
         validator.config_data = {
-            "theme": {"colors": {}},
             "navigation": {"categories": [], "menu_links": []},
         }
         validator.links_data = {
@@ -211,7 +208,6 @@ class TestCrossValidate:
     @pytest.mark.unit
     def test_active_link_missing_url_warns(self, validator):
         validator.config_data = {
-            "theme": {"colors": {}},
             "navigation": {"categories": [], "menu_links": []},
         }
         validator.links_data = {

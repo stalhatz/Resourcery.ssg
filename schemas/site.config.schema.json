@@ -3,7 +3,7 @@
   "title": "Static Site Configuration",
   "description": "Configuration for theme, layout, content, and navigation",
   "type": "object",
-  "required": ["site_info", "theme", "navigation", "content"],
+  "required": ["site_info", "navigation", "content"],
   "additionalProperties": false,
   "properties": {
     "site_info": {
@@ -14,118 +14,6 @@
         "logo": { "type": "string" },
         "favicon": { "type": "string" },
         "description": { "type": "string" }
-      }
-    },
-    "theme": {
-      "type": "object",
-      "required": ["colors", "layout"],
-      "additionalProperties": false,
-      "properties": {
-        "colors": {
-          "type": "object",
-          "required": ["primary", "background", "text"],
-          "additionalProperties": false,
-          "properties": {
-            "primary":     { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "The dominant brand color used throughout the site. Based on the site's theme and content categories, choose a color that reinforces the intended mood and purpose. For example: professional/technical sites may use blue or green; creative/artistic sites may use purple, orange, or unconventional hues; nature/outdoor sites may use greens or earth tones; finance sites may use blue or green. Consider color psychology and ensure sufficient contrast against the background for accessibility." },
-            "secondary": {
-            "type": "string",
-            "pattern": "^#[0-9a-fA-F]{6}$",
-            "description": "Interaction color — used for hovers, focus states, and active transitions. Should be visually distinct from primary but harmonious (e.g. a darker/lighter shade, complementary hue, or analogous color). Default: #64748b."
-          },
-            "background":  { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "The base background color for the entire site, including the main content area and page backgrounds. Choose based on the overall mood: light backgrounds (e.g., #f8fafc, #ffffff) create a clean, professional, or airy feel suitable for most content-heavy sites; dark backgrounds (e.g., #0f172a, #1e293b) convey modernity, sophistication, or focus, ideal for media, portfolios, or dark-mode-first sites; neutral mid-tones (e.g., #e2e8f0, #cbd5e1) offer a balanced, soft alternative. Ensure sufficient contrast with the text color for accessibility." },
-            "surface":     { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "The surface color used for cards, modals, dropdowns, and other elevated UI elements. Should be visually distinct from the background but harmonious — typically a slightly lighter or darker shade, or a subtle complementary tone. For light backgrounds, use a slightly off-white (e.g., #f1f5f9, #f8fafc); for dark backgrounds, use a slightly lighter dark tone (e.g., #1e293b, #334155). This creates depth and hierarchy without overwhelming the primary color." },
-            "text":        { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "The primary text color for headings, body text, and prominent labels. Should provide sufficient contrast against the background color for readability (WCAG AA standard: 4.5:1 ratio recommended). For light backgrounds, use dark grays or near-black (e.g., #1e293b, #334155, #0f172a) rather than pure black for a softer look; for dark backgrounds, use light grays or off-white (e.g., #e2e8f0, #f1f5f9, #f8fafc). Avoid pure black (#000000) and pure white (#ffffff) as they can cause eye strain and harsh contrast." },
-            "text_muted":  { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "The secondary text color for metadata, captions, secondary labels, timestamps, and less important text. Should be lighter than the primary text color but still readable (WCAG AA standard: 3:1 ratio recommended). For light backgrounds, use medium grays (e.g., #64748b, #475569, #334155); for dark backgrounds, use medium-light grays (e.g., #94a3b8, #cbd5e1, #e2e8f0). Avoid colors that are too close to the background or too close to the primary text color, which would create visual confusion." },
-            "accent":      { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "The highlight color used for key interactive elements — buttons, active states, notifications, and primary call-to-actions. Should be visually distinct from primary and background, ideally a complementary or analogous hue that draws attention without overwhelming the primary brand color. Unlike the secondary color which handles subtle interaction states (hovers, focus), accent is reserved for prominent, eye-catching elements that need to stand out. For example: if primary is blue (#2563eb), accent might be orange (#f97316) or teal (#14b8a6) to create dynamic contrast; if primary is purple (#7c3aed), accent could be yellow (#eab308) or pink (#ec4899). Use sparingly to guide user focus and enhance visual hierarchy." },
-            "error":       { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "Color for error states (e.g., 404 pages, failed image placeholders)" },
-            "success":     { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$", "description": "Color for success states (e.g., confirmation messages, form completions)" },
-            "dark": {
-              "type": "object",
-              "description": "Optional dark mode color palette. All fields are optional; omitting any field applies its default or uses the light mode value.",
-              "properties": {
-                "primary":     { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-                "secondary":   { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-                "background":  { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-                "surface":     { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-                "text":        { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-                "text_muted":  { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-                "accent":      { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-                "error":       { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-                "success":     { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
-              }
-            }
-          }
-        },
-        "typography": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "font_family":    { "type": "string" , "description": "Primary font for body text. Choose a font matching your site's mood (e.g., Inter for professional, Merriweather for editorial). This is a CSS font-family stack — include fallbacks like 'Inter, system-ui, sans-serif'. System fonts are automatic fallbacks. You have access to Google Fonts: browse at https://fonts.google.com"},
-            "font_size_base": { "type": "string" , "description": "Base font size for body text and standard paragraphs (e.g., '16px', '1rem'). Choose a size that ensures readability while matching your site's scale. Common values: '16px' (standard), '18px' (generous), '14px' (compact). Pair with your chosen font's x-height for optimal readability."},
-            "heading_font": {
-            "type": "string",
-            "description": "Font family for all headings (h1-h6, titles, labels). Choose a font that complements your body font and matches your site's tone (e.g., Playfair Display for elegant, Oswald for bold, Roboto for neutral). This is a CSS font-family stack — include fallbacks. You have access to Google Fonts: browse at https://fonts.google.com"
-            },
-            "heading_size_scale": {
-              "type": "number",
-              "minimum": 0.8,
-              "maximum": 1.5,
-              "default": 1.0,
-              "description": "Optical size correction factor for the heading font. Fonts with a small x-height (e.g. Playfair Display, Cormorant Garamond) typically need 1.1–1.15. Fonts with a large x-height (e.g. Oswald, Raleway) may need 0.9–0.95."
-            }
-          }
-        },
-        "layout": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "sidebar_width":   { "type": "string" , "description": "Width of the sidebar (e.g., '280px', '300px', '320px'). Choose a width that balances navigation visibility with content space. Narrower (280px) is compact for dense content; wider (300-320px) is spacious for feature-rich sites."},
-            "max_width":       { "type": "string" ,"description": "Maximum content width for the main area (e.g., '1200px', '1400px', '1600px'). Choose based on content density: narrower (1200px) for text-heavy sites; wider (1400-1600px) for image/media-heavy sites."}
-          }
-        },
-        "effects": {
-          "type": "object",
-          "description": "Visual personality of the site. All fields are optional; omitting any field applies its default. Combine these to produce distinct styles — see description of each value for guidance.",
-          "additionalProperties": false,
-          "properties": {
-            "card_style": {
-              "type": "string",
-              "enum": ["image-overlay", "flat", "outlined", "elevated"],
-              "default": "image-overlay",
-              "description": "Dominant visual treatment of link cards. 'image-overlay': dark gradient over thumbnail image, white text — cinematic, editorial, media/inspiration boards. 'flat': solid surface background, no shadow, dark text — clean, academic, documentation, professional directories. 'outlined': bold primary-color border, no shadow, dark text — editorial, developer tools, zines, technical references. 'elevated': strong drop shadow, no border, dark text — product directories, SaaS tools, dashboards."
-            },
-            "shadow_intensity": {
-              "type": "string",
-              "enum": ["none", "subtle", "medium", "dramatic"],
-              "default": "subtle",
-              "description": "Global shadow depth applied to cards, modals, and dropdowns. 'none': completely flat, zero elevation — brutalist, ultra-minimal, print-inspired. 'subtle': barely perceptible lift — light and clean, suits most sites. 'medium': clear depth — professional, balanced. 'dramatic': strong, deep shadows — rich and bold, pairs well with 'elevated' card_style."
-            },
-            "border_radius": {
-              "type": "string",
-              "enum": ["sharp", "standard", "soft", "round"],
-              "default": "standard",
-              "description": "Corner rounding applied globally to cards, buttons, inputs, modals, tags, and badges. 'sharp': 0px — structured, technical, brutalist, newspaper-style. 'standard': 8px — neutral and professional, suits most domains. 'soft': 16px — friendly, approachable, modern consumer feel. 'round': 24px — playful, lifestyle, children's content, social platforms."
-            },
-            "border_treatment": {
-              "type": "string",
-              "enum": ["none", "hairline", "bold", "accent"],
-              "default": "hairline",
-              "description": "Style of structural dividers: sidebar border, header underline, footer top border, and card borders in non-overlay card styles. 'none': no visible borders, separation by spacing and shadow only — airy and modern. 'hairline': barely visible 1px lines — clean neutral default. 'bold': 2px dark borders — assertive, editorial, high-contrast. 'accent': 2px borders using the primary color — strongly branded, high visual identity."
-            },
-            "hover_effect": {
-              "type": "string",
-              "enum": ["none", "lift", "glow", "outline"],
-              "default": "lift",
-              "description": "Animation feedback when hovering over link cards. 'none': no animation — static, document-like, suitable for accessibility-first or print-inspired designs. 'lift': card rises slightly with translateY — default tactile feel. 'glow': colored halo using the primary color — vivid, creative, gaming, entertainment. 'outline': crisp border appears on hover — sharp and keyboard-navigation-friendly, suits technical and developer-focused sites."
-            },
-            "heading_style": {
-              "type": "string",
-              "enum": ["natural", "editorial", "elegant", "uppercase"],
-              "default": "natural",
-              "description": "Typographic personality of all headings and prominent labels (site title, card titles, intro title, modal title). 'natural': standard weight and spacing — neutral and versatile, good default. 'editorial': tight negative letter-spacing, heavy weight — bold, modern, journalistic. 'elegant': wide letter-spacing, light weight — refined, cultural institutions, high-end collections, art. 'uppercase': all-caps with tracked spacing, strong weight — structured, institutional, signage-like, technical directories."
-            }
-          }
-        }
       }
     },
     "navigation": {
@@ -214,7 +102,7 @@
           "type": "object",
           "properties": {
             "search_bar":        { "type": "string" , "description": "Placeholder text for the site search input field (e.g., 'Search...'). Keep it neutral and task-oriented to guide users without biasing results."},
-            "default_image_alt": { "type": "string" , "description": "Alt text for the default placeholder image shown when content images are missing. Keep it generic (e.g., 'Image unavailable') to avoid implying broken functionality."},
+            "default_image_alt": { "type": "string" , "description": "Alt text for the default placeholder image shown when content images are missing. Keep it generic (e.g., 'Image unavailable') to avoid implying broken functionality."}
           }
         }
       }

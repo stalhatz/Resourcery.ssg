@@ -28,8 +28,10 @@ class DataValidator:
         self.warnings: List[str] = []
         self.config_data: Dict = {}
         self.links_data: Dict = {}
+        self.design_data: Dict = {}
         self.config_schema: Dict = {}
         self.links_schema: Dict = {}
+        self.design_schema: Dict = {}
 
     def load_json(self, path: Path) -> Dict:
         """Load and parse a JSON file, recording errors on failure.
@@ -53,35 +55,39 @@ class DataValidator:
             return {}
 
     def load_schemas(self) -> bool:
-        """Load both JSON schema files from the schemas directory.
+        """Load all JSON schema files from the schemas directory.
 
-        Returns: True if both schemas loaded successfully, False otherwise.
+        Returns: True if all schemas loaded successfully, False otherwise.
         """
 
         config_schema_path = self.schemas_dir / "site.config.schema.json"
         links_schema_path = self.schemas_dir / "links.schema.json"
+        design_schema_path = self.schemas_dir / "design.schema.json"
 
         self.config_schema = self.load_json(config_schema_path)
         self.links_schema = self.load_json(links_schema_path)
+        self.design_schema = self.load_json(design_schema_path)
 
-        if not self.config_schema or not self.links_schema:
+        if not self.config_schema or not self.links_schema or not self.design_schema:
             return False
 
         return True
 
     def load_data(self) -> bool:
-        """Load both data files from the data directory.
+        """Load all data files from the data directory.
 
-        Returns: True if both files loaded successfully, False otherwise.
+        Returns: True if all files loaded successfully, False otherwise.
         """
 
         config_path = self.data_dir / "site.config.json"
         links_path = self.data_dir / "links.json"
+        design_path = self.data_dir / "design.json"
 
         self.config_data = self.load_json(config_path)
         self.links_data = self.load_json(links_path)
+        self.design_data = self.load_json(design_path)
 
-        if not self.config_data or not self.links_data:
+        if not self.config_data or not self.links_data or not self.design_data:
             return False
 
         return True
@@ -98,7 +104,7 @@ class DataValidator:
         Side-effects: appends to self.warnings.
         """
 
-        effects = self.config_data.get("theme", {}).get("effects", {})
+        effects = self.design_data.get("theme", {}).get("effects", {})
         if not effects:
             return  # all defaults, always fine
 
@@ -173,12 +179,12 @@ class DataValidator:
         )
         from theme_constants import get_required_weights, weights_to_api_param
 
-        typography = self.config_data.get("theme", {}).get("typography", {})
+        typography = self.design_data.get("theme", {}).get("typography", {})
         font_family = typography.get("font_family", "")
         heading_font = typography.get("heading_font", "")
 
         heading_style = (
-            self.config_data.get("theme", {})
+            self.design_data.get("theme", {})
             .get("effects", {})
             .get("heading_style", "natural")
         )
@@ -288,7 +294,7 @@ class DataValidator:
                 )
 
         # Validate color hex codes in config
-        colors = self.config_data.get("theme", {}).get("colors", {})
+        colors = self.design_data.get("theme", {}).get("colors", {})
         for color_name, color_value in colors.items():
             if not self._is_valid_hex_color(color_value):
                 self.warnings.append(
@@ -354,11 +360,14 @@ class DataValidator:
         links_valid = self.validate_schema(
             self.links_data, self.links_schema, "links.json"
         )
+        design_valid = self.validate_schema(
+            self.design_data, self.design_schema, "design.json"
+        )
 
         print()
 
         # Cross-validation
-        if config_valid and links_valid:
+        if config_valid and links_valid and design_valid:
             print("🔗 Running cross-validation checks...")
             cross_valid = self.cross_validate()
             self.validate_effects()

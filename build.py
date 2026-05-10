@@ -47,7 +47,7 @@ def validate_data(config, links):
     ValueError: a required key is missing from either dictionary.
     """
 
-    required_config = ["site_info", "theme", "navigation", "content"]
+    required_config = ["site_info", "navigation", "content"]
     required_links = ["links"]
 
     for key in required_config:
@@ -154,6 +154,8 @@ def build():
     # Load data
     config = load_json(DATA_DIR / "site.config.json")
     links_data = load_json(DATA_DIR / "links.json")
+    design = load_json(DATA_DIR / "design.json")
+    config["theme"] = design["theme"]
 
     # Resolve heading style values from theme_constants (single source of truth)
     heading_style = (

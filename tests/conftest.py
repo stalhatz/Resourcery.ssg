@@ -26,6 +26,11 @@ def sample_links(testdata_dir: Path) -> dict:
     return json.loads((testdata_dir / "links.json").read_text(encoding="utf-8"))
 
 
+@pytest.fixture
+def sample_design(testdata_dir: Path) -> dict:
+    return json.loads((testdata_dir / "design.json").read_text(encoding="utf-8"))
+
+
 class MockResponse:
     def __init__(self, data: bytes, headers: dict = None):
         self._data = data

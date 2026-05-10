@@ -45,3 +45,6 @@ ENV/
 .opencode
 plans/
 AGENTS.local.md
+
+# Pipeline workspace
+workspace/
