@@ -1,3 +1,9 @@
+---
+size: big
+modified_date: 2026-05-11
+implemented_git_tag: d405920
+---
+
 # Split Data from Design in JSON Schema
 
 We want to split data from design in order to enable a (at least) two step site design/configuration. Single shoting is difficult even for bigger models and, eventually, we want to target small, local models.

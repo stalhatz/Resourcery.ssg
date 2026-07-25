@@ -1,3 +1,9 @@
+---
+size: small
+modified_date: 2026-05-10
+implemented_git_tag: 1cf3cb7
+---
+
 # Add a standardized docstring to all functions in python files
 
 ## Current state

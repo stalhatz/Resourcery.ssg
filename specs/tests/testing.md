@@ -1,3 +1,9 @@
+---
+size: small
+modified_date: 2026-05-10
+implemented_git_tag: d45343d
+---
+
 # Unit and integration testing of all python functions
 
 ## Current state
