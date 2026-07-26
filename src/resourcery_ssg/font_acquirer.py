@@ -10,18 +10,13 @@ Run before build.py:
 """
 
 import json
+import os
 import re
 import sys
 import urllib.request
 from pathlib import Path
 
 from resourcery_ssg.theme_constants import get_required_weights, weights_to_api_param
-
-ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = ROOT_DIR / "data"
-STATIC_DIR = ROOT_DIR / "static"
-FONTS_DIR = STATIC_DIR / "fonts"
-CSS_DIR = STATIC_DIR / "css"
 
 GOOGLE_FONTS_API = "https://fonts.googleapis.com/css2"
 # Modern browser UA — required to receive woff2 format from Google Fonts API
@@ -77,7 +72,7 @@ def read_cached_fonts(fonts_css: Path) -> list:
         return []
 
 
-def is_cache_valid(fonts_css: Path, wanted_names: list) -> bool:
+def is_cache_valid(fonts_css: Path, wanted_names: list, fonts_dir: Path = None) -> bool:
     """Check whether the local font cache covers all requested fonts.
 
     Verifies that fonts.css lists exactly the wanted fonts and that every
@@ -85,30 +80,48 @@ def is_cache_valid(fonts_css: Path, wanted_names: list) -> bool:
 
     fonts_css: path to the fonts.css cache file.
     wanted_names: list of font name strings that should be cached.
+    fonts_dir: directory containing font files (defaults to parent of fonts_css).
 
     Returns: True if the cache is complete and up to date, False otherwise.
     """
 
+    if fonts_dir is None:
+        fonts_dir = fonts_css.parent
     if set(read_cached_fonts(fonts_css)) != set(wanted_names):
         return False
     for name in wanted_names:
         slug = name.lower().replace(" ", "-")
-        if not any(FONTS_DIR.glob(f"{slug}-*.woff2")):
+        if not any(fonts_dir.glob(f"{slug}-*.woff2")):
             return False
     return True
 
 
-def load_config() -> dict:
-    """Load site.config.json from the data directory.
+def _load_config(data_dir: Path) -> dict:
+    """Load site config and merge design theme into it.
 
-    Returns: dictionary of site configuration.
+    Reads both site.config.json and design.json from data_dir, and
+    overlays the ``theme`` section of design.json onto the config.
 
-    FileNotFoundError: the config file does not exist.
-    json.JSONDecodeError: the config file is not valid JSON.
+    data_dir: directory containing site.config.json and design.json.
+
+    Returns: dictionary of site configuration with ``theme`` populated.
+
+    FileNotFoundError: site.config.json does not exist.
+    json.JSONDecodeError: either file is not valid JSON.
     """
 
-    with open(DATA_DIR / "site.config.json", "r", encoding="utf-8") as f:
-        return json.load(f)
+    with open(data_dir / "site.config.json", "r", encoding="utf-8") as f:
+        config = json.load(f)
+
+    design_path = data_dir / "design.json"
+    if design_path.exists():
+        with open(design_path, "r", encoding="utf-8") as f:
+            design = json.load(f)
+        theme = design.get("theme", {})
+        if theme:
+            config["theme"] = theme
+
+    return config
 
 
 def is_system_font(name: str) -> bool:
@@ -216,7 +229,7 @@ def download_file(url: str, dest: Path) -> bool:
         return False
 
 
-def process_font(font_name: str, css: str, face_blocks_out: list) -> bool:
+def process_font(font_name: str, css: str, face_blocks_out: list, fonts_dir: Path, css_dir: Path) -> bool:
     """Download all woff2 variants from previously fetched CSS.
 
     Parses the CSS for @font-face blocks, downloads each unique woff2
@@ -226,10 +239,12 @@ def process_font(font_name: str, css: str, face_blocks_out: list) -> bool:
     font_name: the font family name (used in @font-face and filenames).
     css: raw CSS from the Google Fonts API containing @font-face blocks.
     face_blocks_out: list to which local @font-face rule strings are appended.
+    fonts_dir: directory to write font files into.
+    css_dir: directory where fonts.css will be written (used for relative paths).
 
     Returns: True if at least one variant was successfully processed.
 
-    Side-effects: downloads files to FONTS_DIR; appends to face_blocks_out.
+    Side-effects: downloads files to fonts_dir; appends to face_blocks_out.
     """
 
     # Parse subset name + @font-face block together to avoid filename collisions
@@ -257,7 +272,7 @@ def process_font(font_name: str, css: str, face_blocks_out: list) -> bool:
         subset = subset_name.strip().replace(" ", "-")
 
         local_filename = f"{font_slug}-{font_style}-{font_weight}-{subset}.{ext}"
-        local_path = FONTS_DIR / local_filename
+        local_path = fonts_dir / local_filename
 
         if local_path.exists():
             print(f"    · {local_filename} (cached)")
@@ -266,13 +281,16 @@ def process_font(font_name: str, css: str, face_blocks_out: list) -> bool:
                 continue
             print(f"    ✓ {local_filename}")
 
+        # Build relative URL from css_dir to fonts_dir
+        rel_url = Path(os.path.relpath(fonts_dir, css_dir)) / local_filename
+
         face = (
             f"@font-face {{\n"
             f"  font-family: '{font_name}';\n"
             f"  font-style: {font_style};\n"
             f"  font-weight: {font_weight};\n"
             f"  font-display: swap;\n"
-            f"  src: url('/static/fonts/{local_filename}') format('{ext}');"
+            f"  src: url('{rel_url}') format('{ext}');"
         )
         if unicode_range:
             face += f"\n  unicode-range: {unicode_range};"
@@ -284,13 +302,17 @@ def process_font(font_name: str, css: str, face_blocks_out: list) -> bool:
     return ok_count > 0
 
 
-def acquire_fonts():
+def acquire_fonts(*, data_dir, fonts_dir, css_dir):
     """Download all required Google Fonts and generate fonts.css.
 
     Reads typography config from site.config.json, determines required
     weights from heading_style, checks the local cache, downloads any
-    missing font files, and writes static/css/fonts.css with local
-    @font-face rules.
+    missing font files, and writes fonts.css with local @font-face rules.
+
+    Args:
+        data_dir: Directory containing site.config.json.
+        fonts_dir: Directory to write .woff2 font files into.
+        css_dir: Directory to write fonts.css into.
 
     Returns: None.
 
@@ -302,13 +324,13 @@ def acquire_fonts():
 
     print("🔤 Acquiring fonts...\n")
 
-    config = load_config()
+    config = _load_config(data_dir)
     typography = config.get("theme", {}).get("typography", {})
     font_family = typography.get("font_family", "")
     heading_font = typography.get("heading_font", "")
 
-    FONTS_DIR.mkdir(parents=True, exist_ok=True)
-    CSS_DIR.mkdir(parents=True, exist_ok=True)
+    fonts_dir.mkdir(parents=True, exist_ok=True)
+    css_dir.mkdir(parents=True, exist_ok=True)
 
     # Derive exact weights needed from heading_style
     heading_style = (
@@ -327,7 +349,7 @@ def acquire_fonts():
         )
     )
 
-    if is_cache_valid(CSS_DIR / "fonts.css", wanted_names):
+    if is_cache_valid(css_dir / "fonts.css", wanted_names, fonts_dir=fonts_dir):
         print("ℹ  fonts.css is up to date and all font files present — skipping")
         return
 
@@ -337,7 +359,7 @@ def acquire_fonts():
     ) + extract_google_font_candidates(heading_font)
     if not all_candidates:
         print("ℹ  No Google Fonts detected — using system fonts only.")
-        (CSS_DIR / "fonts.css").write_text(
+        (css_dir / "fonts.css").write_text(
             "/* No Google Fonts configured */\n", encoding="utf-8"
         )
         print("\n✅ fonts.css written (empty)")
@@ -367,10 +389,10 @@ def acquire_fonts():
 
         seen.add(font_name)
         print(f"  → Downloading '{font_name}'...")
-        if not process_font(font_name, css, face_blocks):
+        if not process_font(font_name, css, face_blocks, fonts_dir, css_dir):
             all_ok = False
 
-    fonts_css = CSS_DIR / "fonts.css"
+    fonts_css = css_dir / "fonts.css"
     header = f"/* {json.dumps(list(seen))} */\n"
     fonts_css.write_text(header + "\n\n".join(face_blocks) + "\n", encoding="utf-8")
     print(f"\n✅ fonts.css written — {len(face_blocks)} @font-face rule(s)")
@@ -384,10 +406,37 @@ def acquire_fonts():
 def main():
     """Entry-point for CLI (registered in pyproject.toml scripts).
 
-    Delegates to acquire_fonts().
+    Parses CLI arguments, loads configuration, and dispatches to acquire_fonts().
     """
-    acquire_fonts()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Acquire fonts from Google Fonts")
+    parser.add_argument("--data", type=str, default=None, help="Data directory")
+    parser.add_argument("--fonts-dir", type=str, default=None, help="Fonts output directory")
+    parser.add_argument("--css-dir", type=str, default=None, help="CSS output directory")
+    parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
+    args = parser.parse_args()
+
+    from resourcery_ssg.config import load_resourcery_config
+
+    overrides = {}
+    # Map CLI flag names to config key names
+    flag_to_key = {
+        "data": "data_dir",
+        "fonts_dir": "fonts_dir",
+        "css_dir": "css_dir",
+    }
+    for flag, key in flag_to_key.items():
+        val = getattr(args, flag, None)
+        if val is not None:
+            overrides[f"acquire-fonts.{key}"] = val
+
+    config = load_resourcery_config(
+        config_path=args.config,
+        overrides=overrides,
+    )
+    acquire_fonts(**config["acquire-fonts"])
 
 
 if __name__ == "__main__":
-    acquire_fonts()
+    main()

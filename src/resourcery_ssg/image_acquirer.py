@@ -30,18 +30,19 @@ except ImportError:
 class ImageAcquirer:
     """Handles image acquisition from linked websites."""
 
-    def __init__(self, root_dir: Path = None):
-        """Initialise the acquirer with project root and output directory.
+    def __init__(self, images_dir: Path, links_path: Path = None):
+        """Initialise the acquirer with output and optional links path.
 
-        root_dir: project root directory. Defaults to the directory
-            containing this file.
+        images_dir: directory to write acquired images into.
+        links_path: optional path to links.json (used for relative path
+            generation when acquiring images).
 
         Side-effects: creates the acquired images output directory if it
             does not exist.
         """
 
-        self.root_dir = root_dir or Path(__file__).resolve().parent.parent.parent
-        self.output_dir = self.root_dir / "static" / "images" / "acquired"
+        self.output_dir = images_dir
+        self.links_path = links_path
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         self.session = requests.Session()
@@ -289,7 +290,9 @@ class ImageAcquirer:
 
         # Check if image already exists locally
         if existing_image and existing_image.startswith("/static/images/acquired/"):
-            existing_path = self.root_dir / existing_image.lstrip("/")
+            # Derive filename from the existing image path
+            filename = Path(existing_image).name
+            existing_path = self.output_dir / filename
             if existing_path.exists() and not force:
                 print(f"  ⏭️  {link_id}: Already acquired (skipping)")
                 self.stats["skipped"] += 1
@@ -369,13 +372,13 @@ class ImageAcquirer:
 def main():
     """Run image acquisition from the command line.
 
-    Parses --force and --links arguments, loads the links data file,
-    acquires images for all active links, backs up the original file,
-    and writes the updated data in place.
+    Parses --links, --images-dir, and --force arguments, loads the links
+    data file, acquires images for all active links, backs up the original
+    file, and writes the updated data in place.
 
     Returns: 0 on success, 1 if the links file is not found.
 
-    Side-effects: overwrites data/links.json (with a .json.bak backup);
+    Side-effects: overwrites the links file (with a .json.bak backup);
         prints progress to stdout.
     """
 
@@ -386,12 +389,32 @@ def main():
     )
     parser.add_argument("--force", action="store_true", help="Re-acquire all images")
     parser.add_argument(
-        "--links", type=str, default="data/links.json", help="Path to links.json"
+        "--links", type=str, default=None, help="Path to links.json"
     )
+    parser.add_argument(
+        "--images-dir", type=str, default=None, help="Images output directory"
+    )
+    parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
     args = parser.parse_args()
 
-    root_dir = Path(__file__).resolve().parent.parent.parent
-    links_path = root_dir / args.links
+    from resourcery_ssg.config import load_resourcery_config
+
+    overrides = {}
+    for flag, cfg_key in [
+        ("links", "acquire-images.links"),
+        ("images_dir", "acquire-images.images_dir"),
+    ]:
+        val = getattr(args, flag, None)
+        if val is not None:
+            overrides[cfg_key] = val
+
+    config = load_resourcery_config(
+        config_path=args.config,
+        overrides=overrides,
+    )
+
+    links_path = Path(config["acquire-images"]["links"])
+    images_dir = Path(config["acquire-images"]["images_dir"])
 
     if not links_path.exists():
         print(f"❌ Links file not found: {links_path}")
@@ -402,7 +425,7 @@ def main():
         links_data = json.load(f)
 
     # Acquire images
-    acquirer = ImageAcquirer(root_dir)
+    acquirer = ImageAcquirer(images_dir=images_dir, links_path=links_path)
     updated_data = acquirer.acquire_all(links_data, force=args.force)
 
     # Save updated links

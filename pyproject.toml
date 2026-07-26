@@ -5,6 +5,7 @@ description = "A static link aggregation website with JSON schema validation"
 authors = ["stalhatz@gmail.com"]
 license = "MIT"
 packages = [{ include = "resourcery_ssg", from = "src" }]
+include = ["src/resourcery_ssg/config.yaml"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
@@ -18,6 +19,7 @@ pyppeteer = "^1.0.2"
 trafilatura = "^2.0.0"
 duckduckgo-search = "^6.0.0"
 openai = "^1.50.0"
+python-dotenv = "^1.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0.0"
@@ -38,8 +40,9 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-build = "resourcery_ssg.build:build_site"
+build = "resourcery_ssg.build:main"
 acquire-images = "resourcery_ssg.image_acquirer:main"
 ingest = "resourcery_ssg.data_ingestion:main"
 validate = "resourcery_ssg.validate:main"
 acquire-fonts = "resourcery_ssg.font_acquirer:main"
+site = "resourcery_ssg.site:main"

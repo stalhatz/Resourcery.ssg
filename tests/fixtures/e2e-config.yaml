@@ -1,0 +1,38 @@
+# E2E test configuration — overrides committed config.yaml paths
+# to point at testdata fixtures. Everything else inherits from
+# the committed defaults (var resolution, env fallback, etc.).
+# E2E pipeline configuration.
+# Inputs (notes, prompts, schemas, templates, base static) come from the
+# project tree. Intermediate files (generated JSON, acquired fonts/images)
+# go into staging directories under output/. The final built site goes
+# into OUTPUT_DIR.
+vars:
+  # ── inputs ──────────────────────────────────────────────────
+  SCHEMAS_DIR: ./schemas
+  TEMPLATES_DIR: ./templates
+  STATIC_SOURCE: ./static
+
+  # ── staging — generated data files (site.config, links, design) ──
+  DATA_DIR: ./output/test-e2e-data
+
+  # ── staging — static assets (base + generated fonts/images) ──
+  STATIC_DIR: ./output/test-e2e-static
+  FONTS_DIR: ${STATIC_DIR}/fonts
+  CSS_DIR: ${STATIC_DIR}/css
+  IMAGES_DIR: ${STATIC_DIR}/images/acquired
+
+  # ── output — final built site ───────────────────────────────
+  OUTPUT_DIR: ./output/test-e2e
+
+build:
+  static_source: ${STATIC_SOURCE}
+
+ingest:
+  note: ./tests/fixtures/markdown/notes/tech-links.md
+  site_prompt: ./tests/fixtures/markdown/site_prompts/dev-portal.md
+  schemas_dir: ${SCHEMAS_DIR}
+  prompt: ./prompts/data-ingestion.md
+  model: ""
+  output_dir: ${DATA_DIR}
+  agent: ""
+  opencode_bin: opencode

@@ -94,16 +94,8 @@ class TestBuildAllTags:
 
 class TestIntegrationBuild:
     @pytest.mark.integration
-    def test_build_creates_output(
-        self, testdata_dir: Path, tmp_output_dir: Path, monkeypatch
-    ):
-        static_dir = testdata_dir / "static"
-        monkeypatch.setattr("resourcery_ssg.build.DATA_DIR", testdata_dir)
-        monkeypatch.setattr("resourcery_ssg.build.TEMPLATES_DIR", testdata_dir / "templates")
-        monkeypatch.setattr("resourcery_ssg.build.STATIC_DIR", static_dir)
-        monkeypatch.setattr("resourcery_ssg.build.OUTPUT_DIR", tmp_output_dir)
-
-        build_site()
-        assert (tmp_output_dir / "index.html").exists()
-        assert (tmp_output_dir / "browse.html").exists()
-        assert (tmp_output_dir / "static" / "css" / "style.css").exists()
+    def test_build_creates_output(self, build_paths: dict):
+        build_site(**build_paths)
+        assert (build_paths["output_dir"] / "index.html").exists()
+        assert (build_paths["output_dir"] / "browse.html").exists()
+        assert (build_paths["output_dir"] / "static" / "css" / "style.css").exists()

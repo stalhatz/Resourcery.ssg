@@ -13,13 +13,6 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 from resourcery_ssg.theme_constants import get_heading_weight, get_heading_letter_spacing
 
-# Directories
-ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = ROOT_DIR / "data"
-TEMPLATES_DIR = ROOT_DIR / "templates"
-STATIC_DIR = ROOT_DIR / "static"
-OUTPUT_DIR = ROOT_DIR / "output"
-
 
 def load_json(path):
     """Load and parse a JSON file from disk.
@@ -129,13 +122,19 @@ def build_all_tags(links_data):
 # ==================== BUILD ====================
 
 
-def build_site():
+def build_site(*, data_dir, templates_dir, static_dir, output_dir):
     """Render all templates and copy static assets to the output directory.
 
     Loads data from site.config.json and links.json, pre-computes category
     and tag lookup structures, renders Jinja2 templates (index.html,
     browse.html, style.css), and copies static files (images, JS, fonts,
     fonts.css) into output/.
+
+    Args:
+        data_dir: Directory containing site.config.json, links.json, design.json.
+        templates_dir: Directory containing Jinja2 templates.
+        static_dir: Directory containing static assets (images, JS, fonts).
+        output_dir: Directory to write the generated site into.
 
     Returns: None.
 
@@ -147,14 +146,14 @@ def build_site():
     print("🔨 Building static site...")
 
     # Clean output directory
-    if OUTPUT_DIR.exists():
-        shutil.rmtree(OUTPUT_DIR)
-    OUTPUT_DIR.mkdir(parents=True)
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True)
 
     # Load data
-    config = load_json(DATA_DIR / "site.config.json")
-    links_data = load_json(DATA_DIR / "links.json")
-    design = load_json(DATA_DIR / "design.json")
+    config = load_json(data_dir / "site.config.json")
+    links_data = load_json(data_dir / "links.json")
+    design = load_json(data_dir / "design.json")
     config["theme"] = design["theme"]
 
     # Resolve heading style values from theme_constants (single source of truth)
@@ -163,7 +162,7 @@ def build_site():
     )
 
     # Guard: fonts must be acquired before building
-    fonts_css_path = STATIC_DIR / "css" / "fonts.css"
+    fonts_css_path = static_dir / "css" / "fonts.css"
     if not fonts_css_path.exists():
         print("⚠️  static/css/fonts.css not found — run font_acquirer.py first")
         sys.exit(1)
@@ -173,7 +172,7 @@ def build_site():
     all_tags = build_all_tags(links_data)
 
     # Setup Jinja2
-    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=True)
+    env = Environment(loader=FileSystemLoader(templates_dir), autoescape=True)
 
     # Register custom filters
     env.filters["shuffle"] = shuffle_filter
@@ -191,14 +190,14 @@ def build_site():
     # Render index.html (landing page)
     template = env.get_template("index.html")
     output = template.render(**base_context)
-    with open(OUTPUT_DIR / "index.html", "w", encoding="utf-8") as f:
+    with open(output_dir / "index.html", "w", encoding="utf-8") as f:
         f.write(output)
     print("✓ index.html rendered (landing page)")
 
     # Render browse.html (full browse)
     template = env.get_template("browse.html")
     output = template.render(**base_context)
-    with open(OUTPUT_DIR / "browse.html", "w", encoding="utf-8") as f:
+    with open(output_dir / "browse.html", "w", encoding="utf-8") as f:
         f.write(output)
     print("✓ browse.html rendered (full browse)")
 
@@ -207,31 +206,31 @@ def build_site():
     output = template.render(**base_context)
 
     # Create css directory in output
-    css_dir = OUTPUT_DIR / "static" / "css"
-    css_dir.mkdir(parents=True, exist_ok=True)
+    css_dir_out = output_dir / "static" / "css"
+    css_dir_out.mkdir(parents=True, exist_ok=True)
 
-    with open(css_dir / "style.css", "w", encoding="utf-8") as f:
+    with open(css_dir_out / "style.css", "w", encoding="utf-8") as f:
         f.write(output)
     print("✓ style.css rendered (themed)")
 
     # ==================== COPY STATIC FILES ====================
 
-    static_output = OUTPUT_DIR / "static"
+    static_output = output_dir / "static"
 
     # Copy images
-    images_src = STATIC_DIR / "images"
+    images_src = static_dir / "images"
     if images_src.exists():
         shutil.copytree(images_src, static_output / "images")
         print("✓ Images copied")
 
     # Copy JS
-    js_src = STATIC_DIR / "js"
+    js_src = static_dir / "js"
     if js_src.exists():
         shutil.copytree(js_src, static_output / "js")
         print("✓ JavaScript copied")
 
     # Copy fonts
-    fonts_src = STATIC_DIR / "fonts"
+    fonts_src = static_dir / "fonts"
     if fonts_src.exists():
         shutil.copytree(fonts_src, static_output / "fonts")
         print("✓ Fonts copied")
@@ -243,12 +242,49 @@ def build_site():
     print("✓ fonts.css copied")
 
     print("\n✅ Build complete!")
-    print(f"\n📁 Output directory: {OUTPUT_DIR.absolute()}")
+    print(f"\n📁 Output directory: {output_dir.absolute()}")
     print("\n🌐 To view the site:")
-    print(f"   cd {OUTPUT_DIR} && python -m http.server 8000")
+    print(f"   cd {output_dir} && python -m http.server 8000")
     print("   Landing page:  http://localhost:8000/")
     print("   Browse page:   http://localhost:8000/browse.html")
 
 
+def main():
+    """Entry-point for CLI (registered in pyproject.toml scripts).
+
+    Parses CLI arguments, loads configuration, and dispatches to build_site().
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Build the static site")
+    parser.add_argument("--data", type=str, default=None, help="Data directory")
+    parser.add_argument("--templates", type=str, default=None, help="Templates directory")
+    parser.add_argument("--static", type=str, default=None, help="Static assets directory")
+    parser.add_argument("--output", type=str, default=None, help="Output directory")
+    parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
+    args = parser.parse_args()
+
+    from resourcery_ssg.config import load_resourcery_config
+
+    overrides = {}
+    # Map CLI flag names to config key names
+    flag_to_key = {
+        "data": "data_dir",
+        "templates": "templates_dir",
+        "static": "static_dir",
+        "output": "output_dir",
+    }
+    for flag, key in flag_to_key.items():
+        val = getattr(args, flag, None)
+        if val is not None:
+            overrides[f"build.{key}"] = val
+
+    config = load_resourcery_config(
+        config_path=args.config,
+        overrides=overrides,
+    )
+    build_site(**config["build"])
+
+
 if __name__ == "__main__":
-    build_site()
+    main()

@@ -31,6 +31,23 @@ def sample_design(testdata_dir: Path) -> dict:
     return json.loads((testdata_dir / "design.json").read_text(encoding="utf-8"))
 
 
+@pytest.fixture
+def build_paths(testdata_dir: Path, tmp_output_dir: Path) -> dict:
+    """Return a dict of paths suitable for passing to build_site()."""
+    return {
+        "data_dir": testdata_dir,
+        "templates_dir": testdata_dir / "templates",
+        "static_dir": testdata_dir / "static",
+        "output_dir": tmp_output_dir,
+    }
+
+
+@pytest.fixture
+def committed_config_path() -> Path:
+    """Return the path to the committed config.yaml bundled with the package."""
+    return Path(__file__).parent.parent / "src" / "resourcery_ssg" / "config.yaml"
+
+
 class MockResponse:
     def __init__(self, data: bytes, headers: dict = None):
         self._data = data

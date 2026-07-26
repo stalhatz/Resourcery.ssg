@@ -4,7 +4,7 @@ from pathlib import Path
 from resourcery_ssg.font_acquirer import (
     read_cached_fonts,
     is_cache_valid,
-    load_config,
+    _load_config,
     is_system_font,
     extract_google_font_candidates,
     fetch_google_fonts_css,
@@ -43,9 +43,8 @@ class TestIsCacheValid:
 
 class TestLoadConfig:
     @pytest.mark.unit
-    def test_loads_from_testdata(self, testdata_dir: Path, monkeypatch):
-        monkeypatch.setattr("resourcery_ssg.font_acquirer.DATA_DIR", testdata_dir)
-        config = load_config()
+    def test_loads_from_testdata(self, testdata_dir: Path):
+        config = _load_config(testdata_dir)
         assert "site_info" in config
 
 
@@ -197,10 +196,6 @@ class TestIntegrationAcquireFonts:
         css_dir = tmp_path / "css"
         css_dir.mkdir(parents=True)
 
-        monkeypatch.setattr("resourcery_ssg.font_acquirer.DATA_DIR", testdata_dir)
-        monkeypatch.setattr("resourcery_ssg.font_acquirer.FONTS_DIR", font_dir)
-        monkeypatch.setattr("resourcery_ssg.font_acquirer.CSS_DIR", css_dir)
-
         def mock_urlopen(req, **kw):
             class MockResp:
                 def read(self):
@@ -215,7 +210,7 @@ class TestIntegrationAcquireFonts:
             return MockResp()
 
         monkeypatch.setattr("urllib.request.urlopen", mock_urlopen)
-        acquire_fonts()
+        acquire_fonts(data_dir=testdata_dir, fonts_dir=font_dir, css_dir=css_dir)
         assert (css_dir / "fonts.css").exists()
         content = (css_dir / "fonts.css").read_text(encoding="utf-8")
         assert "@font-face" in content

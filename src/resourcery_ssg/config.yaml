@@ -1,0 +1,25 @@
+vars:
+  STATIC_DIR: ./static
+  DATA_DIR: ./data
+  TEMPLATES_DIR: ./templates
+  SCHEMAS_DIR: ./schemas
+  OUTPUT_DIR: ./output
+  FONTS_DIR: ${STATIC_DIR}/fonts
+  CSS_DIR: ${STATIC_DIR}/css
+  IMAGES_DIR: ${STATIC_DIR}/images/acquired
+
+build:
+  data_dir: ${DATA_DIR}
+  templates_dir: ${TEMPLATES_DIR}
+  static_dir: ${STATIC_DIR}
+  output_dir: ${OUTPUT_DIR}
+validate:
+  data_dir: ${DATA_DIR}
+  schemas_dir: ${SCHEMAS_DIR}
+acquire-fonts:
+  data_dir: ${DATA_DIR}
+  fonts_dir: ${FONTS_DIR}
+  css_dir: ${CSS_DIR}
+acquire-images:
+  links: ${DATA_DIR}/links.json
+  images_dir: ${IMAGES_DIR}

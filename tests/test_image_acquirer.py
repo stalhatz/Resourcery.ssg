@@ -4,8 +4,10 @@ from resourcery_ssg.image_acquirer import ImageAcquirer
 
 
 @pytest.fixture
-def acquirer(testdata_dir: Path) -> ImageAcquirer:
-    return ImageAcquirer(root_dir=testdata_dir.parent)
+def acquirer(tmp_path: Path) -> ImageAcquirer:
+    images_dir = tmp_path / "images"
+    images_dir.mkdir(parents=True)
+    return ImageAcquirer(images_dir=images_dir)
 
 
 class TestGenerateFilename:
@@ -122,7 +124,7 @@ class TestExtractMetaImage:
 
 class TestAcquireForLink:
     @pytest.mark.unit
-    def test_skips_existing_image(self, acquirer, testdata_dir: Path, monkeypatch):
+    def test_skips_existing_image(self, acquirer, monkeypatch):
         monkeypatch.setattr(
             "resourcery_ssg.image_acquirer.ImageAcquirer.extract_meta_image", lambda *a: None
         )
@@ -131,17 +133,17 @@ class TestAcquireForLink:
         )
         monkeypatch.setattr("resourcery_ssg.image_acquirer.PUPPETEER_AVAILABLE", False)
 
+        # Create an existing image in the acquirer's output_dir
+        existing_file = acquirer.output_dir / "existing.jpg"
+        existing_file.touch()
+
         link = {
             "id": "existing",
             "url": "https://example.com/page",
             "image": "/static/images/acquired/existing.jpg",
         }
-        path = testdata_dir.parent / "static" / "images" / "acquired" / "existing.jpg"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.touch()
-
         result = acquirer.acquire_for_link(link)
-        assert result is not None
+        assert result == "/static/images/acquired/existing.jpg"
 
     @pytest.mark.unit
     def test_returns_none_when_all_fail(self, acquirer, monkeypatch):

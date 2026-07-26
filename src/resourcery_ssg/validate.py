@@ -14,15 +14,15 @@ from typing import Dict, List, Set, Tuple, Any
 class DataValidator:
     """Validates site configuration and links data against JSON schemas."""
 
-    def __init__(self, root_dir: Path = None):
-        """Initialise the validator with project root and data/schema directory paths.
+    def __init__(self, data_dir: Path, schemas_dir: Path):
+        """Initialise the validator with explicit data and schema directory paths.
 
-        root_dir: project root directory. Defaults to the directory containing this file.
+        data_dir: directory containing site.config.json, links.json, design.json.
+        schemas_dir: directory containing *.schema.json files.
         """
 
-        self.root_dir = root_dir or Path(__file__).resolve().parent.parent.parent
-        self.data_dir = self.root_dir / "data"
-        self.schemas_dir = self.root_dir / "schemas"
+        self.data_dir = data_dir
+        self.schemas_dir = schemas_dir
 
         self.errors: List[str] = []
         self.warnings: List[str] = []
@@ -416,12 +416,39 @@ class DataValidator:
 def main():
     """Run all validations and exit with the appropriate status code.
 
+    Parses CLI arguments, loads configuration, and dispatches to DataValidator.
+
     Returns: None.
 
     SystemExit: 0 if all validations pass, 1 if any errors were found.
     """
 
-    validator = DataValidator()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Validate site data against JSON schemas")
+    parser.add_argument("--data", type=str, default=None, help="Data directory")
+    parser.add_argument("--schemas", type=str, default=None, help="Schemas directory")
+    parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
+    args = parser.parse_args()
+
+    from resourcery_ssg.config import load_resourcery_config
+
+    overrides = {}
+    flag_to_key = {
+        "data": "data_dir",
+        "schemas": "schemas_dir",
+    }
+    for flag, key in flag_to_key.items():
+        val = getattr(args, flag, None)
+        if val is not None:
+            overrides[f"validate.{key}"] = val
+
+    config = load_resourcery_config(
+        config_path=args.config,
+        overrides=overrides,
+    )
+
+    validator = DataValidator(**config["validate"])
     success = validator.validate_all()
 
     # Exit with appropriate code

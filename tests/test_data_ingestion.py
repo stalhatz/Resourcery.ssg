@@ -49,8 +49,10 @@ def test_data_ingestion_e2e(tmp_path, pytestconfig):
     assert (output_dir / "design.json").exists(), "design.json missing"
 
     # Use DataValidator for schema + cross-validation
-    validator = DataValidator(root_dir=str(_PROJECT_DIR))
-    validator.data_dir = output_dir  # point to output, not default data/
+    validator = DataValidator(
+        data_dir=output_dir,  # point to output, not default data/
+        schemas_dir=_PROJECT_DIR / "schemas",
+    )
 
     # Load schemas (from canonical schemas/ dir)
     assert validator.load_schemas(), "Failed to load schemas"

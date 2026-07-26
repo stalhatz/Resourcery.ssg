@@ -6,7 +6,10 @@ from resourcery_ssg.validate import DataValidator
 
 @pytest.fixture
 def validator(testdata_dir: Path) -> DataValidator:
-    return DataValidator(root_dir=testdata_dir.parent.parent)
+    return DataValidator(
+        data_dir=testdata_dir,
+        schemas_dir=testdata_dir.parent.parent / "schemas",  # project root schemas/
+    )
 
 
 class TestLoadJson:
@@ -242,8 +245,8 @@ class TestValidateAll:
         assert validator.validate_all() is True
 
     @pytest.mark.unit
-    def test_fails_on_missing_schema(self, validator):
-        validator.schemas_dir = Path("/nonexistent")
+    def test_fails_on_missing_schema(self, testdata_dir):
+        validator = DataValidator(data_dir=testdata_dir, schemas_dir=Path("/nonexistent"))
         assert validator.validate_all() is False
 
 
@@ -253,6 +256,9 @@ class TestIntegrationValidate:
         monkeypatch.setattr(
             "resourcery_ssg.font_acquirer.extract_google_font_candidates", lambda s: []
         )
-        validator = DataValidator(root_dir=testdata_dir.parent.parent)
+        validator = DataValidator(
+            data_dir=testdata_dir,
+            schemas_dir=testdata_dir.parent.parent / "schemas",  # project root schemas/
+        )
         assert validator.validate_all() is True
         assert len(validator.errors) == 0
