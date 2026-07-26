@@ -1,0 +1,1 @@
+Create a developer portal for programmers and software engineers. The site should have a professional, technical tone with a clean layout. Focus on tools and frameworks that help developers build better software. The audience is experienced software engineers looking for high-quality development resources.

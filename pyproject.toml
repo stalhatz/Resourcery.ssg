@@ -29,6 +29,7 @@ markers = [
     "unit: pure unit tests, no I/O or network",
     "integration: end-to-end workflow action tests",
     "network: tests that make real network calls (skipped by default)",
+    "e2e: end-to-end tests that require an LLM model (skipped by default)",
 ]
 
 [build-system]
@@ -38,3 +39,4 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.scripts]
 build = "build:build"
 acquire-images = "image_acquirer:main"
+ingest = "data_ingestion:main"

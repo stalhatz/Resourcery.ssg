@@ -105,6 +105,18 @@ def pytest_addoption(parser):
     parser.addoption(
         "--network", action="store_true", help="run network-dependent tests"
     )
+    parser.addoption(
+        "--model",
+        action="store",
+        default=None,
+        help="Model to use for E2E tests (required for -m e2e)",
+    )
+    parser.addoption(
+        "--opencode-path",
+        action="store",
+        default="opencode",
+        help="Path to opencode binary for E2E tests",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -113,3 +125,8 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "network" in item.keywords:
                 item.add_marker(skip_network)
+    if not config.getoption("--model"):
+        skip_e2e = pytest.mark.skip(reason="use --model <name> to run E2E tests")
+        for item in items:
+            if "e2e" in item.keywords:
+                item.add_marker(skip_e2e)

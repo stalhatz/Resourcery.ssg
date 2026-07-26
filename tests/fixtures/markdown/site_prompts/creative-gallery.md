@@ -1,0 +1,1 @@
+Create a creative resource gallery for designers and visual artists. The site should have a vibrant, inspiring tone with bold colors. Focus on design tools, typography resources, icon libraries, and visual inspiration. The audience is UI/UX designers and digital artists seeking creative assets and inspiration.
