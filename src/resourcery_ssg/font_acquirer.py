@@ -15,9 +15,9 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from theme_constants import get_required_weights, weights_to_api_param
+from resourcery_ssg.theme_constants import get_required_weights, weights_to_api_param
 
-ROOT_DIR = Path(__file__).parent
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = ROOT_DIR / "data"
 STATIC_DIR = ROOT_DIR / "static"
 FONTS_DIR = STATIC_DIR / "fonts"
@@ -379,6 +379,14 @@ def acquire_fonts():
     if not all_ok:
         print("\n⚠️  Some fonts failed — check names at fonts.google.com")
         sys.exit(1)
+
+
+def main():
+    """Entry-point for CLI (registered in pyproject.toml scripts).
+
+    Delegates to acquire_fonts().
+    """
+    acquire_fonts()
 
 
 if __name__ == "__main__":

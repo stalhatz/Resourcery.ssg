@@ -256,3 +256,13 @@ No backwards compatibility required. Existing `data/site.config.json` will be ma
 - `workspace/` — stores intermediate pipeline outputs (01_extract.json through 06_design.json)
 - Added to `.gitignore`
 - Cleaned between runs unless `--resume` flag is used
+
+---
+
+> **Note on file paths:** This spec was authored when all Python modules lived in
+> the project root. As of spec
+> [`refactors/src_layout_package.md`](src_layout_package.md), the source code has
+> been moved under `src/resourcery_ssg/`. References to `build.py`, `validate.py`,
+> `font_acquirer.py`, `image_acquirer.py`, and `data_ingestion.py` as root-level
+> files now refer to `src/resourcery_ssg/build.py`, etc. The behavioural scope of
+> this spec is unchanged.

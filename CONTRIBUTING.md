@@ -6,11 +6,12 @@
 
 | Path | Type | Role |
 |------|------|------|
-| `build.py` | Python script | Main entry point. Renders Jinja2 templates into static HTML/CSS, copies static assets, pre-computes category maps and tag lists from JSON data. |
-| `validate.py` | Python script | Data integrity gate. Validates JSON data against JSON Schema (draft-07), cross-validates categories/tags/IDs, checks hex colors, URLs, font availability, and effect compatibility. |
-| `font_acquirer.py` | Python script | Build-time Google Font downloader. Fetches `.woff2` files from Google Fonts API, caches locally, generates `fonts.css` with embedded `@font-face` rules. Zero CDN dependency at runtime. |
-| `image_acquirer.py` | Python script | Link image downloader. Extracts images from link URLs via `og:image` meta tags or headless Puppeteer screenshots. |
-| `theme_constants.py` | Python script | Single source of truth for heading style configuration (weight, letter-spacing, required font weights). Imported by `build.py` and `font_acquirer.py`. |
+| `src/resourcery_ssg/__init__.py` | Python init | Package marker for the `resourcery_ssg` namespace. Contains module docstring only. |
+| `src/resourcery_ssg/build.py` | Python script | Main entry point. Renders Jinja2 templates into static HTML/CSS, copies static assets, pre-computes category maps and tag lists from JSON data. |
+| `src/resourcery_ssg/validate.py` | Python script | Data integrity gate. Validates JSON data against JSON Schema (draft-07), cross-validates categories/tags/IDs, checks hex colors, URLs, font availability, and effect compatibility. |
+| `src/resourcery_ssg/font_acquirer.py` | Python script | Build-time Google Font downloader. Fetches `.woff2` files from Google Fonts API, caches locally, generates `fonts.css` with embedded `@font-face` rules. Zero CDN dependency at runtime. |
+| `src/resourcery_ssg/image_acquirer.py` | Python script | Link image downloader. Extracts images from link URLs via `og:image` meta tags or headless Puppeteer screenshots. |
+| `src/resourcery_ssg/theme_constants.py` | Python script | Single source of truth for heading style configuration (weight, letter-spacing, required font weights). Imported by `build.py` and `font_acquirer.py`. |
 | `schemas/links.schema.json` | JSON Schema | JSON Schema definition for `data/links.json`. Defines required properties, types, and constraints for every link entry. |
 | `schemas/site.config.schema.json` | JSON Schema | JSON Schema definition for `data/site.config.json`. Defines theming, effects, navigation, and metadata shape. |
 | `templates/` | Directory | Jinja2 templates that produce the static site output. |
@@ -24,7 +25,7 @@
 | `static/images/acquired/` | Directory | Downloaded link images (from `image_acquirer.py`). |
 | `output/` | Directory | Build output (gitignored). Complete static site ready for any HTTP server. |
 | `schemas/` | Directory | JSON Schema files. Used for validation and as LLM prompt guidance during data creation. |
-| `pyproject.toml` | Config | Poetry project configuration. Defines dependencies (production + dev), scripts (`build`, `acquire-images`), and tool configs (Black, pytest). |
+| `pyproject.toml` | Config | Poetry project configuration. Defines dependencies (production + dev), scripts (`build`, `validate`, `acquire-images`, `acquire-fonts`, `ingest`), and tool configs (Black, pytest). |
 | `poetry.lock` | Lock file | Poetry dependency lock. Commit to ensure reproducible builds. |
 
 ---
@@ -68,11 +69,11 @@ feat: build-time Google Font acquisition. No runtime CDN dependency
 ### Overview
 
 Resourcery.ssg is a **static site generator (SSG)** with zero runtime dependencies. All processing happens at build time, producing a directory of plain HTML/CSS/JS that works with any HTTP server.
-
 ```
 JSON Data Files  ──>  Validate ──>  Render Jinja2 ──>  Static Site
-(site.config.json      (validate.py)    (build.py)        (output/)
+(site.config.json      (src/resourcery_ssg/validate.py)    (src/resourcery_ssg/build.py)        (output/)
  + links.json)
+
                           │
                     Acquire Assets
                     (fonts, images)
@@ -199,7 +200,7 @@ Side-effects: any notable module-level side-effects on import. (omitted if none)
 ### Build Pipeline (sequential)
 
 ```
-Step 1: validate.py
+Step 1: src/resourcery_ssg/validate.py
   ├── Load JSON Schema from schemas/
   ├── Load data from data/
   ├── Validate schema compliance
@@ -207,20 +208,20 @@ Step 1: validate.py
   ├── Validate effects combinations
   └── Validate Google Font availability
 
-Step 2: font_acquirer.py
+Step 2: src/resourcery_ssg/font_acquirer.py
   ├── Read theme_constants.py for required font weights
   ├── Check font-family stacks in site.config.json
   ├── Check cache (fonts.css line 1 metadata)
   ├── Download missing .woff2 from Google Fonts API
   └── Write fonts.css with @font-face rules
 
-Step 3: image_acquirer.py (optional)
+Step 3: src/resourcery_ssg/image_acquirer.py (optional)
   ├── For each link without a local image:
   │   ├── Fetch URL, parse og:image meta tag
   │   └── Fallback: headless Puppeteer screenshot
   └── Save to static/images/acquired/
 
-Step 4: build.py
+Step 4: src/resourcery_ssg/build.py
   ├── Clean output/
   ├── Load validated data
   ├── Pre-compute category_map and all_tags
@@ -271,7 +272,7 @@ handleHashChange() on load + hashchange event
 
 ## Notes
 
-- **`theme_constants.py` is a shared dependency** between `build.py` and `font_acquirer.py`. Both import it. If you change heading styles, update the constant, not each file.
+- **`src/resourcery_ssg/theme_constants.py` is a shared dependency** between `src/resourcery_ssg/build.py` and `src/resourcery_ssg/font_acquirer.py`. Both import it. If you change heading styles, update the constant, not each file.
 - **`tojson` filter** is used in Jinja2 for safe Python→JavaScript serialization (`{{ config \| tojson }}`). Never use `json.dumps()` manually for template injection.
 - **Font cache invalidation** is done by comparing the first line of `static/css/fonts.css` (a `/* {"font_name": {...}} */` JSON comment) against requested fonts. If any font is missing or has different weights, only the needed fonts are re-downloaded.
 - **Effects presets** in `site.config.json` (`card_style`, `shadow_intensity`, `border_radius`, etc.) are documented in the schema with valid values. Adding a new effect value requires updating both the schema and the CSS template.

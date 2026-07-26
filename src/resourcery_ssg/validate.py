@@ -20,7 +20,7 @@ class DataValidator:
         root_dir: project root directory. Defaults to the directory containing this file.
         """
 
-        self.root_dir = root_dir or Path(__file__).parent
+        self.root_dir = root_dir or Path(__file__).resolve().parent.parent.parent
         self.data_dir = self.root_dir / "data"
         self.schemas_dir = self.root_dir / "schemas"
 
@@ -173,11 +173,11 @@ class DataValidator:
         Side-effects: prints status for each checked font.
         """
 
-        from font_acquirer import (
+        from resourcery_ssg.font_acquirer import (
             find_first_downloadable,
             extract_google_font_candidates,
         )
-        from theme_constants import get_required_weights, weights_to_api_param
+        from resourcery_ssg.theme_constants import get_required_weights, weights_to_api_param
 
         typography = self.design_data.get("theme", {}).get("typography", {})
         font_family = typography.get("font_family", "")

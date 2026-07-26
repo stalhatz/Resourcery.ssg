@@ -40,7 +40,7 @@ class ImageAcquirer:
             does not exist.
         """
 
-        self.root_dir = root_dir or Path(__file__).parent
+        self.root_dir = root_dir or Path(__file__).resolve().parent.parent.parent
         self.output_dir = self.root_dir / "static" / "images" / "acquired"
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -390,7 +390,7 @@ def main():
     )
     args = parser.parse_args()
 
-    root_dir = Path(__file__).parent
+    root_dir = Path(__file__).resolve().parent.parent.parent
     links_path = root_dir / args.links
 
     if not links_path.exists():

@@ -154,3 +154,13 @@ The prompt itself is not specified by this document — it is carried over from 
 - The ingestion prompt should reference the schema files by path so the agent can read them. Symlinks from the temp directory to `schemas/` keep the schemas as a single source of truth.
 - Notes and site prompts live as separate files so they can be combined in different ways. A site prompt is always required — the agent needs context about purpose and audience to produce a coherent taxonomy and visual identity.
 - If `data_ingestion.py` grows enough internal logic to warrant it, its core function (e.g., `run_ingestion(...)`) should be factored out so the test can call it directly without shelling out.
+
+---
+
+> **Note on file paths:** This spec was authored when all Python modules lived in
+> the project root. As of spec
+> [`refactors/src_layout_package.md`](../refactors/src_layout_package.md), the
+> source code has been moved under `src/resourcery_ssg/`. References to
+> `data_ingestion.py`, `validate.py`, and `build.py` as root-level files now
+> refer to `src/resourcery_ssg/data_ingestion.py`, etc. The behavioural scope of
+> this spec is unchanged.

@@ -1,7 +1,7 @@
 import json
 import pytest
 from pathlib import Path
-from validate import DataValidator
+from resourcery_ssg.validate import DataValidator
 
 
 @pytest.fixture
@@ -123,7 +123,7 @@ class TestValidateFonts:
             return []
 
         monkeypatch.setattr(
-            "font_acquirer.extract_google_font_candidates", mock_extract
+            "resourcery_ssg.font_acquirer.extract_google_font_candidates", mock_extract
         )
         validator.validate_fonts()
         assert len(validator.errors) == 0
@@ -237,7 +237,7 @@ class TestValidateAll:
     @pytest.mark.unit
     def test_clean_data_succeeds(self, validator, monkeypatch):
         monkeypatch.setattr(
-            "font_acquirer.extract_google_font_candidates", lambda s: []
+            "resourcery_ssg.font_acquirer.extract_google_font_candidates", lambda s: []
         )
         assert validator.validate_all() is True
 
@@ -251,7 +251,7 @@ class TestIntegrationValidate:
     @pytest.mark.integration
     def test_validate_end_to_end(self, testdata_dir: Path, monkeypatch):
         monkeypatch.setattr(
-            "font_acquirer.extract_google_font_candidates", lambda s: []
+            "resourcery_ssg.font_acquirer.extract_google_font_candidates", lambda s: []
         )
         validator = DataValidator(root_dir=testdata_dir.parent.parent)
         assert validator.validate_all() is True

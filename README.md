@@ -38,7 +38,7 @@ People who:
 | **Validation** | JSON Schema | Enforced via jsonschema library |
 | **Styling** | CSS Variables | Theming via CSS custom properties |
 | **Interactivity** | Vanilla JS | No framework |
-| **Build** | Python Script | build.py renders and copies assets |
+| **Build** | Python Script | src/resourcery_ssg/build.py renders and copies assets |
 
 ## Quick Start
 
@@ -48,15 +48,15 @@ People who:
 
 ### 2. Validate Data (Optional but Recommended)
 
-  `poetry run python validate.py`
+  `poetry run validate`
 
 ### 3. Acquire Images
 
-  `poetry run python image_acquirer.py`
+  `poetry run acquire-images`
 
 ### 4. Build the Site
 
-  `poetry run python build.py`
+  `poetry run build`
 
 ### 5. Serve Locally
 

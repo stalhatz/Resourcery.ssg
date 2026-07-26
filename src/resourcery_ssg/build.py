@@ -11,10 +11,10 @@ import shutil
 import sys
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
-from theme_constants import get_heading_weight, get_heading_letter_spacing
+from resourcery_ssg.theme_constants import get_heading_weight, get_heading_letter_spacing
 
 # Directories
-ROOT_DIR = Path(__file__).parent
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = ROOT_DIR / "data"
 TEMPLATES_DIR = ROOT_DIR / "templates"
 STATIC_DIR = ROOT_DIR / "static"
@@ -129,7 +129,7 @@ def build_all_tags(links_data):
 # ==================== BUILD ====================
 
 
-def build():
+def build_site():
     """Render all templates and copy static assets to the output directory.
 
     Loads data from site.config.json and links.json, pre-computes category
@@ -251,4 +251,4 @@ def build():
 
 
 if __name__ == "__main__":
-    build()
+    build_site()

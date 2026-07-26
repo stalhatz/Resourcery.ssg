@@ -37,3 +37,14 @@ There are no tests. Every change in code or configuration could be catastrophic.
 3. Each of the 4 workflow actions has an integration test that runs it against `data/testdata/` and completes without error.
 4. All tests pass when run on a machine with no internet connection.
 5. `network`-marked tests are skipped unless `--network` is explicitly passed.
+
+---
+
+> **Note on file paths:** This spec was authored when all Python modules lived in
+> the project root. As of spec
+> [`refactors/src_layout_package.md`](../refactors/src_layout_package.md), the
+> source code has been moved under `src/resourcery_ssg/`. References to
+> `build.py`, `validate.py`, `font_acquirer.py`, `image_acquirer.py`, and
+> `theme_constants.py` as root-level files now refer to
+> `src/resourcery_ssg/build.py`, etc. Test imports also use the
+> `resourcery_ssg.` prefix. The behavioural scope of this spec is unchanged.

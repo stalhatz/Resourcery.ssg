@@ -1,5 +1,5 @@
 import pytest
-from theme_constants import (
+from resourcery_ssg.theme_constants import (
     HEADING_STYLE_CONFIG,
     get_heading_weight,
     get_heading_letter_spacing,

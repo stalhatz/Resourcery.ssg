@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from image_acquirer import ImageAcquirer
+from resourcery_ssg.image_acquirer import ImageAcquirer
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ class TestIsValidImageUrl:
 class TestDownloadImage:
     @pytest.mark.unit
     def test_successful_download(self, acquirer, tmp_path: Path, monkeypatch):
-        from image_acquirer import requests
+        from resourcery_ssg.image_acquirer import requests
 
         class MockResp:
             status_code = 200
@@ -64,7 +64,7 @@ class TestDownloadImage:
 
     @pytest.mark.unit
     def test_failed_download_returns_false(self, acquirer, tmp_path: Path, monkeypatch):
-        from image_acquirer import requests
+        from resourcery_ssg.image_acquirer import requests
 
         class MockResp:
             def raise_for_status(self):
@@ -84,7 +84,7 @@ class TestDownloadImage:
 class TestExtractMetaImage:
     @pytest.mark.unit
     def test_finds_og_image(self, acquirer, monkeypatch):
-        from image_acquirer import requests
+        from resourcery_ssg.image_acquirer import requests
 
         class MockResp:
             text = '<html><head><meta property="og:image" content="https://example.com/og.jpg"></head></html>'
@@ -98,7 +98,7 @@ class TestExtractMetaImage:
 
     @pytest.mark.unit
     def test_returns_none_when_no_meta(self, acquirer, monkeypatch):
-        from image_acquirer import requests
+        from resourcery_ssg.image_acquirer import requests
 
         class MockResp:
             text = "<html><head></head></html>"
@@ -111,7 +111,7 @@ class TestExtractMetaImage:
 
     @pytest.mark.unit
     def test_returns_none_on_error(self, acquirer, monkeypatch):
-        from image_acquirer import requests
+        from resourcery_ssg.image_acquirer import requests
 
         def mock_get(*a, **kw):
             raise Exception("Network error")
@@ -124,12 +124,12 @@ class TestAcquireForLink:
     @pytest.mark.unit
     def test_skips_existing_image(self, acquirer, testdata_dir: Path, monkeypatch):
         monkeypatch.setattr(
-            "image_acquirer.ImageAcquirer.extract_meta_image", lambda *a: None
+            "resourcery_ssg.image_acquirer.ImageAcquirer.extract_meta_image", lambda *a: None
         )
         monkeypatch.setattr(
-            "image_acquirer.ImageAcquirer._download_image", lambda *a: False
+            "resourcery_ssg.image_acquirer.ImageAcquirer._download_image", lambda *a: False
         )
-        monkeypatch.setattr("image_acquirer.PUPPETEER_AVAILABLE", False)
+        monkeypatch.setattr("resourcery_ssg.image_acquirer.PUPPETEER_AVAILABLE", False)
 
         link = {
             "id": "existing",
@@ -146,12 +146,12 @@ class TestAcquireForLink:
     @pytest.mark.unit
     def test_returns_none_when_all_fail(self, acquirer, monkeypatch):
         monkeypatch.setattr(
-            "image_acquirer.ImageAcquirer.extract_meta_image", lambda *a: None
+            "resourcery_ssg.image_acquirer.ImageAcquirer.extract_meta_image", lambda *a: None
         )
         monkeypatch.setattr(
-            "image_acquirer.ImageAcquirer._download_image", lambda *a: False
+            "resourcery_ssg.image_acquirer.ImageAcquirer._download_image", lambda *a: False
         )
-        monkeypatch.setattr("image_acquirer.PUPPETEER_AVAILABLE", False)
+        monkeypatch.setattr("resourcery_ssg.image_acquirer.PUPPETEER_AVAILABLE", False)
 
         link = {"id": "fail", "url": "https://example.com/fail", "image": ""}
         result = acquirer.acquire_for_link(link)
@@ -185,12 +185,12 @@ class TestIntegrationAcquireImages:
     @pytest.mark.integration
     def test_acquire_images_runs(self, acquirer, monkeypatch):
         monkeypatch.setattr(
-            "image_acquirer.ImageAcquirer.extract_meta_image", lambda *a: None
+            "resourcery_ssg.image_acquirer.ImageAcquirer.extract_meta_image", lambda *a: None
         )
         monkeypatch.setattr(
-            "image_acquirer.ImageAcquirer._download_image", lambda *a: False
+            "resourcery_ssg.image_acquirer.ImageAcquirer._download_image", lambda *a: False
         )
-        monkeypatch.setattr("image_acquirer.PUPPETEER_AVAILABLE", False)
+        monkeypatch.setattr("resourcery_ssg.image_acquirer.PUPPETEER_AVAILABLE", False)
 
         links_data = {
             "links": [{"id": "t1", "url": "https://example.com/t1", "status": "active"}]

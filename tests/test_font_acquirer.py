@@ -1,7 +1,7 @@
 import json
 import pytest
 from pathlib import Path
-from font_acquirer import (
+from resourcery_ssg.font_acquirer import (
     read_cached_fonts,
     is_cache_valid,
     load_config,
@@ -44,7 +44,7 @@ class TestIsCacheValid:
 class TestLoadConfig:
     @pytest.mark.unit
     def test_loads_from_testdata(self, testdata_dir: Path, monkeypatch):
-        monkeypatch.setattr("font_acquirer.DATA_DIR", testdata_dir)
+        monkeypatch.setattr("resourcery_ssg.font_acquirer.DATA_DIR", testdata_dir)
         config = load_config()
         assert "site_info" in config
 
@@ -141,7 +141,7 @@ class TestFindFirstDownloadable:
                 f"@font-face {{ font-family: '{name}'; }}" if name == "Roboto" else None
             )
 
-        monkeypatch.setattr("font_acquirer.fetch_google_fonts_css", mock_fetch)
+        monkeypatch.setattr("resourcery_ssg.font_acquirer.fetch_google_fonts_css", mock_fetch)
         name, css = find_first_downloadable("Roboto, system-ui", "0,400")
         assert name == "Roboto"
         assert css is not None
@@ -151,7 +151,7 @@ class TestFindFirstDownloadable:
         def mock_fetch(name, weights):
             return None
 
-        monkeypatch.setattr("font_acquirer.fetch_google_fonts_css", mock_fetch)
+        monkeypatch.setattr("resourcery_ssg.font_acquirer.fetch_google_fonts_css", mock_fetch)
         name, css = find_first_downloadable("UnknownFont, system-ui", "0,400")
         assert name is None
         assert css is None
@@ -197,9 +197,9 @@ class TestIntegrationAcquireFonts:
         css_dir = tmp_path / "css"
         css_dir.mkdir(parents=True)
 
-        monkeypatch.setattr("font_acquirer.DATA_DIR", testdata_dir)
-        monkeypatch.setattr("font_acquirer.FONTS_DIR", font_dir)
-        monkeypatch.setattr("font_acquirer.CSS_DIR", css_dir)
+        monkeypatch.setattr("resourcery_ssg.font_acquirer.DATA_DIR", testdata_dir)
+        monkeypatch.setattr("resourcery_ssg.font_acquirer.FONTS_DIR", font_dir)
+        monkeypatch.setattr("resourcery_ssg.font_acquirer.CSS_DIR", css_dir)
 
         def mock_urlopen(req, **kw):
             class MockResp:

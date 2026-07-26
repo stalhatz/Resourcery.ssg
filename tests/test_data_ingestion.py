@@ -2,8 +2,8 @@
 
 import pytest
 from pathlib import Path
-from validate import DataValidator
-from data_ingestion import run_ingestion
+from resourcery_ssg.validate import DataValidator
+from resourcery_ssg.data_ingestion import run_ingestion
 
 
 # Root of the test directory — used to locate fixtures and project dirs

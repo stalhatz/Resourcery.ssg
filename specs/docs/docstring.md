@@ -30,3 +30,12 @@ def my_function(param: str) -> bool:
 ```
 ### Side-effects
 Update CONTRIBUTING.md with new docstring format
+
+---
+
+> **Note on file paths:** This spec was authored when all Python modules lived in
+> the project root. As of spec
+> [`refactors/src_layout_package.md`](../refactors/src_layout_package.md), the
+> source code has been moved under `src/resourcery_ssg/`. References to `.py`
+> files at the root now refer to `src/resourcery_ssg/`. The docstring conventions
+> defined by this spec apply identically in the new location.
