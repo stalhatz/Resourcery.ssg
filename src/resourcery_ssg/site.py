@@ -71,6 +71,8 @@ def _build_parser() -> argparse.ArgumentParser:
     ingest_p.add_argument("--agent", type=str, default=None)
     ingest_p.add_argument("--opencode-path", type=str, default=None)
     ingest_p.add_argument("--debug", action="store_true")
+    ingest_p.add_argument("--multi-step", action="store_true", default=None)
+    ingest_p.add_argument("--max-retries", type=int, default=None)
 
     # all
     all_p = subparsers.add_parser(
@@ -94,6 +96,8 @@ def _build_parser() -> argparse.ArgumentParser:
     all_p.add_argument("--agent", type=str, default=None)
     all_p.add_argument("--opencode-path", type=str, default=None)
     all_p.add_argument("--debug", action="store_true")
+    all_p.add_argument("--multi-step", action="store_true", default=None)
+    all_p.add_argument("--max-retries", type=int, default=None)
 
     return parser
 
@@ -116,6 +120,8 @@ ARG_TO_CONFIG_KEY = {
     "model": "model",
     "agent": "agent",
     "opencode_path": "opencode_bin",
+    "multi_step": "multi_step",
+    "max_retries": "max_retries",
 }
 
 # Per-command config key names
@@ -124,7 +130,7 @@ COMMAND_FLAGS = {
     "validate": ["data_dir", "schemas_dir"],
     "acquire-fonts": ["data_dir", "fonts_dir", "css_dir"],
     "acquire-images": ["links", "images_dir"],
-    "ingest": ["note", "site_prompt", "schemas_dir", "prompt", "model", "output_dir", "agent", "opencode_bin"],
+    "ingest": ["note", "site_prompt", "schemas_dir", "prompt", "model", "output_dir", "agent", "opencode_bin", "multi_step", "max_retries"],
 }
 
 
@@ -241,19 +247,46 @@ def _run_ingest(config, args=None):
         print("  ⚠️  ingest.model not set — skipping ingestion")
         return
 
-    from resourcery_ssg.data_ingestion import run_ingestion
+    note = ingest_cfg.get("note")
+    site_prompt = ingest_cfg.get("site_prompt")
+    if not note or not site_prompt:
+        print(
+            "  ⚠️  ingest.note and ingest.site_prompt are required — "
+            "pass --note and --site-prompt on the command line",
+            file=sys.stderr,
+        )
+        return
 
-    run_ingestion(
-        note_path=Path(ingest_cfg["note"]),
-        site_prompt_path=Path(ingest_cfg["site_prompt"]),
-        schemas_dir=Path(ingest_cfg["schemas_dir"]),
-        prompt_path=Path(ingest_cfg["prompt"]),
-        model=model,
-        output_dir=Path(ingest_cfg["output_dir"]),
-        agent_path=Path(ingest_cfg["agent"]) if ingest_cfg.get("agent") else None,
-        opencode_bin=ingest_cfg.get("opencode_bin", "opencode"),
-        debug=getattr(args, "debug", False) or ingest_cfg.get("debug", False),
-    )
+    from resourcery_ssg.data_ingestion import run_ingestion, run_multi_step_ingestion
+
+    multi_step = ingest_cfg.get("multi_step", False)
+    max_retries = ingest_cfg.get("max_retries", 3)
+    opencode_bin = ingest_cfg.get("opencode_bin", "opencode")
+
+    if multi_step:
+        prompts_dir = Path(ingest_cfg["prompt"]).resolve().parent
+        run_multi_step_ingestion(
+            note_path=Path(note),
+            site_prompt_path=Path(site_prompt),
+            schemas_dir=Path(ingest_cfg["schemas_dir"]),
+            prompts_dir=prompts_dir,
+            model=model,
+            output_dir=Path(ingest_cfg["output_dir"]),
+            max_retries=max_retries,
+            opencode_bin=opencode_bin,
+            debug=getattr(args, "debug", False) or ingest_cfg.get("debug", False),
+        )
+    else:
+        run_ingestion(
+            note_path=Path(note),
+            site_prompt_path=Path(site_prompt),
+            schemas_dir=Path(ingest_cfg["schemas_dir"]),
+            prompt_path=Path(ingest_cfg["prompt"]),
+            model=model,
+            output_dir=Path(ingest_cfg["output_dir"]),
+            opencode_bin=opencode_bin,
+            debug=getattr(args, "debug", False) or ingest_cfg.get("debug", False),
+        )
     print("\n✓ Ingestion complete.")
 
 

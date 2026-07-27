@@ -23,3 +23,11 @@ acquire-fonts:
 acquire-images:
   links: ${DATA_DIR}/links.json
   images_dir: ${IMAGES_DIR}
+ingest:
+  schemas_dir: ${SCHEMAS_DIR}
+  prompt: ./prompts/data-ingestion.md
+  output_dir: ${OUTPUT_DIR}
+  model: gpt-4o
+  multi_step: false
+  max_retries: 3
+  opencode_bin: opencode

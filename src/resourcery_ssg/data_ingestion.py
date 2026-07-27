@@ -8,6 +8,7 @@ validate against the project's JSON Schemas.
 """
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -15,6 +16,8 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Optional
+
+from resourcery_ssg.validate import DataValidator
 
 
 # Expected output files
@@ -70,6 +73,105 @@ def _read_file(path: Path) -> str:
     FileNotFoundError: raised if the file does not exist.
     """
     return path.read_text(encoding="utf-8")
+
+
+def _generate_step_agent_def(
+    work_dir: str, schemas_dir: str, step_name: str, output_file: str
+) -> str:
+    """Generate a scoped agent definition for a single ingestion step.
+
+    work_dir: absolute path to the temp working directory (write scope).
+    schemas_dir: absolute path to the schemas directory (read scope).
+    step_name: short label for the step (e.g. 'site-config', 'links', 'design').
+    output_file: the single output file this step generates (e.g. 'site.config.json').
+
+    Returns: agent definition as a YAML-frontmatter markdown string.
+    """
+    return f"""---
+name: data-ingestion-{step_name}
+description: generate the output file {output_file}
+mode: primary
+permission:
+  read:
+    "{schemas_dir}/**": allow
+  write:
+    "{work_dir}/**": allow
+  edit:
+    "{work_dir}/**": allow
+  bash:
+    "{work_dir}/**": allow
+  webfetch: allow
+  websearch: allow
+---
+
+You are a data ingestion agent. Read the instruction carefully, use the inlined schemas to understand the required output format, and generate the output file {output_file} at the exact absolute path specified in the instruction. Use the write tool. Do not ask questions — produce the output file.
+"""
+
+
+def _compose_step_instruction(
+    step_prompt: str,
+    note_content: str,
+    site_prompt_content: str,
+    schema_contents: dict,
+    schema_keys: list[str],
+    output_path: Path,
+    context_files: Optional[dict[str, str]] = None,
+) -> str:
+    """Compose a step-specific instruction with only the relevant schemas inlined.
+
+    step_prompt: the step-specific prompt markdown content.
+    note_content: the raw markdown note content.
+    site_prompt_content: the site prompt markdown content.
+    schema_contents: dict mapping schema filename -> schema JSON string.
+    schema_keys: list of schema filenames to inline in this step.
+    output_path: the absolute path where the output file should be written.
+    context_files: optional dict of {filename: content} for additional context
+        (e.g. site.config.json for Step 2).
+
+    Returns: the composed instruction string.
+    """
+    instruction_parts = [
+        step_prompt,
+        "",
+        "## Input Files",
+        "",
+        "### Note",
+        "```markdown",
+        note_content,
+        "```",
+        "",
+        "### Site Prompt",
+        "```markdown",
+        site_prompt_content,
+        "```",
+    ]
+
+    for schema_key in schema_keys:
+        if schema_key in schema_contents:
+            instruction_parts.extend([
+                "",
+                f"### Schema: {schema_key}",
+                "```json",
+                schema_contents[schema_key],
+                "```",
+            ])
+
+    if context_files:
+        for filename, content in context_files.items():
+            instruction_parts.extend([
+                "",
+                f"### Context: {filename}",
+                "```json",
+                content,
+                "```",
+            ])
+
+    instruction_parts.extend([
+        "",
+        f"Write the output file to: {output_path}",
+    ])
+
+    return "\n".join(instruction_parts)
 
 
 def run_ingestion(
@@ -139,6 +241,8 @@ def run_ingestion(
     # Create temporary working directory
     tmp_dir_obj = tempfile.mkdtemp(prefix="data_ingestion_")
     tmp_dir = Path(tmp_dir_obj)
+
+    print("⚡ Running single-shot data ingestion...", file=sys.stderr)
 
     try:
         # Generate or resolve agent definition
@@ -257,6 +361,391 @@ def run_ingestion(
             dst = output_dir / filename
             shutil.copy2(str(src), str(dst))
 
+        print("  ✓ All three output files generated", file=sys.stderr)
+        print(f"\n✅ Ingestion complete!", file=sys.stderr)
+        print(f"📁 Output files: {output_dir}", file=sys.stderr)
+        for filename in REQUIRED_OUTPUTS:
+            if (output_dir / filename).exists():
+                print(f"   • {filename}", file=sys.stderr)
+
+        if debug:
+            print(f"  Output files written to: {output_dir}", file=sys.stderr)
+
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"opencode process timed out after {OPENCODE_TIMEOUT} seconds. "
+            f"Check the model and prompt, or increase the timeout."
+        )
+    finally:
+        if not debug:
+            shutil.rmtree(tmp_dir_obj, ignore_errors=True)
+
+
+def run_multi_step_ingestion(
+    note_path: Path,
+    site_prompt_path: Path,
+    schemas_dir: Path,
+    prompts_dir: Path,
+    model: str,
+    output_dir: Path,
+    max_retries: int = 3,
+    agent_path: Optional[Path] = None,
+    opencode_bin: str = "opencode",
+    debug: bool = False,
+) -> None:
+    """Run the multi-step data ingestion pipeline.
+
+    Executes three sequential opencode calls, each focused on a single output
+    file with its own prompt, schema validation, retry logic, and final
+    cross-validation.
+
+    Args:
+        note_path: Path to the raw markdown note file.
+        site_prompt_path: Path to the site prompt markdown file.
+        schemas_dir: Path to the directory containing schema JSON files.
+        prompts_dir: Path to the directory containing step prompt files.
+        model: LLM model identifier to use (e.g. "gpt-4o").
+        output_dir: Directory to write the generated JSON files into.
+        max_retries: Maximum retries per step on validation failure.
+        agent_path: Optional path to a custom agent definition file. If not
+            provided, a scoped default is generated per step.
+        opencode_bin: Path or name of the opencode binary.
+        debug: If True, preserve the temporary workspace on failure.
+
+    Raises:
+        FileNotFoundError: If any input file or binary is missing.
+        RuntimeError: If a step exhausts retries or cross-validation fails.
+    """
+    # Resolve all input paths
+    note_path = Path(note_path).resolve(strict=True)
+    site_prompt_path = Path(site_prompt_path).resolve(strict=True)
+    schemas_dir = Path(schemas_dir).resolve(strict=True)
+    prompts_dir = Path(prompts_dir).resolve(strict=True)
+    output_dir = Path(output_dir).resolve()
+
+    # Check opencode binary exists
+    opencode_bin_resolved = shutil.which(opencode_bin)
+    if opencode_bin_resolved is None:
+        raise FileNotFoundError(
+            f"opencode binary '{opencode_bin}' not found on PATH. "
+            f"Use --opencode-path or set PATH accordingly."
+        )
+
+    # Read input files
+    note_content = _read_file(note_path)
+    site_prompt_content = _read_file(site_prompt_path)
+
+    # Read schemas
+    schema_contents = {}
+    for schema_file in SCHEMA_FILES:
+        schema_path = schemas_dir / schema_file
+        if not schema_path.exists():
+            raise FileNotFoundError(
+                f"Schema file not found: {schema_path}"
+            )
+        schema_contents[schema_file] = _read_file(schema_path)
+
+    # Read step prompts
+    step_prompts = {}
+
+    # Step definitions
+    STEPS = [
+        {
+            "name": "site.config.json",
+            "prompt_file": "ingest-site-config.md",
+            "output_file": "site.config.json",
+            "schema_keys": ["site.config.schema.json"],
+            "context_files": None,
+            "depends_on": None,
+        },
+        {
+            "name": "links.json",
+            "prompt_file": "ingest-links.md",
+            "output_file": "links.json",
+            "schema_keys": ["links.schema.json"],
+            "context_files": {"site.config.json": None},  # populated at runtime
+            "depends_on": "site.config.json",
+        },
+        {
+            "name": "design.json",
+            "prompt_file": "ingest-design.md",
+            "output_file": "design.json",
+            "schema_keys": ["design.schema.json"],
+            "context_files": None,
+            "depends_on": None,
+        },
+    ]
+
+    # Read step prompt files
+    for step in STEPS:
+        prompt_path = prompts_dir / step["prompt_file"]
+        if not prompt_path.exists():
+            raise FileNotFoundError(
+                f"Step prompt file not found: {prompt_path}"
+            )
+        step_prompts[step["prompt_file"]] = _read_file(prompt_path)
+
+    # Create temporary working directory
+    tmp_dir_obj = tempfile.mkdtemp(prefix="multi_step_ingestion_")
+    tmp_dir = Path(tmp_dir_obj)
+
+    print("🧩 Starting multi-step data ingestion...\n", file=sys.stderr)
+
+    try:
+        # Run each step
+        step_labels = {
+            "site.config.json": "Defining site identity, taxonomy, and content copy",
+            "links.json": "Extracting and enriching links with category assignments",
+            "design.json": "Designing visual theme (colors, typography, layout, effects)",
+        }
+        step_index = 0
+        for step in STEPS:
+            step_name = step["name"]
+            output_file = step["output_file"]
+            prompt_file = step["prompt_file"]
+            schema_keys = step["schema_keys"]
+            context_files = step.get("context_files")
+
+            # If step has context from a previous step, read the file
+            resolved_context = None
+            if context_files:
+                resolved_context = {}
+                for ctx_filename, _ in context_files.items():
+                    ctx_path = tmp_dir / ctx_filename
+                    if ctx_path.exists():
+                        resolved_context[ctx_filename] = _read_file(ctx_path)
+                    else:
+                        # If the dependency file doesn't exist yet, it's a
+                        # step that hasn't been processed; skip context
+                        print(
+                            f"WARNING  Context file '{ctx_filename}' not found for step "
+                            f"'{step_name}' — skipping context.",
+                            file=sys.stderr,
+                        )
+
+            # Compose step instruction
+            output_path = tmp_dir / output_file
+            step_prompt_content = step_prompts[prompt_file]
+
+            composed_instruction = _compose_step_instruction(
+                step_prompt=step_prompt_content,
+                note_content=note_content,
+                site_prompt_content=site_prompt_content,
+                schema_contents=schema_contents,
+                schema_keys=schema_keys,
+                output_path=output_path,
+                context_files=resolved_context,
+            )
+
+            # Generate step agent definition
+            if agent_path:
+                agent_def_file = Path(agent_path).resolve(strict=True)
+            else:
+                agent_def_content = _generate_step_agent_def(
+                    work_dir=str(tmp_dir),
+                    schemas_dir=str(schemas_dir),
+                    step_name=step_name,
+                    output_file=output_file,
+                )
+                agent_def_file = tmp_dir / f"agent_{step_name}.md"
+                agent_def_file.write_text(agent_def_content, encoding="utf-8")
+
+            # Write instruction to a temp file
+            instruction_file = tmp_dir / f"instruction_{step_name}.md"
+            instruction_file.write_text(composed_instruction, encoding="utf-8")
+
+            step_index += 1
+            step_desc = step_labels.get(step_name, f"Generating {step_name}")
+            print(f"  Step {step_index}/3: {step_desc}...", file=sys.stderr)
+
+            # Retry loop
+            last_validation_errors = []
+            last_output_content = None
+            step_succeeded = False
+
+            for attempt in range(1, max_retries + 1):
+                # Determine which instruction to use
+                if attempt == 1:
+                    current_instruction = composed_instruction
+                else:
+                    # Retry instruction: include previous output + validation errors
+                    retry_parts = [
+                        composed_instruction,
+                        "",
+                        "## Previous (Invalid) Output",
+                        "```json",
+                        last_output_content,
+                        "```",
+                        "",
+                        "## Validation Errors",
+                    ]
+                    for err in last_validation_errors:
+                        retry_parts.append(f"- {err}")
+                    retry_parts.extend([
+                        "",
+                        "## Fix Request",
+                        "Please fix the specific errors above and regenerate the corrected output.",
+                    ])
+                    current_instruction = "\n".join(retry_parts)
+                    instruction_file.write_text(current_instruction, encoding="utf-8")
+
+                # Prepare environment
+                env = os.environ.copy()
+                env["OPENCODE_DISABLE_PROJECT_CONFIG"] = "1"
+
+                cmd = [
+                    opencode_bin_resolved,
+                    "run",
+                    "Execute the instructions in the attached file.",
+                    "--file", str(instruction_file),
+                    "--model", model,
+                    "--agent", str(agent_def_file),
+                    "--auto",
+                    "--dir", str(tmp_dir),
+                ]
+
+                if debug:
+                    print(f"  Command: {' '.join(cmd)}", file=sys.stderr)
+                    print(f"  Working directory: {tmp_dir}", file=sys.stderr)
+                    print(f"  Instruction file: {instruction_file}", file=sys.stderr)
+                    print(f"  Step: {step_name}, attempt: {attempt}/{max_retries}", file=sys.stderr)
+
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    timeout=OPENCODE_TIMEOUT,
+                )
+
+                if result.returncode != 0:
+                    error_msg = (
+                        f"opencode process failed with exit code {result.returncode}.\n"
+                    )
+                    if result.stdout:
+                        error_msg += f"stdout:\n{result.stdout}\n"
+                    if result.stderr:
+                        error_msg += f"stderr:\n{result.stderr}\n"
+                    raise RuntimeError(error_msg)
+
+                # Check that the output file exists
+                if not output_path.exists():
+                    raise RuntimeError(
+                        f"Step '{step_name}' did not produce output file: {output_path}\n"
+                        f"opencode stdout:\n{result.stdout}\n"
+                        f"opencode stderr:\n{result.stderr}\n"
+                    )
+
+                # Read the output for validation
+                last_output_content = output_path.read_text(encoding="utf-8")
+
+                # Validate against schema using DataValidator
+                step_validator = DataValidator(
+                    data_dir=tmp_dir,
+                    schemas_dir=schemas_dir,
+                )
+                step_validator.load_schemas()
+
+                try:
+                    output_data = json.loads(last_output_content)
+                except json.JSONDecodeError as e:
+                    last_validation_errors = [f"Invalid JSON: {e}"]
+                    if attempt < max_retries:
+                        print(
+                            f"  ⚠️  Step {step_index}/3 '{step_name}' invalid JSON — "
+                            f"retry {attempt}/{max_retries}",
+                            file=sys.stderr,
+                        )
+                        continue
+                    else:
+                        raise RuntimeError(
+                            f"Step '{step_name}' failed after {max_retries} retries.\n"
+                            f"Last validation errors: {last_validation_errors}\n"
+                            f"Last invalid output: {output_path}"
+                        )
+
+                # Determine which schema to validate against
+                if output_file == "site.config.json":
+                    schema = step_validator.config_schema
+                elif output_file == "links.json":
+                    schema = step_validator.links_schema
+                elif output_file == "design.json":
+                    schema = step_validator.design_schema
+                else:
+                    schema = None
+
+                if schema is None:
+                    raise RuntimeError(f"Unknown output file: {output_file}")
+
+                validation_passed = step_validator.validate_schema(
+                    output_data, schema, output_file
+                )
+
+                if validation_passed:
+                    step_succeeded = True
+                    print(
+                        f"  ✓ {step_name} generated and validated",
+                        file=sys.stderr,
+                    )
+                    if debug:
+                        print(
+                            f"  Step '{step_name}' validation passed.",
+                            file=sys.stderr,
+                        )
+                    break
+                else:
+                    last_validation_errors = list(step_validator.errors)
+                    if attempt < max_retries:
+                        print(
+                            f"  ⚠️  Step {step_index}/3 '{step_name}' failed validation — "
+                            f"retry {attempt}/{max_retries}",
+                            file=sys.stderr,
+                        )
+                    else:
+                        raise RuntimeError(
+                            f"Step '{step_name}' failed after {max_retries} retries.\n"
+                            f"Last validation errors: {last_validation_errors}\n"
+                            f"Last invalid output: {output_path}"
+                        )
+
+            if not step_succeeded:
+                raise RuntimeError(
+                    f"Step '{step_name}' did not complete successfully."
+                )
+
+        # Cross-validation at the end
+        print("\n🔗 Cross-validating output files...", file=sys.stderr)
+        cross_validator = DataValidator(
+            data_dir=tmp_dir,
+            schemas_dir=schemas_dir,
+        )
+        cross_validator.load_schemas()
+        cross_validator.load_data()
+
+        cross_valid = cross_validator.cross_validate()
+        if not cross_valid:
+            raise RuntimeError(
+                f"Cross-validation failed. Errors: {cross_validator.errors}"
+            )
+        if cross_validator.warnings:
+            for w in cross_validator.warnings:
+                print(f"  ⚠️  {w}", file=sys.stderr)
+        print("  ✓ Cross-validation passed", file=sys.stderr)
+
+        # Copy output files to output_dir
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for filename in REQUIRED_OUTPUTS:
+            src = tmp_dir / filename
+            if src.exists():
+                dst = output_dir / filename
+                shutil.copy2(str(src), str(dst))
+
+        print(f"\n✅ Ingestion complete!", file=sys.stderr)
+        print(f"📁 Output files: {output_dir}", file=sys.stderr)
+        for filename in REQUIRED_OUTPUTS:
+            if (output_dir / filename).exists():
+                print(f"   • {filename}", file=sys.stderr)
+
         if debug:
             print(f"  Output files written to: {output_dir}", file=sys.stderr)
 
@@ -290,26 +779,26 @@ def main():
     parser.add_argument(
         "--schemas",
         type=str,
-        required=True,
-        help="Path to the schemas directory.",
+        default=None,
+        help="Path to the schemas directory (default: from config.yaml).",
     )
     parser.add_argument(
         "--prompt",
         type=str,
-        required=True,
-        help="Path to the ingestion prompt markdown file.",
+        default=None,
+        help="Path to the ingestion prompt markdown file (ignored when --multi-step is used; default: from config.yaml).",
     )
     parser.add_argument(
         "--model",
         type=str,
-        required=True,
-        help="LLM model identifier (e.g. gpt-4o).",
+        default=None,
+        help="LLM model identifier (e.g. gpt-4o; default: from config.yaml).",
     )
     parser.add_argument(
         "--output",
         type=str,
-        required=True,
-        help="Output directory for generated JSON files.",
+        default=None,
+        help="Output directory for generated JSON files (default: from config.yaml).",
     )
     parser.add_argument(
         "--agent",
@@ -320,8 +809,8 @@ def main():
     parser.add_argument(
         "--opencode-path",
         type=str,
-        default="opencode",
-        help="Path or name of the opencode binary (default: opencode, resolved from PATH).",
+        default=None,
+        help="Path or name of the opencode binary (default: 'opencode' or from config.yaml).",
     )
     parser.add_argument(
         "--debug",
@@ -329,15 +818,81 @@ def main():
         default=False,
         help="Preserve temporary workspace on failure for debugging.",
     )
+    parser.add_argument(
+        "--multi-step",
+        action="store_true",
+        default=None,
+        help="Enable 3-step pipeline instead of single-shot mode (default: from config.yaml).",
+    )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=None,
+        help="Maximum retries per step when --multi-step is used (default: 3 or from config.yaml).",
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Path to a user config YAML file (optional; layered on top of committed config.yaml).",
+    )
 
     args = parser.parse_args()
+
+    # Load config
+    from resourcery_ssg.config import load_resourcery_config
+
+    # Build CLI overrides (only for values that were explicitly provided)
+    overrides = {}
+    flag_to_key = {
+        "schemas": "schemas_dir",
+        "prompt": "prompt",
+        "model": "model",
+        "output": "output_dir",
+        "opencode_path": "opencode_bin",
+        "multi_step": "multi_step",
+        "max_retries": "max_retries",
+    }
+    for flag, key in flag_to_key.items():
+        val = getattr(args, flag, None)
+        if val is not None:
+            overrides[f"ingest.{key}"] = val
+
+    config = load_resourcery_config(
+        config_path=args.config,
+        overrides=overrides,
+    )
+    ingest_cfg = config.get("ingest", {})
+
+    # Resolve values: CLI (via overrides already merged into config) > config defaults
+    schemas_dir = ingest_cfg.get("schemas_dir")
+    prompt_path = ingest_cfg.get("prompt")
+    model = ingest_cfg.get("model")
+    output_dir = ingest_cfg.get("output_dir")
+    opencode_bin = ingest_cfg.get("opencode_bin", "opencode")
+    multi_step = ingest_cfg.get("multi_step", False)
+    max_retries = ingest_cfg.get("max_retries", 3)
+
+    # Validate that required values are present
+    if not schemas_dir:
+        print("Error: --schemas is required (and not set in config.yaml)", file=sys.stderr)
+        sys.exit(1)
+    if not prompt_path:
+        print("Error: --prompt is required (and not set in config.yaml)", file=sys.stderr)
+        sys.exit(1)
+    if not model:
+        print("Error: --model is required (and not set in config.yaml)", file=sys.stderr)
+        sys.exit(1)
+    if not output_dir:
+        print("Error: --output is required (and not set in config.yaml)", file=sys.stderr)
+        sys.exit(1)
 
     # Resolve paths
     note_path = Path(args.note)
     site_prompt_path = Path(args.site_prompt)
-    schemas_dir = Path(args.schemas)
-    prompt_path = Path(args.prompt)
-    output_dir = Path(args.output)
+    schemas_dir = Path(schemas_dir)
+    prompt_path = Path(prompt_path)
+    output_dir = Path(output_dir)
     agent_path = Path(args.agent) if args.agent else None
 
     # Validate inputs
@@ -352,17 +907,34 @@ def main():
             sys.exit(1)
 
     try:
-        run_ingestion(
-            note_path=note_path,
-            site_prompt_path=site_prompt_path,
-            schemas_dir=schemas_dir,
-            prompt_path=prompt_path,
-            model=args.model,
-            output_dir=output_dir,
-            agent_path=agent_path,
-            opencode_bin=args.opencode_path,
-            debug=args.debug,
-        )
+        if multi_step:
+            # Derive prompts_dir from the parent of the prompt file
+            prompts_dir = prompt_path.resolve().parent
+
+            run_multi_step_ingestion(
+                note_path=note_path,
+                site_prompt_path=site_prompt_path,
+                schemas_dir=schemas_dir,
+                prompts_dir=prompts_dir,
+                model=model,
+                output_dir=output_dir,
+                max_retries=max_retries,
+                agent_path=agent_path,
+                opencode_bin=opencode_bin,
+                debug=args.debug,
+            )
+        else:
+            run_ingestion(
+                note_path=note_path,
+                site_prompt_path=site_prompt_path,
+                schemas_dir=schemas_dir,
+                prompt_path=prompt_path,
+                model=model,
+                output_dir=output_dir,
+                agent_path=agent_path,
+                opencode_bin=opencode_bin,
+                debug=args.debug,
+            )
     except (FileNotFoundError, RuntimeError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

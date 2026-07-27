@@ -30,9 +30,6 @@ build:
 ingest:
   note: ./tests/fixtures/markdown/notes/tech-links.md
   site_prompt: ./tests/fixtures/markdown/site_prompts/dev-portal.md
-  schemas_dir: ${SCHEMAS_DIR}
-  prompt: ./prompts/data-ingestion.md
-  model: ""
+  multi_step: true
+  max_retries: 2
   output_dir: ${DATA_DIR}
-  agent: ""
-  opencode_bin: opencode
