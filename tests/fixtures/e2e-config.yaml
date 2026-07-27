@@ -32,4 +32,7 @@ ingest:
   site_prompt: ./tests/fixtures/markdown/site_prompts/dev-portal.md
   multi_step: true
   max_retries: 2
+  #stages:
+  #  design:
+  #    model: opencode-go/hy3
   output_dir: ${DATA_DIR}

@@ -381,14 +381,33 @@ def run_ingestion(
             shutil.rmtree(tmp_dir_obj, ignore_errors=True)
 
 
+def _resolve_stage_setting(step_key, stage_config, setting_key, global_value):
+    """Resolve a per-stage setting with cascading fallback.
+
+    step_key: stage key (e.g. "design").
+    stage_config: dict of stage_key → overrides dict.
+    setting_key: "model" or "max_retries".
+    global_value: fallback value from global_* params.
+
+    Returns: the effective value.
+    """
+    if stage_config and step_key in stage_config:
+        val = stage_config[step_key].get(setting_key)
+        if val is not None:
+            return val
+    return global_value
+
+
 def run_multi_step_ingestion(
     note_path: Path,
     site_prompt_path: Path,
     schemas_dir: Path,
     prompts_dir: Path,
-    model: str,
+    global_model: str,
     output_dir: Path,
-    max_retries: int = 3,
+    global_max_retries: int = 3,
+    stage_config: Optional[dict] = None,
+    requested_stages: Optional[list] = None,
     agent_path: Optional[Path] = None,
     opencode_bin: str = "opencode",
     debug: bool = False,
@@ -404,9 +423,17 @@ def run_multi_step_ingestion(
         site_prompt_path: Path to the site prompt markdown file.
         schemas_dir: Path to the directory containing schema JSON files.
         prompts_dir: Path to the directory containing step prompt files.
-        model: LLM model identifier to use (e.g. "gpt-4o").
+        global_model: LLM model identifier used as the default for all stages
+            unless overridden per-stage in *stage_config*.
         output_dir: Directory to write the generated JSON files into.
-        max_retries: Maximum retries per step on validation failure.
+        global_max_retries: Maximum retries per step (default for all stages).
+        stage_config: Optional dict mapping stage key (e.g. "design") to a dict
+            of overrides (e.g. {"model": "claude-sonnet-4", "max_retries": 5}).
+            Only stages with actual overrides need entries. If None, all stages
+            use *global_model* and *global_max_retries*.
+        requested_stages: Optional ordered list of stage keys to execute. Stages
+            not in this list are skipped. If None, all three stages execute.
+            Ignored when *stage_config* is also None.
         agent_path: Optional path to a custom agent definition file. If not
             provided, a scoped default is generated per step.
         opencode_bin: Path or name of the opencode binary.
@@ -452,6 +479,7 @@ def run_multi_step_ingestion(
     STEPS = [
         {
             "name": "site.config.json",
+            "stage_key": "site.config",
             "prompt_file": "ingest-site-config.md",
             "output_file": "site.config.json",
             "schema_keys": ["site.config.schema.json"],
@@ -460,6 +488,7 @@ def run_multi_step_ingestion(
         },
         {
             "name": "links.json",
+            "stage_key": "links",
             "prompt_file": "ingest-links.md",
             "output_file": "links.json",
             "schema_keys": ["links.schema.json"],
@@ -468,6 +497,7 @@ def run_multi_step_ingestion(
         },
         {
             "name": "design.json",
+            "stage_key": "design",
             "prompt_file": "ingest-design.md",
             "output_file": "design.json",
             "schema_keys": ["design.schema.json"],
@@ -492,6 +522,51 @@ def run_multi_step_ingestion(
     print("🧩 Starting multi-step data ingestion...\n", file=sys.stderr)
 
     try:
+        # Determine which steps to execute based on requested_stages
+        selected_steps = STEPS  # default: all three
+
+        if requested_stages is not None:
+            # --- Completeness check: do all three output files exist in output_dir? ---
+            all_exist = all((output_dir / f).exists() for f in REQUIRED_OUTPUTS)
+
+            if not all_exist:
+                missing = [f for f in REQUIRED_OUTPUTS if not (output_dir / f).exists()]
+                if global_model:
+                    # Auto-expand: run full pipeline
+                    print(
+                        f"ℹ️  Output set incomplete — {', '.join(missing)} not found in "
+                        f"output directory. Automatically running full pipeline to "
+                        f"generate all required output files. Stages listed in config "
+                        f"use their per-stage settings; auto-added stages use global defaults.",
+                        file=sys.stderr,
+                    )
+                    selected_steps = STEPS
+                else:
+                    # Error: no global model to auto-generate missing files
+                    raise RuntimeError(
+                        f"Output set incomplete — {', '.join(missing)} not found in "
+                        f"output directory and no global 'model' is defined to "
+                        f"auto-generate {'it' if len(missing) == 1 else 'them'}. "
+                        f"All three output files ({', '.join(REQUIRED_OUTPUTS)}) are "
+                        f"required to build the website.\n"
+                        f"Either:\n"
+                        f"  1. Set 'ingest.model' in config.yaml as a global default, or\n"
+                        f"  2. Run the full pipeline first to generate all output files, or\n"
+                        f"  3. Provide per-stage 'model' for all missing stages in the "
+                        f"stages: section."
+                    )
+            else:
+                # All three exist — run only the requested stages (in pipeline order)
+                selected_steps = [
+                    s for s in STEPS if s["stage_key"] in requested_stages
+                ]
+                # Prime tmp_dir with existing output files so context feeding
+                # and cross-validation have access to unexecuted stages' data.
+                for filename in REQUIRED_OUTPUTS:
+                    src = output_dir / filename
+                    if src.exists():
+                        shutil.copy2(str(src), str(tmp_dir / filename))
+
         # Run each step
         step_labels = {
             "site.config.json": "Defining site identity, taxonomy, and content copy",
@@ -499,12 +574,30 @@ def run_multi_step_ingestion(
             "design.json": "Designing visual theme (colors, typography, layout, effects)",
         }
         step_index = 0
-        for step in STEPS:
+        for step in selected_steps:
             step_name = step["name"]
+            step_key = step["stage_key"]
             output_file = step["output_file"]
             prompt_file = step["prompt_file"]
             schema_keys = step["schema_keys"]
             context_files = step.get("context_files")
+
+            # Resolve effective model and max_retries for this step
+            # Auto-added stages (not in requested_stages when auto-expanding)
+            # should only use globals — their key won't be in stage_config.
+            effective_model = _resolve_stage_setting(
+                step_key, stage_config, "model", global_model
+            )
+            effective_max_retries = _resolve_stage_setting(
+                step_key, stage_config, "max_retries", global_max_retries
+            )
+
+            if not effective_model:
+                raise RuntimeError(
+                    f"No model configured for stage '{step_key}'. "
+                    f"Set either 'ingest.model' in config.yaml as a global default "
+                    f"or provide a per-stage 'model' override."
+                )
 
             # If step has context from a previous step, read the file
             resolved_context = None
@@ -556,14 +649,14 @@ def run_multi_step_ingestion(
 
             step_index += 1
             step_desc = step_labels.get(step_name, f"Generating {step_name}")
-            print(f"  Step {step_index}/3: {step_desc}...", file=sys.stderr)
+            print(f"  Step {step_index}/{len(selected_steps)}: {step_desc}...", file=sys.stderr)
 
             # Retry loop
             last_validation_errors = []
             last_output_content = None
             step_succeeded = False
 
-            for attempt in range(1, max_retries + 1):
+            for attempt in range(1, effective_max_retries + 1):
                 # Determine which instruction to use
                 if attempt == 1:
                     current_instruction = composed_instruction
@@ -598,7 +691,7 @@ def run_multi_step_ingestion(
                     "run",
                     "Execute the instructions in the attached file.",
                     "--file", str(instruction_file),
-                    "--model", model,
+                    "--model", effective_model,
                     "--agent", str(agent_def_file),
                     "--auto",
                     "--dir", str(tmp_dir),
@@ -608,7 +701,7 @@ def run_multi_step_ingestion(
                     print(f"  Command: {' '.join(cmd)}", file=sys.stderr)
                     print(f"  Working directory: {tmp_dir}", file=sys.stderr)
                     print(f"  Instruction file: {instruction_file}", file=sys.stderr)
-                    print(f"  Step: {step_name}, attempt: {attempt}/{max_retries}", file=sys.stderr)
+                    print(f"  Step: {step_name}, attempt: {attempt}/{effective_max_retries}", file=sys.stderr)
 
                 result = subprocess.run(
                     cmd,
@@ -650,16 +743,16 @@ def run_multi_step_ingestion(
                     output_data = json.loads(last_output_content)
                 except json.JSONDecodeError as e:
                     last_validation_errors = [f"Invalid JSON: {e}"]
-                    if attempt < max_retries:
+                    if attempt < effective_max_retries:
                         print(
-                            f"  ⚠️  Step {step_index}/3 '{step_name}' invalid JSON — "
-                            f"retry {attempt}/{max_retries}",
+                            f"  ⚠️  Step {step_index}/{len(selected_steps)} '{step_name}' invalid JSON — "
+                            f"retry {attempt}/{effective_max_retries}",
                             file=sys.stderr,
                         )
                         continue
                     else:
                         raise RuntimeError(
-                            f"Step '{step_name}' failed after {max_retries} retries.\n"
+                            f"Step '{step_name}' failed after {effective_max_retries} retries.\n"
                             f"Last validation errors: {last_validation_errors}\n"
                             f"Last invalid output: {output_path}"
                         )
@@ -695,15 +788,15 @@ def run_multi_step_ingestion(
                     break
                 else:
                     last_validation_errors = list(step_validator.errors)
-                    if attempt < max_retries:
+                    if attempt < effective_max_retries:
                         print(
-                            f"  ⚠️  Step {step_index}/3 '{step_name}' failed validation — "
-                            f"retry {attempt}/{max_retries}",
+                            f"  ⚠️  Step {step_index}/{len(selected_steps)} '{step_name}' failed validation — "
+                            f"retry {attempt}/{effective_max_retries}",
                             file=sys.stderr,
                         )
                     else:
                         raise RuntimeError(
-                            f"Step '{step_name}' failed after {max_retries} retries.\n"
+                            f"Step '{step_name}' failed after {effective_max_retries} retries.\n"
                             f"Last validation errors: {last_validation_errors}\n"
                             f"Last invalid output: {output_path}"
                         )
@@ -720,17 +813,32 @@ def run_multi_step_ingestion(
             schemas_dir=schemas_dir,
         )
         cross_validator.load_schemas()
-        cross_validator.load_data()
 
-        cross_valid = cross_validator.cross_validate()
-        if not cross_valid:
-            raise RuntimeError(
-                f"Cross-validation failed. Errors: {cross_validator.errors}"
+        if not cross_validator.load_data():
+            # Some expected files are missing (intentionally skipped with
+            # no prior output). Warn instead of failing.
+            print(
+                "  ⚠️  Skipping cross-validation — one or more output files are "
+                "absent (intentionally skipped stages).",
+                file=sys.stderr,
             )
-        if cross_validator.warnings:
-            for w in cross_validator.warnings:
-                print(f"  ⚠️  {w}", file=sys.stderr)
-        print("  ✓ Cross-validation passed", file=sys.stderr)
+        else:
+            cross_valid = cross_validator.cross_validate()
+            if not cross_valid:
+                if requested_stages is not None:
+                    # Selective execution: cross-validation failures are warnings,
+                    # since some files may come from a different run.
+                    for err in cross_validator.errors:
+                        print(f"  ⚠️  {err}", file=sys.stderr)
+                else:
+                    # Full run: cross-validation failures are still errors.
+                    raise RuntimeError(
+                        f"Cross-validation failed. Errors: {cross_validator.errors}"
+                    )
+            if cross_validator.warnings:
+                for w in cross_validator.warnings:
+                    print(f"  ⚠️  {w}", file=sys.stderr)
+            print("  ✓ Cross-validation passed", file=sys.stderr)
 
         # Copy output files to output_dir
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -863,6 +971,7 @@ def main():
         overrides=overrides,
     )
     ingest_cfg = config.get("ingest", {})
+    stages_cfg = ingest_cfg.get("stages")
 
     # Resolve values: CLI (via overrides already merged into config) > config defaults
     schemas_dir = ingest_cfg.get("schemas_dir")
@@ -906,6 +1015,49 @@ def main():
             print(f"Error: {label} path does not exist: {path}", file=sys.stderr)
             sys.exit(1)
 
+    # Process stages configuration (per-stage overrides and selective execution)
+    # Valid stage keys in pipeline order
+    STAGE_KEYS = ["site.config", "links", "design"]
+
+    stage_config = None
+    requested_stages = None
+
+    if stages_cfg:
+        # Validate stage keys
+        for key in stages_cfg:
+            if key not in STAGE_KEYS:
+                print(
+                    f"Error: Unknown stage key '{key}' in config.yaml ingest.stages. "
+                    f"Valid keys are: {', '.join(STAGE_KEYS)}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+        # Build requested_stages in pipeline order
+        requested_stages = [k for k in STAGE_KEYS if k in stages_cfg]
+
+        # Build stage_config: only include stages that have actual overrides
+        stage_config = {}
+        for key in requested_stages:
+            overrides = stages_cfg[key]
+            if isinstance(overrides, dict) or hasattr(overrides, "items"):
+                # Only include if there are actual overrides
+                filtered = {k: v for k, v in overrides.items() if v is not None}
+                if filtered:
+                    stage_config[key] = filtered
+            # If overrides is None (YAML empty value), no overrides — skip
+
+        # Warn when stages: is used with multi_step: false
+        if not multi_step:
+            print(
+                "⚠️  Warning: 'stages:' is configured but 'multi_step' is false. "
+                "Per-stage configuration requires multi_step mode. "
+                "Ignoring stages configuration.",
+                file=sys.stderr,
+            )
+            stage_config = None
+            requested_stages = None
+
     try:
         if multi_step:
             # Derive prompts_dir from the parent of the prompt file
@@ -916,9 +1068,11 @@ def main():
                 site_prompt_path=site_prompt_path,
                 schemas_dir=schemas_dir,
                 prompts_dir=prompts_dir,
-                model=model,
+                global_model=model,
                 output_dir=output_dir,
-                max_retries=max_retries,
+                global_max_retries=max_retries,
+                stage_config=stage_config,
+                requested_stages=requested_stages,
                 agent_path=agent_path,
                 opencode_bin=opencode_bin,
                 debug=args.debug,

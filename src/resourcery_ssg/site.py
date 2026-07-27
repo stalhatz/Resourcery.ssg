@@ -263,6 +263,36 @@ def _run_ingest(config, args=None):
     max_retries = ingest_cfg.get("max_retries", 3)
     opencode_bin = ingest_cfg.get("opencode_bin", "opencode")
 
+    # Process stages configuration (per-stage overrides and selective execution)
+    stages_cfg = ingest_cfg.get("stages")
+    STAGE_KEYS = ["site.config", "links", "design"]
+
+    stage_config = None
+    requested_stages = None
+
+    if stages_cfg and multi_step:
+        # Validate stage keys
+        for key in stages_cfg:
+            if key not in STAGE_KEYS:
+                print(
+                    f"Error: Unknown stage key '{key}' in config.yaml ingest.stages. "
+                    f"Valid keys are: {', '.join(STAGE_KEYS)}",
+                    file=sys.stderr,
+                )
+                return
+
+        # Build requested_stages in pipeline order
+        requested_stages = [k for k in STAGE_KEYS if k in stages_cfg]
+
+        # Build stage_config: only include stages that have actual overrides
+        stage_config = {}
+        for key in requested_stages:
+            overrides = stages_cfg[key]
+            if isinstance(overrides, dict) or hasattr(overrides, "items"):
+                filtered = {k: v for k, v in overrides.items() if v is not None}
+                if filtered:
+                    stage_config[key] = filtered
+
     if multi_step:
         prompts_dir = Path(ingest_cfg["prompt"]).resolve().parent
         run_multi_step_ingestion(
@@ -270,9 +300,11 @@ def _run_ingest(config, args=None):
             site_prompt_path=Path(site_prompt),
             schemas_dir=Path(ingest_cfg["schemas_dir"]),
             prompts_dir=prompts_dir,
-            model=model,
+            global_model=model,
             output_dir=Path(ingest_cfg["output_dir"]),
-            max_retries=max_retries,
+            global_max_retries=max_retries,
+            stage_config=stage_config,
+            requested_stages=requested_stages,
             opencode_bin=opencode_bin,
             debug=getattr(args, "debug", False) or ingest_cfg.get("debug", False),
         )
