@@ -70,6 +70,67 @@ def get_required_weights(heading_style: str) -> list:
     return sorted(set(BODY_WEIGHTS + style_weights))
 
 
+# ============================================================================
+# Override-aware heading resolution (new for design token system)
+# ============================================================================
+
+
+def resolve_heading(typography: dict, heading_style: str) -> dict:
+    """Resolve effective heading weight and letter-spacing with overrides.
+
+    typography: the 'typography' section from design.json theme. May contain
+        heading_weight (int) and heading_letter_spacing (string like "0.05em").
+    heading_style: key into HEADING_STYLE_CONFIG; falls back to DEFAULT_STYLE.
+
+    Returns: dict with keys 'heading_weight' (int) and 'heading_letter_spacing' (str).
+        Typography overrides take precedence over the enum-derived defaults.
+    """
+
+    style_config = HEADING_STYLE_CONFIG.get(
+        heading_style, HEADING_STYLE_CONFIG[DEFAULT_STYLE]
+    )
+
+    # Start with enum-derived defaults
+    effective_weight = style_config["heading_weight"]
+    effective_spacing = style_config["letter_spacing"]
+
+    # Override with typography values if present
+    if isinstance(typography, dict):
+        if "heading_weight" in typography and typography["heading_weight"] is not None:
+            effective_weight = typography["heading_weight"]
+        if "heading_letter_spacing" in typography and typography["heading_letter_spacing"] is not None:
+            effective_spacing = typography["heading_letter_spacing"]
+
+    return {
+        "heading_weight": effective_weight,
+        "heading_letter_spacing": effective_spacing,
+    }
+
+
+def get_effective_weights(typography: dict, heading_style: str) -> list:
+    """Return sorted set of all font weights needed, including overrides.
+
+    Considers the enum-derived weights from heading_style AND any explicit
+    heading_weight override in typography.
+
+    typography: the 'typography' section from design.json.
+    heading_style: key into HEADING_STYLE_CONFIG.
+
+    Returns: sorted list of unique integer weight values.
+    """
+
+    heading = resolve_heading(typography, heading_style)
+    override_weight = heading["heading_weight"]
+
+    # Base weights from enum style
+    style_weights = HEADING_STYLE_CONFIG.get(
+        heading_style, HEADING_STYLE_CONFIG[DEFAULT_STYLE]
+    )["weights"]
+
+    all_weights = set(BODY_WEIGHTS + style_weights + [override_weight])
+    return sorted(all_weights)
+
+
 def weights_to_api_param(weights: list) -> str:
     """Convert a list of integer weights to a Google Fonts ital,wght parameter string.
 

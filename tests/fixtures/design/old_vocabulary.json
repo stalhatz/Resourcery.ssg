@@ -1,0 +1,38 @@
+{
+  "theme": {
+    "colors": {
+      "primary": "#2563eb",
+      "secondary": "#64748b",
+      "background": "#f8fafc",
+      "surface": "#f1f5f9",
+      "text": "#1e293b",
+      "text_muted": "#64748b",
+      "accent": "#f97316",
+      "error": "#ef4444",
+      "success": "#22c55e",
+      "dark": {
+        "primary": "#60a5fa",
+        "background": "#0f172a",
+        "text": "#e2e8f0"
+      }
+    },
+    "typography": {
+      "font_family": "Inter, system-ui, sans-serif",
+      "font_size_base": "16px",
+      "heading_font": "Inter, system-ui, sans-serif",
+      "heading_size_scale": 1.0
+    },
+    "layout": {
+      "sidebar_width": "280px",
+      "max_width": "1200px"
+    },
+    "effects": {
+      "card_style": "flat",
+      "shadow_intensity": "subtle",
+      "border_radius": "standard",
+      "border_treatment": "hairline",
+      "hover_effect": "lift",
+      "heading_style": "natural"
+    }
+  }
+}

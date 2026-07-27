@@ -89,12 +89,15 @@ class TestValidateEffects:
             "theme": {
                 "effects": {
                     "card_style": "elevated",
-                    "shadow_intensity": "none",
-                }
+                },
+                "elevation": {
+                    "shadow_strength": 0,
+                },
+                "colors": {},
             }
         }
         validator.validate_effects()
-        assert any("shadow_intensity" in w for w in validator.warnings)
+        assert any("shadow_strength" in w or "elevated" in w for w in validator.warnings)
 
     @pytest.mark.unit
     def test_image_overlay_with_outline_warns(self, validator):

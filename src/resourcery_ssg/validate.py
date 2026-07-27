@@ -5,10 +5,264 @@ Validates data files against JSON schemas and performs cross-validation.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 from jsonschema import validate, ValidationError, SchemaError
-from typing import Dict, List, Set, Tuple, Any
+from typing import Dict, List, Set, Tuple, Any, Optional
+
+
+# ============================================================================
+# WCAG relative luminance and contrast helpers
+# ============================================================================
+
+
+def _hex_to_srgb(hex_color: str) -> tuple:
+    """Convert a six-digit hex color to sRGB (0-1) tuple.
+
+    hex_color: e.g. "#2563eb".
+
+    Returns: (r, g, b) tuple of floats 0-1.
+    """
+
+    hex_color = hex_color.lstrip("#")
+    r = int(hex_color[0:2], 16) / 255.0
+    g = int(hex_color[2:4], 16) / 255.0
+    b = int(hex_color[4:6], 16) / 255.0
+    return (r, g, b)
+
+
+def _linearize(channel: float) -> float:
+    """Linearize a single sRGB channel value for luminance calculation.
+
+    channel: sRGB value 0-1.
+
+    Returns: linearized value.
+    """
+
+    if channel <= 0.04045:
+        return channel / 12.92
+    return ((channel + 0.055) / 1.055) ** 2.4
+
+
+def relative_luminance(hex_color: str) -> float:
+    """Compute WCAG 2.1 relative luminance from a hex color.
+
+    hex_color: six-digit hex string e.g. "#ffffff".
+
+    Returns: luminance value 0-1.
+    """
+
+    r, g, b = _hex_to_srgb(hex_color)
+    r_lin = _linearize(r)
+    g_lin = _linearize(g)
+    b_lin = _linearize(b)
+    return 0.2126 * r_lin + 0.7152 * g_lin + 0.0722 * b_lin
+
+
+def contrast_ratio(color1: str, color2: str) -> float:
+    """Compute WCAG 2.1 contrast ratio between two hex colors.
+
+    color1: first hex color string.
+    color2: second hex color string.
+
+    Returns: contrast ratio (1.0–21.0). Higher = more contrast.
+    """
+
+    l1 = relative_luminance(color1)
+    l2 = relative_luminance(color2)
+    lighter = max(l1, l2)
+    darker = min(l1, l2)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def parse_em(value: str) -> Optional[float]:
+    """Parse a CSS em string to a float, stripping the unit.
+
+    value: e.g. "0.05em", "0", "-0.03em".
+
+    Returns: float value or None if unparseable.
+    """
+
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        cleaned = value.strip().rstrip("em").rstrip("EM")
+        return float(cleaned)
+    except (ValueError, TypeError):
+        return None
+
+
+# ============================================================================
+# Design token validation (range + contrast)
+# ============================================================================
+
+
+def validate_design_tokens(validator_instance) -> None:
+    """Validate numeric ranges and WCAG contrast for design tokens.
+
+    Runs after schema validation passes. Appends errors to
+    validator_instance.errors for out-of-range values and contrast failures.
+
+    validator_instance: a DataValidator instance with design_data loaded and
+        errors list already initialized.
+
+    Returns: None.
+
+    Side-effects: appends to validator_instance.errors.
+    """
+
+    design = validator_instance.design_data
+    theme = design.get("theme", {})
+    colors = theme.get("colors", {})
+    typography = theme.get("typography", {})
+    spacing_cfg = theme.get("spacing", {})
+    radius_cfg = theme.get("radius", {})
+    elevation_cfg = theme.get("elevation", {})
+    border_cfg = theme.get("border", {})
+    motion_cfg = theme.get("motion", {})
+
+    # --- Range checks ---
+
+    # Color levers
+    levers = colors.get("levers", {})
+    _check_range(validator_instance, levers, "brand_saturation", 0, 1)
+    _check_range(validator_instance, levers, "neutral_temperature", -1, 1)
+    _check_range(validator_instance, levers, "shade_spread", 0, 1)
+
+    # Overlay strength
+    _check_range(validator_instance, colors, "overlay_strength", 0, 1)
+
+    # Typography
+    _check_range(validator_instance, typography, "font_size_base", 14, 20)
+    _check_range(validator_instance, typography, "type_scale_ratio", 1.125, 1.5)
+    _check_range(validator_instance, typography, "body_line_height", 1.4, 1.8)
+    _check_range(validator_instance, typography, "heading_line_height", 1.0, 1.3)
+    _check_range(validator_instance, typography, "measure", 60, 75)
+    _check_range(validator_instance, typography, "heading_weight", 300, 900)
+
+    # Heading letter spacing (custom parser)
+    spacing_val = typography.get("heading_letter_spacing")
+    if spacing_val is not None:
+        em_val = parse_em(spacing_val)
+        if em_val is None:
+            validator_instance.errors.append(
+                f"❌ typography.heading_letter_spacing: cannot parse '{spacing_val}' as em value"
+            )
+        elif em_val < -0.04 or em_val > 0.12:
+            validator_instance.errors.append(
+                f"❌ typography.heading_letter_spacing: {em_val}em is out of range (-0.04em to 0.12em)"
+            )
+
+    # Spacing
+    space_base = spacing_cfg.get("space_base")
+    if space_base is not None and space_base not in (4, 8):
+        validator_instance.errors.append(
+            f"❌ spacing.space_base: {space_base} must be 4 or 8"
+        )
+    _check_range(validator_instance, spacing_cfg, "space_ratio", 1.5, 2)
+
+    # Radius
+    _check_range(validator_instance, radius_cfg, "radius_base", 0, 16)
+    for key in ["radius_card", "radius_button", "radius_pill"]:
+        _check_range(validator_instance, radius_cfg, key, 0, 48)
+
+    # Elevation
+    _check_range(validator_instance, elevation_cfg, "shadow_strength", 0, 1)
+    _check_range(validator_instance, elevation_cfg, "shadow_softness", 0, 1)
+
+    # Border
+    _check_range(validator_instance, border_cfg, "border_width", 0, 2)
+
+    # Motion
+    _check_range(validator_instance, motion_cfg, "transition_duration", 120, 360)
+
+    # --- Contrast checks ---
+
+    bg = colors.get("background")
+    if bg and isinstance(bg, str) and bg.startswith("#"):
+        _check_contrast_pair(validator_instance, colors, "text", bg, 4.5,
+                             "text on background")
+        _check_contrast_pair(validator_instance, colors, "text_muted", bg, 3.0,
+                             "text_muted on background")
+        _check_contrast_pair(validator_instance, colors, "primary", bg, 4.5,
+                             "primary on background", large_ok=3.0)
+        _check_contrast_pair(validator_instance, colors, "accent", bg, 4.5,
+                             "accent on background", large_ok=3.0)
+
+    # Dark mode contrast
+    dark_cfg = colors.get("dark", {})
+    dark_bg = dark_cfg.get("background")
+    if dark_bg and isinstance(dark_bg, str) and dark_bg.startswith("#"):
+        _check_contrast_pair(validator_instance, dark_cfg, "text", dark_bg, 4.5,
+                             "dark text on dark background")
+        _check_contrast_pair(validator_instance, dark_cfg, "text_muted", dark_bg, 3.0,
+                             "dark text_muted on dark background")
+        _check_contrast_pair(validator_instance, dark_cfg, "primary", dark_bg, 4.5,
+                             "dark primary on dark background", large_ok=3.0)
+        _check_contrast_pair(validator_instance, dark_cfg, "accent", dark_bg, 4.5,
+                             "dark accent on dark background", large_ok=3.0)
+
+
+def _check_range(validator_instance, cfg: dict, key: str, min_val: float, max_val: float) -> None:
+    """Check a numeric config value is within [min_val, max_val].
+
+    validator_instance: DataValidator instance.
+    cfg: config dict containing the key.
+    key: the key to check in cfg.
+    min_val: inclusive minimum.
+    max_val: inclusive maximum.
+
+    Returns: None.
+
+    Side-effects: appends to validator_instance.errors if value is out of range.
+    """
+
+    value = cfg.get(key)
+    if value is None:
+        return
+    if not isinstance(value, (int, float)):
+        return
+    if value < min_val or value > max_val:
+        validator_instance.errors.append(
+            f"❌ {key}: {value} is out of range [{min_val}, {max_val}]"
+        )
+
+
+def _check_contrast_pair(validator_instance, colors: dict, fg_key: str, bg_value: str,
+                         required_ratio: float, label: str, large_ok: float = None) -> None:
+    """Check WCAG contrast ratio for a foreground/background color pair.
+
+    validator_instance: DataValidator instance.
+    colors: dict from which to read the foreground color.
+    fg_key: key in colors for the foreground color.
+    bg_value: hex string for background.
+    required_ratio: minimum ratio for normal text.
+    label: human-readable label for error messages.
+    large_ok: optional relaxed ratio for large text/UI elements.
+
+    Returns: None.
+
+    Side-effects: appends to validator_instance.errors if ratio is insufficient.
+    """
+
+    fg_value = colors.get(fg_key)
+    if not fg_value or not isinstance(fg_value, str) or not fg_value.startswith("#"):
+        return
+
+    try:
+        ratio = contrast_ratio(fg_value, bg_value)
+    except Exception:
+        return
+
+    if ratio < required_ratio:
+        msg = (
+            f"❌ WCAG contrast: {label} — {fg_key}({fg_value}) / "
+            f"background({bg_value}) = {ratio:.2f}:1 (needs ≥ {required_ratio}:1)"
+        )
+        if large_ok is not None and ratio >= large_ok:
+            msg += " — PASSES for large text (≥3:1) but FAILS for normal text (≥4.5:1)"
+        validator_instance.errors.append(msg), Optional
 
 
 class DataValidator:
@@ -93,11 +347,10 @@ class DataValidator:
         return True
 
     def validate_effects(self):
-        """Check for contradictory or ineffective effect combinations.
+        """Check for contradictory or ineffective effect and token combinations.
 
-        Inspects card_style, shadow_intensity, hover_effect, and
-        border_treatment for known bad pairings. Appends warnings to
-        self.warnings rather than raising.
+        Inspects card_style, hover_effect, and the new border/elevation tokens
+        for known bad pairings. Appends warnings to self.warnings.
 
         Returns: None.
 
@@ -109,22 +362,26 @@ class DataValidator:
             return  # all defaults, always fine
 
         card_style = effects.get("card_style", "image-overlay")
-        shadow_intensity = effects.get("shadow_intensity", "subtle")
         hover_effect = effects.get("hover_effect", "lift")
-        border_treatment = effects.get("border_treatment", "hairline")
 
-        # elevated card_style with no shadows defeats the entire point
-        if card_style == "elevated" and shadow_intensity == "none":
+        theme = self.design_data.get("theme", {})
+        border_cfg = theme.get("border", {})
+        border_width = border_cfg.get("border_width", 1)
+        elevation_cfg = theme.get("elevation", {})
+        shadow_strength = elevation_cfg.get("shadow_strength", 0.35)
+
+        # elevated card_style with no shadows defeats the point
+        if card_style == "elevated" and shadow_strength == 0:
             self.warnings.append(
-                "⚠️ effects: card_style 'elevated' with shadow_intensity 'none' "
-                "will render identically to 'flat' — consider 'medium' or 'dramatic'."
+                "⚠️ effects: card_style 'elevated' with elevation.shadow_strength 0 "
+                "will render identically to 'flat' — consider shadow_strength ≥ 0.15."
             )
 
-        # outlined card_style overrides its own border, border_treatment is irrelevant
-        if card_style == "outlined" and border_treatment in ("none", "hairline"):
+        # outlined card_style with border_width 0 is contradictory
+        if card_style == "outlined" and border_width == 0:
             self.warnings.append(
                 "⚠️ effects: card_style 'outlined' uses its own primary-color border — "
-                "border_treatment 'none'/'hairline' has no visible effect on cards."
+                "border.border_width 0 hides it completely. Set border_width ≥ 1."
             )
 
         # image-overlay with hover 'outline' is low contrast (outline on image)
@@ -177,7 +434,7 @@ class DataValidator:
             find_first_downloadable,
             extract_google_font_candidates,
         )
-        from resourcery_ssg.theme_constants import get_required_weights, weights_to_api_param
+        from resourcery_ssg.theme_constants import get_effective_weights, weights_to_api_param
 
         typography = self.design_data.get("theme", {}).get("typography", {})
         font_family = typography.get("font_family", "")
@@ -188,7 +445,7 @@ class DataValidator:
             .get("effects", {})
             .get("heading_style", "natural")
         )
-        weights_param = weights_to_api_param(get_required_weights(heading_style))
+        weights_param = weights_to_api_param(get_effective_weights(typography, heading_style))
 
         for field, stack in [
             ("font_family", font_family),
@@ -293,13 +550,22 @@ class DataValidator:
                     f"⚠️  Menu link '{menu_link.get('label')}' has suspicious URL: '{url}'"
                 )
 
-        # Validate color hex codes in config
+        # Validate color hex codes in config (skip non-color fields like levers, overlay_strength)
+        color_keys = {"primary", "secondary", "background", "surface", "text",
+                       "text_muted", "accent", "error", "success"}
         colors = self.design_data.get("theme", {}).get("colors", {})
         for color_name, color_value in colors.items():
-            if not self._is_valid_hex_color(color_value):
+            if color_name in color_keys and not self._is_valid_hex_color(color_value):
                 self.warnings.append(
                     f"⚠️  Invalid hex color for '{color_name}': '{color_value}'"
                 )
+            # Also check dark mode anchors
+            if color_name == "dark" and isinstance(color_value, dict):
+                for dk, dv in color_value.items():
+                    if dk in color_keys and isinstance(dv, str) and not self._is_valid_hex_color(dv):
+                        self.warnings.append(
+                            f"⚠️  Invalid hex color for 'dark.{dk}': '{dv}'"
+                        )
 
         # Report results
         if not self.warnings:
@@ -370,6 +636,8 @@ class DataValidator:
         if config_valid and links_valid and design_valid:
             print("🔗 Running cross-validation checks...")
             cross_valid = self.cross_validate()
+            print("🎨 Running design token validation...")
+            validate_design_tokens(self)
             self.validate_effects()
             self.validate_fonts()
             print()

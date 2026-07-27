@@ -11,7 +11,12 @@ import shutil
 import sys
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
-from resourcery_ssg.theme_constants import get_heading_weight, get_heading_letter_spacing
+from resourcery_ssg.theme_constants import (
+    get_heading_weight,
+    get_heading_letter_spacing,
+    resolve_heading,
+)
+from resourcery_ssg.token_gen import generate_theme_tokens
 
 
 def load_json(path):
@@ -156,10 +161,15 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir):
     design = load_json(data_dir / "design.json")
     config["theme"] = design["theme"]
 
-    # Resolve heading style values from theme_constants (single source of truth)
+    # Generate design tokens at build time
+    theme_tokens = generate_theme_tokens(config["theme"])
+
+    # Resolve heading style values with typography overrides
     heading_style = (
         config.get("theme", {}).get("effects", {}).get("heading_style", "natural")
     )
+    typography = config.get("theme", {}).get("typography", {})
+    heading = resolve_heading(typography, heading_style)
 
     # Guard: fonts must be acquired before building
     fonts_css_path = static_dir / "css" / "fonts.css"
@@ -183,6 +193,9 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir):
         "links": links_data,
         "category_map": category_map,
         "all_tags": all_tags,
+        "theme_tokens": theme_tokens,
+        "heading_weight": heading["heading_weight"],
+        "heading_letter_spacing": heading["heading_letter_spacing"],
     }
 
     # ==================== RENDER TEMPLATES ====================

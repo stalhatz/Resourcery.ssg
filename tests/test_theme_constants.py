@@ -5,6 +5,8 @@ from resourcery_ssg.theme_constants import (
     get_heading_letter_spacing,
     get_required_weights,
     weights_to_api_param,
+    resolve_heading,
+    get_effective_weights,
 )
 
 
@@ -89,3 +91,74 @@ class TestHeadingStyleConfig:
             assert isinstance(config["heading_weight"], int)
             assert isinstance(config["letter_spacing"], str)
             assert isinstance(config["weights"], list)
+
+
+class TestResolveHeading:
+    @pytest.mark.unit
+    def test_enum_default_no_overrides(self):
+        result = resolve_heading({}, "natural")
+        assert result["heading_weight"] == 700
+        assert result["heading_letter_spacing"] == "0"
+
+    @pytest.mark.unit
+    def test_weight_override(self):
+        typography = {"heading_weight": 300}
+        result = resolve_heading(typography, "natural")
+        # Override should take precedence over enum default (700)
+        assert result["heading_weight"] == 300
+        # Letter spacing falls back to enum default
+        assert result["heading_letter_spacing"] == "0"
+
+    @pytest.mark.unit
+    def test_letter_spacing_override(self):
+        typography = {"heading_letter_spacing": "0.05em"}
+        result = resolve_heading(typography, "uppercase")
+        # Spacing override should beat enum default (0.10em)
+        assert result["heading_letter_spacing"] == "0.05em"
+        # Weight falls back to enum default
+        assert result["heading_weight"] == 700
+
+    @pytest.mark.unit
+    def test_both_overrides(self):
+        typography = {"heading_weight": 300, "heading_letter_spacing": "0.08em"}
+        result = resolve_heading(typography, "editorial")
+        assert result["heading_weight"] == 300
+        assert result["heading_letter_spacing"] == "0.08em"
+
+    @pytest.mark.unit
+    def test_unknown_style_uses_default(self):
+        result = resolve_heading({}, "nonexistent")
+        assert result["heading_weight"] == 700  # natural default
+        assert result["heading_letter_spacing"] == "0"
+
+
+class TestGetEffectiveWeights:
+    @pytest.mark.unit
+    def test_includes_override_weight(self):
+        typography = {"heading_weight": 900}
+        weights = get_effective_weights(typography, "natural")
+        assert 900 in weights
+        # Should also include body weights
+        assert 400 in weights
+        assert 600 in weights
+
+    @pytest.mark.unit
+    def test_includes_enum_weights(self):
+        typography = {}
+        weights = get_effective_weights(typography, "elegant")
+        assert 300 in weights  # elegant weight
+        assert 400 in weights  # body weight
+        assert 600 in weights  # body weight
+
+    @pytest.mark.unit
+    def test_deduplicates(self):
+        typography = {"heading_weight": 700}
+        weights = get_effective_weights(typography, "natural")
+        # 700 should appear only once (already in natural weights)
+        assert weights.count(700) == 1
+
+    @pytest.mark.unit
+    def test_returns_sorted(self):
+        typography = {}
+        weights = get_effective_weights(typography, "natural")
+        assert weights == sorted(weights)

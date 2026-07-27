@@ -16,7 +16,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from resourcery_ssg.theme_constants import get_required_weights, weights_to_api_param
+from resourcery_ssg.theme_constants import get_effective_weights, weights_to_api_param
 
 GOOGLE_FONTS_API = "https://fonts.googleapis.com/css2"
 # Modern browser UA — required to receive woff2 format from Google Fonts API
@@ -332,11 +332,12 @@ def acquire_fonts(*, data_dir, fonts_dir, css_dir):
     fonts_dir.mkdir(parents=True, exist_ok=True)
     css_dir.mkdir(parents=True, exist_ok=True)
 
-    # Derive exact weights needed from heading_style
+    # Derive exact weights needed from heading_style + typography overrides
     heading_style = (
         config.get("theme", {}).get("effects", {}).get("heading_style", "natural")
     )
-    weights_param = weights_to_api_param(get_required_weights(heading_style))
+    typography = config.get("theme", {}).get("typography", {})
+    weights_param = weights_to_api_param(get_effective_weights(typography, heading_style))
 
     # Fast cache check — no network contact needed
     wanted_names = list(
