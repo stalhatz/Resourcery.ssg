@@ -5,6 +5,7 @@ Renders Jinja2 templates with JSON data.
 """
 
 import json
+import mistune
 import random
 import os
 import shutil
@@ -127,7 +128,8 @@ def build_all_tags(links_data):
 # ==================== BUILD ====================
 
 
-def build_site(*, data_dir, templates_dir, static_dir, output_dir):
+def build_site(*, data_dir, templates_dir, static_dir, output_dir,
+               attribution=None, ingest_note=None, ingest_site_prompt=None):
     """Render all templates and copy static assets to the output directory.
 
     Loads data from site.config.json and links.json, pre-computes category
@@ -177,6 +179,60 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir):
         print("⚠️  static/css/fonts.css not found — run font_acquirer.py first")
         sys.exit(1)
 
+    # ==================== ATTRIBUTION ====================
+
+    # Resolve attribution flag (absent → None → False)
+    attribution_enabled = attribution if attribution else False
+
+    note_html = None
+    prompt_html = None
+
+    if attribution_enabled:
+        # Validate ingest.note is set
+        if not ingest_note:
+            print("Error: build.attribution is enabled but ingest.note is not set in config.")
+            print("Add 'note' under the 'ingest' section in your config.yaml.")
+            sys.exit(1)
+
+        # Validate ingest.site_prompt is set
+        if not ingest_site_prompt:
+            print("Error: build.attribution is enabled but ingest.site_prompt is not set in config.")
+            print("Add 'site_prompt' under the 'ingest' section in your config.yaml.")
+            sys.exit(1)
+
+        # Validate files exist on disk
+        note_path = Path(ingest_note)
+        prompt_path = Path(ingest_site_prompt)
+
+        if not note_path.exists():
+            print(f"Error: Cannot read note file: {note_path}")
+            sys.exit(1)
+
+        if not prompt_path.exists():
+            print(f"Error: Cannot read site prompt file: {prompt_path}")
+            sys.exit(1)
+
+        # Read markdown files as UTF-8
+        try:
+            note_md = note_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            print(f"Error: Cannot decode {note_path.name} as UTF-8")
+            sys.exit(1)
+
+        try:
+            prompt_md = prompt_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            print(f"Error: Cannot decode {prompt_path.name} as UTF-8")
+            sys.exit(1)
+
+        # Convert markdown to HTML using mistune with GFM plugin
+        markdown = mistune.create_markdown(
+            escape=False,
+            plugins=["strikethrough", "footnotes", "table", "speedup"]
+        )
+        note_html = markdown(note_md)
+        prompt_html = markdown(prompt_md)
+
     # Pre-compute derived data
     category_map = build_category_map(config)
     all_tags = build_all_tags(links_data)
@@ -196,6 +252,7 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir):
         "theme_tokens": theme_tokens,
         "heading_weight": heading["heading_weight"],
         "heading_letter_spacing": heading["heading_letter_spacing"],
+        "attribution_enabled": attribution_enabled,
     }
 
     # ==================== RENDER TEMPLATES ====================
@@ -254,6 +311,31 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir):
     shutil.copy2(fonts_css_path, css_out / "fonts.css")
     print("✓ fonts.css copied")
 
+    # ==================== SOURCE PAGES (attribution) ====================
+
+    if attribution_enabled:
+        template = env.get_template("source.html")
+
+        # Render note.html
+        output = template.render(
+            **base_context,
+            source_title="Source Note",
+            source_content=note_html,
+        )
+        with open(output_dir / "note.html", "w", encoding="utf-8") as f:
+            f.write(output)
+        print("✓ note.html rendered (source note)")
+
+        # Render prompt.html
+        output = template.render(
+            **base_context,
+            source_title="Site Prompt",
+            source_content=prompt_html,
+        )
+        with open(output_dir / "prompt.html", "w", encoding="utf-8") as f:
+            f.write(output)
+        print("✓ prompt.html rendered (site prompt)")
+
     print("\n✅ Build complete!")
     print(f"\n📁 Output directory: {output_dir.absolute()}")
     print("\n🌐 To view the site:")
@@ -296,7 +378,10 @@ def main():
         config_path=args.config,
         overrides=overrides,
     )
-    build_site(**config["build"])
+    build_kwargs = dict(config["build"])
+    build_kwargs["ingest_note"] = config.get("ingest", {}).get("note")
+    build_kwargs["ingest_site_prompt"] = config.get("ingest", {}).get("site_prompt")
+    build_site(**build_kwargs)
 
 
 if __name__ == "__main__":

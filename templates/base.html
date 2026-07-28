@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{{ config.site_info.description }}">
-    <title>{{ config.site_info.name }}</title>
+    <title>{% block title %}{{ config.site_info.name }}{% endblock %}</title>
     
     {% if config.site_info.favicon %}
     <link rel="icon" href="{{ config.site_info.favicon }}">
@@ -124,6 +124,18 @@
                         <a href="{{ link.url }}">{{ link.label }}</a>
                         {% endfor %}
                     </div>
+                    {% endif %}
+                    
+                    {% if attribution_enabled %}
+                    <p class="attribution-note">
+                        This web site was created automatically using
+                        <a href="https://github.com/stalhatz/Resourcery.ssg">Resourcery.ssg</a>
+                        using
+                        <a href="note.html">this note file</a>
+                        and
+                        <a href="prompt.html">this prompt file</a>
+                        as inputs.
+                    </p>
                     {% endif %}
                 </div>
             </footer>

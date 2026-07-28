@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}{{ source_title }} — {{ config.site_info.name }}{% endblock %}
+
+{% block content %}
+<div class="source-page">
+    <a href="index.html" class="home-link source-home-link">← Home</a>
+    <article class="source-content">
+        {{ source_content | safe }}
+    </article>
+</div>
+{% endblock %}

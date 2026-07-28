@@ -1,4 +1,5 @@
 import json
+import sys
 import pytest
 from pathlib import Path
 from resourcery_ssg.build import (
@@ -99,3 +100,190 @@ class TestIntegrationBuild:
         assert (build_paths["output_dir"] / "index.html").exists()
         assert (build_paths["output_dir"] / "browse.html").exists()
         assert (build_paths["output_dir"] / "static" / "css" / "style.css").exists()
+        # Verify no attribution when not configured
+        assert not (build_paths["output_dir"] / "note.html").exists()
+        assert not (build_paths["output_dir"] / "prompt.html").exists()
+        index_html = (build_paths["output_dir"] / "index.html").read_text("utf-8")
+        assert "attribution-note" not in index_html
+
+
+class TestMarkdownConversion:
+    """Unit tests for mistune markdown conversion."""
+
+    @pytest.fixture(autouse=True)
+    def setup_markdown(self):
+        import mistune
+        self.md = mistune.create_markdown(
+            escape=False,
+            plugins=["strikethrough", "footnotes", "table", "speedup"]
+        )
+
+    @pytest.mark.unit
+    def test_renders_headings(self):
+        result = self.md("# H1\n\n## H2\n\n### H3")
+        assert "<h1>H1</h1>" in result
+        assert "<h2>H2</h2>" in result
+        assert "<h3>H3</h3>" in result
+
+    @pytest.mark.unit
+    def test_renders_lists(self):
+        result = self.md("- item1\n- item2\n- item3")
+        assert "<ul>" in result
+        assert "<li>item1</li>" in result
+        assert "<li>item2</li>" in result
+
+    @pytest.mark.unit
+    def test_renders_code_blocks(self):
+        result = self.md("```python\nprint('hello')\n```")
+        assert "<pre>" in result
+        assert "<code" in result
+        assert "print" in result
+
+    @pytest.mark.unit
+    def test_renders_links(self):
+        result = self.md("[text](https://example.com)")
+        assert '<a href="https://example.com">text</a>' in result
+
+    @pytest.mark.unit
+    def test_renders_tables(self):
+        result = self.md("| a | b |\n|---|---|\n| 1 | 2 |")
+        assert "<table>" in result
+        assert "<th>a</th>" in result
+        assert "<td>1</td>" in result
+
+    @pytest.mark.unit
+    def test_renders_inline_html(self):
+        result = self.md("text with <strong>bold</strong> html")
+        assert "<strong>bold</strong>" in result
+
+    @pytest.mark.unit
+    def test_renders_emphasis(self):
+        result = self.md("**bold** and *italic* and ~~strike~~")
+        assert "<strong>bold</strong>" in result
+        assert "<em>italic</em>" in result
+        assert "<del>strike</del>" in result
+
+
+class TestBuildAttribution:
+    """Unit tests for attribution logic (error paths, conditional rendering)."""
+
+    @pytest.mark.unit
+    def test_attribution_none_skips_source_pages(self, build_paths: dict):
+        """With attribution=None, verify note.html and prompt.html are NOT generated."""
+        paths = dict(build_paths)
+        paths["attribution"] = None
+        build_site(**paths)
+        assert not (paths["output_dir"] / "note.html").exists()
+        assert not (paths["output_dir"] / "prompt.html").exists()
+
+    @pytest.mark.unit
+    def test_attribution_false_skips_source_pages(self, build_paths: dict):
+        """With attribution=False, verify note.html and prompt.html are NOT generated."""
+        paths = dict(build_paths)
+        paths["attribution"] = False
+        build_site(**paths)
+        assert not (paths["output_dir"] / "note.html").exists()
+        assert not (paths["output_dir"] / "prompt.html").exists()
+
+    @pytest.mark.unit
+    def test_missing_ingest_note_raises(self, build_paths: dict):
+        """With attribution=True but ingest_note=None, verify sys.exit(1)."""
+        paths = dict(build_paths)
+        paths["attribution"] = True
+        paths["ingest_note"] = None
+        paths["ingest_site_prompt"] = None
+        with pytest.raises(SystemExit) as exc_info:
+            build_site(**paths)
+        assert exc_info.value.code == 1
+
+    @pytest.mark.unit
+    def test_missing_ingest_site_prompt_raises(self, build_paths: dict, tmp_path: Path):
+        """With attribution=True but ingest_site_prompt=None, verify sys.exit(1)."""
+        note_file = tmp_path / "test-note.md"
+        note_file.write_text("# Test Note")
+        paths = dict(build_paths)
+        paths["attribution"] = True
+        paths["ingest_note"] = str(note_file)
+        paths["ingest_site_prompt"] = None
+        with pytest.raises(SystemExit) as exc_info:
+            build_site(**paths)
+        assert exc_info.value.code == 1
+
+    @pytest.mark.unit
+    def test_missing_note_file_raises(self, build_paths: dict, tmp_path: Path):
+        """With attribution=True but ingest_note pointing to non-existent file."""
+        prompt_file = tmp_path / "test-prompt.md"
+        prompt_file.write_text("# Test Prompt")
+        paths = dict(build_paths)
+        paths["attribution"] = True
+        paths["ingest_note"] = str(tmp_path / "nonexistent.md")
+        paths["ingest_site_prompt"] = str(prompt_file)
+        with pytest.raises(SystemExit) as exc_info:
+            build_site(**paths)
+        assert exc_info.value.code == 1
+
+    @pytest.mark.unit
+    def test_missing_prompt_file_raises(self, build_paths: dict, tmp_path: Path):
+        """With attribution=True but ingest_site_prompt pointing to non-existent file."""
+        note_file = tmp_path / "test-note.md"
+        note_file.write_text("# Test Note")
+        paths = dict(build_paths)
+        paths["attribution"] = True
+        paths["ingest_note"] = str(note_file)
+        paths["ingest_site_prompt"] = str(tmp_path / "nonexistent.md")
+        with pytest.raises(SystemExit) as exc_info:
+            build_site(**paths)
+        assert exc_info.value.code == 1
+
+    @pytest.mark.unit
+    def test_utf8_decode_error(self, build_paths: dict, tmp_path: Path):
+        """Create a non-UTF-8 file and verify sys.exit(1) with decode error."""
+        note_file = tmp_path / "test-note.md"
+        note_file.write_text("# Test Note")
+        prompt_file = tmp_path / "test-prompt.md"
+        # Write non-UTF-8 bytes
+        prompt_file.write_bytes(b"\x80\x81\x82")
+        paths = dict(build_paths)
+        paths["attribution"] = True
+        paths["ingest_note"] = str(note_file)
+        paths["ingest_site_prompt"] = str(prompt_file)
+        with pytest.raises(SystemExit) as exc_info:
+            build_site(**paths)
+        assert exc_info.value.code == 1
+
+    def test_footer_contains_attribution(self, attribution_paths: dict):
+        """Verify index.html contains the .attribution-note element with correct links."""
+        build_site(**attribution_paths)
+        index_html = (attribution_paths["output_dir"] / "index.html").read_text("utf-8")
+        assert "attribution-note" in index_html
+        assert "https://github.com/stalhatz/Resourcery.ssg" in index_html
+        assert "note.html" in index_html
+        assert "prompt.html" in index_html
+
+
+class TestIntegrationAttribution:
+    """Integration tests for the full build with attribution."""
+
+    @pytest.mark.integration
+    def test_build_with_attribution(self, attribution_paths: dict):
+        build_site(**attribution_paths)
+        out = attribution_paths["output_dir"]
+        # Verify all 4 pages exist
+        assert (out / "index.html").exists()
+        assert (out / "browse.html").exists()
+        assert (out / "note.html").exists()
+        assert (out / "prompt.html").exists()
+        # Verify index.html contains attribution footer
+        index_html = (out / "index.html").read_text("utf-8")
+        assert "attribution-note" in index_html
+        # Verify note.html contains rendered markdown content
+        note_html = (out / "note.html").read_text("utf-8")
+        assert "Test Note" in note_html
+        assert "<strong>test</strong>" in note_html
+        # Verify prompt.html contains rendered markdown content
+        prompt_html = (out / "prompt.html").read_text("utf-8")
+        assert "Test Prompt" in prompt_html
+        assert "<li>Item 1</li>" in prompt_html
+        # Verify source pages extend base (contain footer)
+        assert "main-footer" in note_html
+        assert "main-footer" in prompt_html

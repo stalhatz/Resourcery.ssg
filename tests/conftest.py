@@ -48,6 +48,30 @@ def committed_config_path() -> Path:
     return Path(__file__).parent.parent / "src" / "resourcery_ssg" / "config.yaml"
 
 
+@pytest.fixture
+def attribution_paths(testdata_dir: Path, tmp_path: Path) -> dict:
+    """Return build_paths extended with attribution parameters."""
+    out = tmp_path / "output"
+    out.mkdir(parents=True)
+
+    # Create test markdown files
+    note_file = tmp_path / "test-note.md"
+    note_file.write_text("# Test Note\n\nThis is a **test** note.\n\n```python\nprint('hello')\n```")
+
+    prompt_file = tmp_path / "test-prompt.md"
+    prompt_file.write_text("# Test Prompt\n\nThis is the site prompt.\n\n- Item 1\n- Item 2")
+
+    return {
+        "data_dir": testdata_dir,
+        "templates_dir": testdata_dir / "templates",
+        "static_dir": testdata_dir / "static",
+        "output_dir": out,
+        "attribution": True,
+        "ingest_note": str(note_file),
+        "ingest_site_prompt": str(prompt_file),
+    }
+
+
 class MockResponse:
     def __init__(self, data: bytes, headers: dict = None):
         self._data = data

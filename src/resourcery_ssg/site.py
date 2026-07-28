@@ -182,7 +182,9 @@ def main():
     if args.command == "build":
         from resourcery_ssg.build import build_site
 
-        build_site(**{k: v for k, v in config["build"].items() if k != "static_source"})
+        build_site(**{k: v for k, v in config["build"].items() if k != "static_source"},
+                   ingest_note=config.get("ingest", {}).get("note"),
+                   ingest_site_prompt=config.get("ingest", {}).get("site_prompt"))
 
     elif args.command == "validate":
         from resourcery_ssg.validate import DataValidator
@@ -483,6 +485,8 @@ def _run_all(args):
     from resourcery_ssg.build import build_site
 
     build_kwargs = {k: v for k, v in config["build"].items() if k != "static_source"}
+    build_kwargs["ingest_note"] = config.get("ingest", {}).get("note")
+    build_kwargs["ingest_site_prompt"] = config.get("ingest", {}).get("site_prompt")
     build_site(**build_kwargs)
     print("\n✅ Pipeline complete!")
 

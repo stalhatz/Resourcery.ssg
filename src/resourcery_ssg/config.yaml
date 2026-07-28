@@ -13,6 +13,7 @@ build:
   templates_dir: ${TEMPLATES_DIR}
   static_dir: ${STATIC_DIR}
   output_dir: ${OUTPUT_DIR}
+  # attribution: false           # set to true to enable build-time attribution footer + source pages
 validate:
   data_dir: ${DATA_DIR}
   schemas_dir: ${SCHEMAS_DIR}
@@ -31,6 +32,8 @@ ingest:
   multi_step: false
   max_retries: 3
   opencode_bin: opencode
+  # note: ./my-note.md                 # optional — path to source note file (required if build.attribution is true)
+  # site_prompt: ./my-site-prompt.md   # optional — path to site prompt file (required if build.attribution is true)
 
   # Per-stage configuration (optional). Uncomment to enable selective execution
   # and per-stage model/max_retries overrides. Listed stages run in pipeline
