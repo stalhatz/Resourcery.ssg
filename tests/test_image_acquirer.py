@@ -7,7 +7,8 @@ from resourcery_ssg.image_acquirer import ImageAcquirer
 def acquirer(tmp_path: Path) -> ImageAcquirer:
     images_dir = tmp_path / "images"
     images_dir.mkdir(parents=True)
-    return ImageAcquirer(images_dir=images_dir)
+    static_dir = tmp_path
+    return ImageAcquirer(images_dir=images_dir, static_dir=static_dir)
 
 
 class TestGenerateFilename:
@@ -140,10 +141,10 @@ class TestAcquireForLink:
         link = {
             "id": "existing",
             "url": "https://example.com/page",
-            "image": "/static/images/acquired/existing.jpg",
+            "image": f"{acquirer.image_url_prefix}existing.jpg",
         }
         result = acquirer.acquire_for_link(link)
-        assert result == "/static/images/acquired/existing.jpg"
+        assert result == f"{acquirer.image_url_prefix}existing.jpg"
 
     @pytest.mark.unit
     def test_returns_none_when_all_fail(self, acquirer, monkeypatch):

@@ -210,7 +210,11 @@ def main():
         with open(links_path, "r", encoding="utf-8") as f:
             links_data = json.load(f)
 
-        acquirer = ImageAcquirer(images_dir=images_dir, links_path=links_path)
+        acquirer = ImageAcquirer(
+            images_dir=images_dir,
+            static_dir=config["build"]["static_dir"],
+            links_path=links_path,
+        )
         updated_data = acquirer.acquire_all(links_data, force=getattr(args, "force", False))
 
         backup_path = links_path.with_suffix(".json.bak")
@@ -325,10 +329,11 @@ def _run_ingest(config, args=None):
 def _seed_static_staging(config):
     """Copy base static assets from ``static_source`` to ``static_dir``.
 
-    If the build section has a ``static_source`` key, its contents are copied
-    into the build's ``static_dir``. This lets the pipeline use a writable
-    staging directory for static assets while the original source files remain
-    untouched.
+    If the build section has a ``static_source`` key, only files and
+    directories that do **not** already exist in the staging directory are
+    copied.  This preserves generated content (acquired fonts, images,
+    themed CSS) that was placed in the staging directory by earlier
+    pipeline steps, while still making new base assets available.
     """
     build_cfg = config.get("build", {})
     source_raw = build_cfg.get("static_source")
@@ -348,11 +353,19 @@ def _seed_static_staging(config):
             continue  # skip gitkeep files
         dst_path = dest / item.name
         if item.is_dir():
-            if dst_path.exists():
-                shutil.rmtree(dst_path)
-            shutil.copytree(item, dst_path)
+            # Merge: only copy items that don't already exist.
+            # This preserves generated content (fonts, acquired images, etc.).
+            dst_path.mkdir(exist_ok=True)
+            for sub_item in item.iterdir():
+                sub_dst = dst_path / sub_item.name
+                if not sub_dst.exists():
+                    if sub_item.is_dir():
+                        shutil.copytree(sub_item, sub_dst)
+                    else:
+                        shutil.copy2(sub_item, sub_dst)
         else:
-            shutil.copy2(item, dst_path)
+            if not dst_path.exists():
+                shutil.copy2(item, dst_path)
 
 
 def _run_all(args):
@@ -446,7 +459,11 @@ def _run_all(args):
         with open(links_path, "r", encoding="utf-8") as f:
             links_data = json.load(f)
 
-        acquirer = ImageAcquirer(images_dir=images_dir, links_path=links_path)
+        acquirer = ImageAcquirer(
+            images_dir=images_dir,
+            static_dir=config["build"]["static_dir"],
+            links_path=links_path,
+        )
         updated_data = acquirer.acquire_all(links_data, force=getattr(args, "force", False))
 
         backup_path = links_path.with_suffix(".json.bak")

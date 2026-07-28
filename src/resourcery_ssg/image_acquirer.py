@@ -30,10 +30,12 @@ except ImportError:
 class ImageAcquirer:
     """Handles image acquisition from linked websites."""
 
-    def __init__(self, images_dir: Path, links_path: Path = None):
+    def __init__(self, images_dir: Path, static_dir: Path, links_path: Path = None):
         """Initialise the acquirer with output and optional links path.
 
         images_dir: directory to write acquired images into.
+        static_dir: root static directory. Used with images_dir to compute
+            the URL prefix for image paths stored in links.json.
         links_path: optional path to links.json (used for relative path
             generation when acquiring images).
 
@@ -44,6 +46,12 @@ class ImageAcquirer:
         self.output_dir = images_dir
         self.links_path = links_path
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Compute the URL prefix for image paths stored in links.json.
+        # With default config: static_dir=./static, images_dir=./static/images/acquired
+        # => image_url_prefix = "/static/images/acquired/"
+        relative = self.output_dir.relative_to(static_dir)
+        self.image_url_prefix = f"/{static_dir.name}/{relative}/"
 
         self.session = requests.Session()
         self.session.headers.update(
@@ -289,7 +297,7 @@ class ImageAcquirer:
         self.stats["total"] += 1
 
         # Check if image already exists locally
-        if existing_image and existing_image.startswith("/static/images/acquired/"):
+        if existing_image and existing_image.startswith(self.image_url_prefix):
             # Derive filename from the existing image path
             filename = Path(existing_image).name
             existing_path = self.output_dir / filename
@@ -308,7 +316,7 @@ class ImageAcquirer:
         if save_path.exists() and not force:
             print(f"      ⏭️  File exists (use --force to re-acquire)")
             self.stats["skipped"] += 1
-            return f"/static/images/acquired/{filename}"
+            return f"{self.image_url_prefix}{filename}"
 
         # Method 1: Try meta tags
         meta_image_url = self.extract_meta_image(url)
@@ -316,14 +324,14 @@ class ImageAcquirer:
             if self._download_image(meta_image_url, save_path):
                 print(f"      ✅ Acquired from meta tags")
                 self.stats["from_meta"] += 1
-                return f"/static/images/acquired/{filename}"
+                return f"{self.image_url_prefix}{filename}"
 
         # Method 2: Try screenshot
         if PUPPETEER_AVAILABLE:
             print(f"      📸 Trying screenshot...")
             if asyncio.run(self.capture_screenshot(url, save_path)):
                 self.stats["from_screenshot"] += 1
-                return f"/static/images/acquired/{filename}"
+                return f"{self.image_url_prefix}{filename}"
 
         # Failed
         self.stats["failed"] += 1
@@ -415,6 +423,7 @@ def main():
 
     links_path = Path(config["acquire-images"]["links"])
     images_dir = Path(config["acquire-images"]["images_dir"])
+    static_dir = Path(config["build"]["static_dir"])
 
     if not links_path.exists():
         print(f"❌ Links file not found: {links_path}")
@@ -425,7 +434,11 @@ def main():
         links_data = json.load(f)
 
     # Acquire images
-    acquirer = ImageAcquirer(images_dir=images_dir, links_path=links_path)
+    acquirer = ImageAcquirer(
+        images_dir=images_dir,
+        static_dir=static_dir,
+        links_path=links_path,
+    )
     updated_data = acquirer.acquire_all(links_data, force=args.force)
 
     # Save updated links
