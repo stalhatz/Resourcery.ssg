@@ -529,9 +529,11 @@ const SidebarManager = {
                     return;
                 }
                 
-                var isExpanded = trigger.getAttribute('aria-expanded') === 'true';
-                var subcategoryList = document.getElementById(trigger.getAttribute('aria-controls'));
+                var categoryId = trigger.dataset.categoryId;
+                if (!categoryId) return;
                 
+                // Collapse all other category triggers before setting hash
+                // (handleHashChange will re-expand the correct one)
                 categoryTriggers.forEach(function(t) {
                     t.setAttribute('aria-expanded', 'false');
                     var list = document.getElementById(t.getAttribute('aria-controls'));
@@ -540,10 +542,10 @@ const SidebarManager = {
                     }
                 });
                 
-                if (!isExpanded && subcategoryList) {
-                    trigger.setAttribute('aria-expanded', 'true');
-                    subcategoryList.classList.add('expanded');
-                }
+                // Set the hash — handleHashChange (triggered via hashchange event)
+                // handles: expanding matching trigger, filtering cards,
+                // updating filter header, syncing dropdown selection
+                window.location.hash = 'category-' + categoryId;
             });
         });
         

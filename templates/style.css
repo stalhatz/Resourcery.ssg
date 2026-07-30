@@ -676,10 +676,16 @@ ul, li {
   border: none;
   text-align: left;
   font-size: 0.9rem;
+  font-weight: 600;
   color: var(--color-text);
   cursor: pointer;
   transition: background-color var(--transition-fast), color var(--transition-fast);
   pointer-events: auto;
+}
+
+.filter-dropdown-child {
+  font-weight: 400;
+  padding-left: calc(var(--space-3) + var(--space-2));
 }
 
 .filter-dropdown-option:hover  { background-color: var(--color-surface); color: var(--color-secondary); }
