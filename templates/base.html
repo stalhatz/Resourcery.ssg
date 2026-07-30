@@ -5,13 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{{ config.site_info.description }}">
     <title>{% block title %}{{ config.site_info.name }}{% endblock %}</title>
-    
+
+    <!-- Add the `js` class to <html> before first paint so the entry-animation
+         CSS can hide cards until they scroll into view. Gated behind .js so that
+         clients without JavaScript still see all cards (progressive enhancement). -->
+    <script>document.documentElement.classList.add('js');</script>
+
     <link rel="icon" href="{{ config.site_info.favicon or 'static/images/favicon.svg' }}">
     
     <link rel="stylesheet" href="static/css/style.css?v={{ links.site_meta.version }}">
     <link rel="stylesheet" href="/static/css/fonts.css">
 </head>
-<body>
+<body data-entry-animation="{{ config.theme.effects.entry_animation | default('fade-slide-up') }}">
     <div class="app-container">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">

@@ -177,6 +177,52 @@ class TestValidateDesignTokens:
             js_validate(instance=design, schema=design_schema)
 
 
+class TestEntryAnimationEnum:
+    """AC8: entry_animation enum in the effects block of design.schema.json."""
+
+    @staticmethod
+    def _schema():
+        schemas_dir = Path(__file__).parent.parent / "schemas"
+        return json.loads((schemas_dir / "design.schema.json").read_text())
+
+    @staticmethod
+    def _design(entry_animation=None):
+        fixture = Path(__file__).parent / "fixtures" / "design" / "good.json"
+        design = json.loads(fixture.read_text())
+        if entry_animation is not None:
+            design.setdefault("theme", {}).setdefault("effects", {})["entry_animation"] = entry_animation
+        return design
+
+    @pytest.mark.unit
+    def test_valid_value_passes(self):
+        """entry_animation: 'slide-up' validates against the schema."""
+        from jsonschema import validate as js_validate
+
+        js_validate(instance=self._design("slide-up"), schema=self._schema())
+
+    @pytest.mark.unit
+    def test_omitted_value_passes(self):
+        """Omitting entry_animation entirely still validates (optional, default applies)."""
+        from jsonschema import validate as js_validate
+
+        js_validate(instance=self._design(None), schema=self._schema())
+
+    @pytest.mark.unit
+    def test_all_enum_values_pass(self):
+        from jsonschema import validate as js_validate
+
+        for value in ["none", "fade", "slide-up", "fade-slide-up"]:
+            js_validate(instance=self._design(value), schema=self._schema())
+
+    @pytest.mark.unit
+    def test_invalid_value_fails(self):
+        """entry_animation: 'zoom' (not in enum) must fail schema validation."""
+        from jsonschema import validate as js_validate, ValidationError
+
+        with pytest.raises(ValidationError):
+            js_validate(instance=self._design("zoom"), schema=self._schema())
+
+
 # ============================================================================
 # validate_effects (new model)
 # ============================================================================

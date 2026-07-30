@@ -634,6 +634,66 @@ const CardManager = {
     }
 };
 
+// ==================== ENTRY ANIMATOR ====================
+// Scroll-triggered, filter-replayable entry animation for .link-card elements.
+// JS only adds/removes the `.link-card--enter` class; the body
+// data-entry-animation attribute selects which keyframe the CSS plays.
+var EntryAnimator = {
+  init: function() {
+    var mode = (document.body.getAttribute('data-entry-animation') || 'fade-slide-up');
+    // Ensure the `.js` class is present even if the inline <head> script was
+    // blocked (e.g. by a CSP). main.js is an external script and runs reliably.
+    document.documentElement.classList.add('js');
+
+    if (mode === 'none') return;
+
+    var cards = document.querySelectorAll('.link-card');
+    if (!('IntersectionObserver' in window) || !cards.length) {
+      // Fallback: animate all immediately so nothing stays hidden.
+      cards.forEach(function(c){ c.classList.add('link-card--enter'); });
+      return;
+    }
+
+    var vh = window.innerHeight;
+    var io = new IntersectionObserver(function(entries, obs) {
+      entries.forEach(function(entry) {
+        // Reveal if the card is in or above the viewport. Using the rect
+        // (not just `isIntersecting`) catches cards scrolled past very fast:
+        // the browser may coalesce the IO callback to the final "not
+        // intersecting" state after the card has already gone past the
+        // threshold, which would otherwise leave it stuck invisible.
+        if (entry.boundingClientRect.top < vh) {
+          entry.target.classList.add('link-card--enter');
+          obs.unobserve(entry.target); // animate once per card instance
+        }
+      });
+    }, { threshold: 0.05, rootMargin: "0px 0px -40px 0px" });
+
+    cards.forEach(function(c){ io.observe(c); });
+
+    // Safety net for fast / coalesced scrolls: a throttled scroll listener
+    // reveals any card whose top has entered (or passed) the viewport but
+    // which the IO may have missed. Guarantees no card stays hidden.
+    var scrollTicking = false;
+    function revealOnScroll() {
+      if (scrollTicking) return;
+      scrollTicking = true;
+      requestAnimationFrame(function() {
+        scrollTicking = false;
+        var h = window.innerHeight;
+        for (var i = 0; i < cards.length; i++) {
+          var c = cards[i];
+          if (c.classList.contains('link-card--enter')) continue;
+          if (c.getBoundingClientRect().top < h) {
+            c.classList.add('link-card--enter');
+          }
+        }
+      });
+    }
+    window.addEventListener('scroll', revealOnScroll, { passive: true });
+  }
+};
+
 // ==================== FILTER MANAGER ====================
 const FilterManager = {
   dropdowns: {},
@@ -771,6 +831,15 @@ function filterCards() {
     var matchingCategories = category ? (window.CATEGORY_MAP[category] || [category]) : [];
 
     var visibleCount = 0;
+    // On a filter change, only re-animate cards that are currently within the
+    // viewport. Cards below the fold must be left WITHOUT `.link-card--enter`
+    // (hidden) so the IntersectionObserver reveals them when the user scrolls
+    // to them. Re-adding the class to below-fold cards would make them animate
+    // on filter instead of on scroll (and they'd already have the class, so
+    // scrolling would do nothing).
+    var mode = document.body.getAttribute('data-entry-animation') || 'fade-slide-up';
+    var reanimate = mode !== 'none';
+    var reshownCards = [];
 
     cards.forEach(function(card) { 
         var title = card.dataset.title ? card.dataset.title.toLowerCase() : '';
@@ -796,11 +865,32 @@ function filterCards() {
         
         if (matchesFilter) {
             card.style.display = '';
+            if (reanimate) {
+                var rect = card.getBoundingClientRect();
+                var inView = rect.top < window.innerHeight && rect.bottom > 0;
+                // Always drop the class so the reveal can replay...
+                card.classList.remove('link-card--enter');
+                if (inView) {
+                    // ...but only re-add it now for cards the user can see.
+                    reshownCards.push(card);
+                }
+                // Below-fold cards stay without the class (hidden) and are
+                // revealed by the IntersectionObserver as they scroll into view.
+            }
             visibleCount++;
         } else {
             card.style.display = 'none';
         }
     });
+
+    // Force ONE reflow, then re-add .link-card--enter to the in-viewport
+    // re-shown cards so the entry animation replays once for the visible set.
+    if (reshownCards.length) {
+        void document.body.offsetWidth; // force reflow so the animation can replay
+        reshownCards.forEach(function(card) {
+            card.classList.add('link-card--enter');
+        });
+    }
 
     if (noResults) {
         noResults.style.display = visibleCount === 0 ? 'block' : 'none';
@@ -959,6 +1049,7 @@ document.addEventListener('DOMContentLoaded', function() {
     ThemeManager.init();
     SidebarManager.init();
     CardManager.init();
+    EntryAnimator.init();
 
     if (isBrowsePage) {
         FilterManager.init();

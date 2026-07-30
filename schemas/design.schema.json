@@ -367,6 +367,12 @@
               "enum": ["natural", "editorial", "elegant", "uppercase"],
               "default": "natural",
               "description": "Typographic personality of all headings and prominent labels."
+            },
+            "entry_animation": {
+              "type": "string",
+              "enum": ["none", "fade", "slide-up", "fade-slide-up"],
+              "default": "fade-slide-up",
+              "description": "Entry animation for link cards when they first appear (scroll into viewport or reappear after filtering). 'none' disables entry animation entirely."
             }
           }
         }

@@ -167,6 +167,7 @@ ul, li {
   .link-card,
   .link-card:hover,
   .link-card:focus {
+    opacity: 1 !important;
     transform: none !important;
   }
 
@@ -1362,12 +1363,47 @@ ul, li {
 /* ============================================
    ANIMATIONS
    ============================================ */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+@keyframes entry-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes entry-slide-up {
+  from { transform: translateY(20px); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes entry-fade-slide-up {
+  from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.link-card { animation: fadeIn 0.3s var(--motion-easing) forwards; }
+/* Reveal-on-scroll: cards start hidden, become visible only when
+   `.link-card--enter` is added (by the IntersectionObserver on scroll, or by
+   filter re-animation). Gated behind `.js` so non-JS clients still see all
+   cards (progressive enhancement). */
+.js [data-entry-animation]:not([data-entry-animation="none"]) .link-card {
+  opacity: 0;
+  transform: translateY(20px);
+}
+.js [data-entry-animation]:not([data-entry-animation="none"]) .link-card--enter {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Entry animation contract: JS adds `.link-card--enter` to a card; the body
+   data-entry-animation attribute selects which keyframe plays. `none` has no
+   rule, so cards appear instantly. Gated behind .js to match the hidden state. */
+.js [data-entry-animation="fade"] .link-card--enter {
+  animation: entry-fade var(--motion-duration) var(--motion-easing) forwards;
+}
+.js [data-entry-animation="slide-up"] .link-card--enter {
+  animation: entry-slide-up var(--motion-duration) var(--motion-easing) forwards;
+}
+.js [data-entry-animation="fade-slide-up"] .link-card--enter {
+  animation: entry-fade-slide-up var(--motion-duration) var(--motion-easing) forwards;
+}
+/* No rule for [data-entry-animation="none"] → cards appear instantly. */
 
 @keyframes fadeInModal {
   from { opacity: 0; }

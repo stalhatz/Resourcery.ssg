@@ -150,6 +150,7 @@ These are retained from v1 — choose one value per field:
 | `heading_style` | `natural`, `editorial`, `elegant`, `uppercase` | `natural` | Heading weight/spacing personality |
 | `card_style` | `image-overlay`, `flat`, `outlined`, `elevated` | `image-overlay` | Link card visual treatment |
 | `hover_effect` | `none`, `lift`, `glow`, `outline` | `lift` | Card hover animation feedback |
+| `entry_animation` | `none`, `fade`, `slide-up`, `fade-slide-up` | `fade-slide-up` | Card entry motion when scrolling or after filtering |
 
 ### Heading Style Guide
 - `natural`: Standard weight (700) and spacing (0). Neutral and versatile.
@@ -168,6 +169,12 @@ These are retained from v1 — choose one value per field:
 - `lift`: Card rises slightly with translateY. Default tactile feel.
 - `glow`: Colored halo using primary color. Vivid/creative.
 - `outline`: Crisp border appears on hover. Sharp and keyboard-friendly.
+
+### Entry Animation Guide
+- `none`: Cards appear instantly. Clean and minimal.
+- `fade`: Gentle opacity fade. Subtle and lightweight.
+- `slide-up`: Cards rise from below. Playful and dynamic.
+- `fade-slide-up`: Combined fade + slide (default). The most common and versatile choice.
 
 ---
 
@@ -201,7 +208,7 @@ Before outputting your `design.json`, verify each of these:
 - [ ] `font_size_base` is a **number** (e.g., `16`), NOT a string like `"16px"`
 - [ ] `heading_letter_spacing` uses `em` units (e.g., `"0"`, `"0.05em"`, `"-0.03em"`) and is between −0.04em and 0.12em
 - [ ] `space_base` is `4` or `8`
-- [ ] All enum values are valid (check enums for `heading_style`, `card_style`, `hover_effect`, `border_style`, `transition_easing`)
+- [ ] All enum values are valid (check enums for `heading_style`, `card_style`, `hover_effect`, `entry_animation`, `border_style`, `transition_easing`)
 - [ ] `overlay_strength`, `brand_saturation`, `neutral_temperature`, `shade_spread` are numbers 0–1 (or −1–1 for temperature)
 - [ ] Contrast ratios against `background` satisfy the WCAG requirements listed above
 - [ ] No removed fields present: `heading_size_scale`, `shadow_intensity`, `border_radius`, `border_treatment`
