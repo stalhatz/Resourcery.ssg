@@ -332,11 +332,11 @@ def _run_ingest(config, args=None):
 def _seed_static_staging(config):
     """Copy base static assets from ``static_source`` to ``static_dir``.
 
-    If the build section has a ``static_source`` key, only files and
-    directories that do **not** already exist in the staging directory are
-    copied.  This preserves generated content (acquired fonts, images,
-    themed CSS) that was placed in the staging directory by earlier
-    pipeline steps, while still making new base assets available.
+    Files from the source always overwrite corresponding files in the staging
+    directory.  Generated content (acquired fonts, images) lives in
+    subdirectories (fonts/, images/) that typically do not exist in the base
+    static_source, so they are preserved automatically.  If they do exist
+    in the source, the source version wins — rebuild means rebuild.
     """
     build_cfg = config.get("build", {})
     source_raw = build_cfg.get("static_source")
@@ -356,19 +356,15 @@ def _seed_static_staging(config):
             continue  # skip gitkeep files
         dst_path = dest / item.name
         if item.is_dir():
-            # Merge: only copy items that don't already exist.
-            # This preserves generated content (fonts, acquired images, etc.).
             dst_path.mkdir(exist_ok=True)
             for sub_item in item.iterdir():
                 sub_dst = dst_path / sub_item.name
-                if not sub_dst.exists():
-                    if sub_item.is_dir():
-                        shutil.copytree(sub_item, sub_dst)
-                    else:
-                        shutil.copy2(sub_item, sub_dst)
+                if sub_item.is_dir():
+                    shutil.copytree(sub_item, sub_dst, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(sub_item, sub_dst)
         else:
-            if not dst_path.exists():
-                shutil.copy2(item, dst_path)
+            shutil.copy2(item, dst_path)
 
 
 def _run_all(args):
