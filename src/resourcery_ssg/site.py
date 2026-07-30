@@ -182,6 +182,7 @@ def main():
     if args.command == "build":
         from resourcery_ssg.build import build_site
 
+        _seed_static_staging(config)
         build_site(**{k: v for k, v in config["build"].items() if k != "static_source"},
                    ingest_note=config.get("ingest", {}).get("note"),
                    ingest_site_prompt=config.get("ingest", {}).get("site_prompt"))
