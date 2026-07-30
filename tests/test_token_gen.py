@@ -387,6 +387,7 @@ class TestDeriveDarkTokens:
             "--color-primary", "--color-secondary", "--color-background",
             "--color-surface", "--color-text", "--color-text-muted",
             "--color-accent", "--color-error", "--color-success",
+            "--color-primary-subtle",
         ]
         for key in expected:
             assert key in dark, f"Missing {key}"
@@ -406,6 +407,20 @@ class TestDeriveDarkTokens:
         dark = _derive_dark_tokens(anchors, levers, {})
         _, _, text_l = hex_to_hsl(dark["--color-text"])
         assert text_l > 70, f"Dark text should be light, got L={text_l}"
+
+    @pytest.mark.unit
+    def test_primary_subtle_is_dark_for_dark_mode(self):
+        """--color-primary-subtle should be a dark shade in dark mode, not the light tint."""
+        anchors = {"primary": "#2563eb", "background": "#f8fafc", "text": "#1e293b"}
+        levers = {"shade_spread": 0.6, "neutral_temperature": 0, "brand_saturation": 0.8}
+        dark = _derive_dark_tokens(anchors, levers, {})
+
+        subtle_hex = dark["--color-primary-subtle"]
+        _, _, subtle_l = hex_to_hsl(subtle_hex)
+        assert subtle_l < 30, (
+            f"Dark --color-primary-subtle should be dark (L < 30), "
+            f"got L={subtle_l} ({subtle_hex})"
+        )
 
     @pytest.mark.unit
     def test_explicit_overrides_take_precedence(self):
@@ -542,6 +557,10 @@ class TestGenerateThemeTokens:
         dark_tokens = tokens["--dark-tokens"]
         assert dark_tokens["--color-background"] == "#000000"
         assert dark_tokens["--color-text"] == "#ffffff"
+        # --color-primary-subtle should also be derived in dark auto=false mode
+        assert "--color-primary-subtle" in dark_tokens
+        _, _, subtle_l = hex_to_hsl(dark_tokens["--color-primary-subtle"])
+        assert subtle_l < 30, "Dark subtle should be dark even with auto=False"
 
 
 # ============================================================================

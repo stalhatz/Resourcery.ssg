@@ -403,6 +403,12 @@ def _derive_dark_tokens(anchors: dict, levers: dict, dark_overrides: dict) -> di
     dark_primary_s = min(p_s * (0.9 + 0.3 * brand_saturation), 90)
     dark_primary = hsl_to_hex(p_h, dark_primary_s, dark_primary_l)
 
+    # Dark primary-subtle: very dark muted shade for hover/focus bg in dark mode
+    dp_h, dp_s, dp_l = hex_to_hsl(dark_primary)
+    dark_subtle_l = 15
+    dark_subtle_s = dp_s * 0.15
+    dark_subtle = hsl_to_hex(dp_h, dark_subtle_s, dark_subtle_l)
+
     # Dark accent: similar boost
     accent_hex = anchors.get("accent", "#7c3aed")
     a_h, a_s, a_l = hex_to_hsl(accent_hex)
@@ -432,6 +438,7 @@ def _derive_dark_tokens(anchors: dict, levers: dict, dark_overrides: dict) -> di
         "--color-accent": dark_accent,
         "--color-error": dark_error,
         "--color-success": dark_success,
+        "--color-primary-subtle": dark_subtle,
     }
 
     # Apply explicit overrides from dark.* anchors
@@ -569,6 +576,11 @@ def generate_theme_tokens(config_theme: dict) -> dict:
         }
         for key, (var_name, light_default) in override_map.items():
             dark_tokens[var_name] = dark_cfg.get(key, light_default)
+
+        # Derive --color-primary-subtle for dark mode when auto=False
+        dark_primary_for_subtle = dark_tokens.get("--color-primary", colors.get("primary", "#2563eb"))
+        dp_h, dp_s, dp_l = hex_to_hsl(dark_primary_for_subtle)
+        dark_tokens["--color-primary-subtle"] = hsl_to_hex(dp_h, dp_s * 0.15, 15)
 
     tokens["--dark-tokens"] = dark_tokens  # nested dict for template rendering
 
