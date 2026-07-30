@@ -50,6 +50,13 @@ def _build_parser() -> argparse.ArgumentParser:
     fonts_p.add_argument("--fonts-dir", type=str, default=None)
     fonts_p.add_argument("--css-dir", type=str, default=None)
 
+    # acquire-js
+    acquire_js_p = subparsers.add_parser(
+        "acquire-js", help="Acquire the Nanostores JS library"
+    )
+    acquire_js_p.add_argument("--package-json", type=str, default=None)
+    acquire_js_p.add_argument("--vendor-dir", type=str, default=None)
+
     # acquire-images
     imgs_p = subparsers.add_parser(
         "acquire-images", help="Acquire images for links"
@@ -88,6 +95,10 @@ def _build_parser() -> argparse.ArgumentParser:
     all_p.add_argument("--links", type=str, default=None)
     all_p.add_argument("--images-dir", type=str, default=None)
     all_p.add_argument("--force", action="store_true")
+    # acquire-js flags for "all"
+    all_p.add_argument("--package-json", type=str, default=None)
+    all_p.add_argument("--vendor-dir", type=str, default=None)
+
     # ingest flags for "all"
     all_p.add_argument("--note", type=str, default=None)
     all_p.add_argument("--site-prompt", type=str, default=None)
@@ -114,6 +125,8 @@ ARG_TO_CONFIG_KEY = {
     "css_dir": "css_dir",
     "links": "links",
     "images_dir": "images_dir",
+    "package_json": "package_json_path",
+    "vendor_dir": "vendor_dir",
     "note": "note",
     "site_prompt": "site_prompt",
     "prompt": "prompt",
@@ -130,6 +143,7 @@ COMMAND_FLAGS = {
     "validate": ["data_dir", "schemas_dir"],
     "acquire-fonts": ["data_dir", "fonts_dir", "css_dir"],
     "acquire-images": ["links", "images_dir"],
+    "acquire-js": ["package_json_path", "vendor_dir"],
     "ingest": ["note", "site_prompt", "schemas_dir", "prompt", "model", "output_dir", "agent", "opencode_bin", "multi_step", "max_retries"],
 }
 
@@ -227,6 +241,10 @@ def main():
             json.dump(updated_data, f, indent=2, ensure_ascii=False)
 
         print(f"\n✅ Updated {links_path}")
+
+    elif args.command == "acquire-js":
+        from resourcery_ssg.js_vendor import acquire_js
+        acquire_js(**config["acquire-js"])
 
     elif args.command == "ingest":
         _run_ingest(config)
@@ -389,6 +407,9 @@ def _run_all(args):
     overrides.update(
         _extract_overrides(args, "ingest", COMMAND_FLAGS["ingest"])
     )
+    overrides.update(
+        _extract_overrides(args, "acquire-js", COMMAND_FLAGS["acquire-js"])
+    )
 
     config = load_resourcery_config(
         config_path=args.config,
@@ -403,7 +424,7 @@ def _run_all(args):
 
     # Determine total steps (ingest is step 0 when configured)
     has_ingest = bool(config.get("ingest", {}).get("model"))
-    total_steps = 5 if has_ingest else 4
+    total_steps = 6 if has_ingest else 5
 
     step = 0
 
@@ -443,7 +464,16 @@ def _run_all(args):
             sys.exit(1)
     print("\n✓ Fonts acquired.")
 
-    # 3. Acquire images
+    # 3. Acquire JS
+    step += 1
+    print("\n" + "=" * 60)
+    print(f"STEP {step}/{total_steps}: Acquire JS")
+    print("=" * 60)
+    from resourcery_ssg.js_vendor import acquire_js
+    acquire_js()
+    print("\n✓ JS vendor file acquired.")
+
+    # 4. Acquire images
     step += 1
     print("\n" + "=" * 60)
     print(f"STEP {step}/{total_steps}: Acquire images")
@@ -474,7 +504,7 @@ def _run_all(args):
     else:
         print(f"  ⚠️  Links file not found: {links_path} — skipping image acquisition")
 
-    # 4. Build
+    # 5. Build
     step += 1
     print("\n" + "=" * 60)
     print(f"STEP {step}/{total_steps}: Build")

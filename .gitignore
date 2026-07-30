@@ -23,6 +23,7 @@ wheels/
 
 fonts.css
 static/fonts/
+static/js/vendor/
 data/
 output/
 *.jpg

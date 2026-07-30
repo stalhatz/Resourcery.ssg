@@ -24,6 +24,10 @@ acquire-fonts:
 acquire-images:
   links: ${DATA_DIR}/links.json
   images_dir: ${IMAGES_DIR}
+acquire-js:
+  package_json_path: ./package.json
+  vendor_dir: ./static/js/vendor
+
 ingest:
   schemas_dir: ${SCHEMAS_DIR}
   prompt: ./prompts/data-ingestion.md

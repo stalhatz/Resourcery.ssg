@@ -151,6 +151,6 @@
         window.CATEGORY_MAP = {{ category_map | tojson }};
         window.ALL_TAGS     = {{ all_tags | tojson }};
     </script>
-    <script src="static/js/main.js?v={{ links.site_meta.version }}"></script>
+    <script type="module" src="static/js/main.js?v={{ links.site_meta.version }}"></script>
 </body>
 </html>

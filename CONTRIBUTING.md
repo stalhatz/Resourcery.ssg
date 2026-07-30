@@ -11,6 +11,7 @@
 | `src/resourcery_ssg/validate.py` | Python script | Data integrity gate. Validates JSON data against JSON Schema (draft-07), cross-validates categories/tags/IDs, checks hex colors, URLs, font availability, and effect compatibility. |
 | `src/resourcery_ssg/font_acquirer.py` | Python script | Build-time Google Font downloader. Fetches `.woff2` files from Google Fonts API, caches locally, generates `fonts.css` with embedded `@font-face` rules. Zero CDN dependency at runtime. |
 | `src/resourcery_ssg/image_acquirer.py` | Python script | Link image downloader. Extracts images from link URLs via `og:image` meta tags or headless Puppeteer screenshots. |
+| `src/resourcery_ssg/js_vendor.py` | Python script | Build-time Nanostores JS acquirer. Downloads `nanostores.esm.js` from unpkg, prepends a header comment, caches to `static/js/vendor/`. |
 | `src/resourcery_ssg/theme_constants.py` | Python script | Single source of truth for heading style configuration (weight, letter-spacing, required font weights). Imported by `build.py` and `font_acquirer.py`. |
 | `schemas/links.schema.json` | JSON Schema | JSON Schema definition for `data/links.json`. Defines required properties, types, and constraints for every link entry. |
 | `schemas/site.config.schema.json` | JSON Schema | JSON Schema definition for `data/site.config.json`. Defines theming, effects, navigation, and metadata shape. |
@@ -21,7 +22,11 @@
 | `templates/modal.html` | Jinja2 template | Link detail modal. Populated from `data-*` attributes on card elements at runtime. |
 | `templates/style.css` | Jinja2 template | Themed CSS. Rendered through Jinja2 to inject `--color-*`, `--shadow-*`, `--border-radius`, `--heading-*` CSS custom properties from `site.config.json`. |
 | `static/` | Directory | Source static assets. Copied verbatim into `output/static/` during build. |
-| `static/js/main.js` | JavaScript | All client-side interactivity: tag search, category filtering, sorting, modal, dark mode, sidebar, URL hash routing. ES5-compatible. |
+| `static/js/main.js` | JavaScript | ES module bootstrap (~30 lines). Imports all managers from `static/js/modules/`, wires atom ↔ URL hash bridge, initialises managers. |
+| `static/js/dom.js` | JavaScript | DOM manifest. Exports a `dom` object with all cached `document.getElementById()` references used across modules. |
+| `static/js/modules/` | Directory | ES modules: `state.js` (Nanostores atoms), `tag-manager.js`, `modal-manager.js`, `theme-manager.js`, `sidebar-manager.js`, `card-manager.js`, `entry-animator.js`, `filter-manager.js`, `filter-cards.js`, `sort-cards.js`, `handle-hash-change.js`. |
+| `static/js/vendor/` | Directory | Vendored third-party JS (gitignored). Currently contains `nanostores.js` acquired at build time. |
+| `package.json` | Config | Declares the Nanostores npm dependency version (used at build time only — no Node.js runtime needed). |
 | `static/images/acquired/` | Directory | Downloaded link images (from `image_acquirer.py`). |
 | `output/` | Directory | Build output (gitignored). Complete static site ready for any HTTP server. |
 | `schemas/` | Directory | JSON Schema files. Used for validation and as LLM prompt guidance during data creation. |
@@ -58,9 +63,9 @@ feat: build-time Google Font acquisition. No runtime CDN dependency
 
 ### What Is Tracked / Ignored
 
-**Tracked:** Python source, Jinja2 templates, JSON schemas, config files (`pyproject.toml`, `poetry.lock`), documentation.
+**Tracked:** Python source, Jinja2 templates, JSON schemas, config files (`pyproject.toml`, `poetry.lock`, `package.json`), documentation.
 
-**Not tracked** (in `.gitignore`): `data/` (input data), `output/` (build artifacts), `*.sh` files, images, font binaries, IDE config (`.vscode/`, `.kilo/`).
+**Not tracked** (in `.gitignore`): `data/` (input data), `output/` (build artifacts), `*.sh` files, images, font binaries, vendored JS (`static/js/vendor/`), IDE config (`.vscode/`, `.kilo/`).
 
 ---
 
@@ -105,18 +110,23 @@ if __name__ == '__main__':
 
 ### Frontend
 
-All JavaScript is vanilla ES5-compatible, organized into **singleton manager objects**:
+The frontend uses a **modular ESM architecture** backed by [Nanostores](https://github.com/nanostores/nanostores) atoms for observable state. The `static/js/modules/` directory contains 11 ES modules imported by the slim `static/js/main.js` bootstrap.
 
-| Object | Responsibility |
+| Module | Responsibility |
 |--------|---------------|
-| `TagManager` | Active tag state, search suggestions |
-| `ModalManager` | Open/close link detail modals |
-| `ThemeManager` | Dark/light mode toggle with `localStorage` persistence |
-| `SidebarManager` | Collapsible category accordion, mobile overlay |
-| `CardManager` | Click/keyboard handlers on link cards |
-| `FilterManager` | Custom dropdown for category/sort with full ARIA |
+| `state.js` | Nanostores atoms (`$activeTag`, `$activeSearch`, `$activeCategory`, `$animatedIds`), computed `$visibleCards`, URL-hash bridge (`bridgeFromHash`, `bridgeToHash`). |
+| `tag-manager.js` | Search suggestions, active tag/search state, filter header display. |
+| `modal-manager.js` | Open/close link detail modals with keyboard/overlay support. |
+| `theme-manager.js` | Dark/light mode toggle with `localStorage` persistence. |
+| `sidebar-manager.js` | Collapsible category accordion, mobile overlay. |
+| `card-manager.js` | Click/keyboard handlers on link cards and tag badges. |
+| `filter-manager.js` | Custom dropdown for category/sort with full ARIA. |
+| `entry-animator.js` | Scroll-triggered card entry animation with `IntersectionObserver`. |
+| `filter-cards.js` | Applies `$visibleCards` to the DOM (show/hide, re-animate). |
+| `sort-cards.js` | Reorders card elements by date or title. |
+| `handle-hash-change.js` | Bridges URL hash changes to atoms and DOM side-effects. |
 
-Global functions (`filterCards()`, `sortCards()`, `handleHashChange()`) coordinate between managers. The URL `hashchange` event is the single source of truth for application state.
+The `dom.js` manifest caches all `document.getElementById()` lookups. The URL `hashchange` event is the single source of truth for cross-module state coordination; atoms provide reactive observability within modules.
 
 ### JSON Data Shape
 
@@ -215,13 +225,18 @@ Step 2: src/resourcery_ssg/font_acquirer.py
   ├── Download missing .woff2 from Google Fonts API
   └── Write fonts.css with @font-face rules
 
-Step 3: src/resourcery_ssg/image_acquirer.py (optional)
+Step 3: src/resourcery_ssg/js_vendor.py
+  ├── Read package.json for nanostores version
+  ├── Check cache (static/js/vendor/nanostores.js header comment)
+  └── Download nanostores.esm.js from unpkg
+
+Step 4: src/resourcery_ssg/image_acquirer.py (optional)
   ├── For each link without a local image:
   │   ├── Fetch URL, parse og:image meta tag
   │   └── Fallback: headless Puppeteer screenshot
   └── Save to static/images/acquired/
 
-Step 4: src/resourcery_ssg/build.py
+Step 5: src/resourcery_ssg/build.py
   ├── Clean output/
   ├── Load validated data
   ├── Pre-compute category_map and all_tags
@@ -252,21 +267,29 @@ build.py renders templates ──> output/*.html
 ```
 URL hash (#category-x, #tag-y, #search-z)
     │
-    ▼
-handleHashChange() on load + hashchange event
+    ├── bridgeFromHash (parses hash, writes atoms)
+    │       │
+    │       ├── $activeTag, $activeSearch, $activeCategory
+    │       └── $visibleCards (computed from atoms)
+    │               │
+    │               ▼
+    │         handleHashChange()
+    │           ├── Updates category dropdown
+    │           ├── Updates sidebar active states
+    │           └── filterCards()
+    │                   │
+    │                   ├── Shows/hides card DOM nodes
+    │                   └── sortCards() reorders
     │
-    ├── FilterManager updates category dropdown
-    ├── TagManager updates tag/search state
-    └── filterCards()
+    └── bridgeToHash (atom → hash, keeps URL in sync)
             │
-            ├── Reads hash, globals, data-* attributes
-            ├── Shows/hides card DOM nodes directly
-            └── sortCards() reorders by date/title
-                    │
-                    └── ModalManager opens modal from card data-* attributes
+            └── User interaction → TagManager / FilterManager
+                    → writes atoms
+                    → bridgeToHash writes URL hash
+                    → hashchange event → handleHashChange
 ```
 
-**Key point:** The DOM is the data layer. Card elements carry all their metadata as `data-*` attributes. Filtering is done by toggling `display: none` — no virtual DOM, no re-rendering.
+**Key point:** The DOM is the data layer. Card elements carry all their metadata as `data-*` attributes. Filtering is done by toggling `display: none` — no virtual DOM, no re-rendering. Nanostores atoms provide reactive, observable state with built-in equality checks to prevent update loops.
 
 ---
 
