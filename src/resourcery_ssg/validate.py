@@ -262,7 +262,7 @@ def _check_contrast_pair(validator_instance, colors: dict, fg_key: str, bg_value
         )
         if large_ok is not None and ratio >= large_ok:
             msg += " — PASSES for large text (≥3:1) but FAILS for normal text (≥4.5:1)"
-        validator_instance.errors.append(msg), Optional
+        validator_instance.errors.append(msg)
 
 
 class DataValidator:
