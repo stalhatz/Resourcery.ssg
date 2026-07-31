@@ -81,4 +81,76 @@ describe('handle-hash-change.js', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(state.$activeTag.get()).toBe('foo');
   });
+
+  // B1 regression: the hash-change path must refresh the filter header, not
+  // just the atoms/dropdown/sidebar/cards. (tag-manager.js updateFilterHeader
+  // — which owns the header — is only invoked on direct user interactions.)
+  describe('handleHashChange refreshes the filter header from the parsed hash (B1)', () => {
+    const header = () => ({
+      filterText1: document.getElementById('filterText1'),
+      filterValue1: document.getElementById('filterValue1'),
+      filterText2: document.getElementById('filterText2'),
+      categoryTrigger: document.getElementById('categoryTrigger'),
+      searchValue: document.getElementById('searchValue'),
+    });
+
+    it("'#tag-foo' -> filterText1='Showing', filterValue1='#foo' (inline), categoryTrigger inline-flex+pe:none+opacity 1, searchValue hidden, filterText2 inline", async () => {
+      const { handleHashChange } = await setup(`${BROWSE}#tag-foo`);
+      handleHashChange();
+      const h = header();
+      expect(h.filterText1.style.display).toBe('inline');
+      expect(h.filterText1.textContent).toBe('Showing');
+      expect(h.filterValue1.style.display).toBe('inline');
+      expect(h.filterValue1.textContent).toBe('#foo');
+      expect(h.categoryTrigger.style.display).toBe('inline-flex');
+      expect(h.categoryTrigger.style.pointerEvents).toBe('none');
+      expect(h.categoryTrigger.style.opacity).toBe('1');
+      expect(h.searchValue.style.display).toBe('none');
+      expect(h.filterText2.style.display).toBe('inline');
+    });
+
+    it("'#search-bar' -> filterText1='Searching', categoryTrigger hidden, searchValue='\"bar\"' (inline), filterText2 hidden", async () => {
+      const { handleHashChange } = await setup(`${BROWSE}#search-bar`);
+      handleHashChange();
+      const h = header();
+      expect(h.filterText1.style.display).toBe('inline');
+      expect(h.filterText1.textContent).toBe('Searching');
+      expect(h.categoryTrigger.style.display).toBe('none');
+      expect(h.searchValue.style.display).toBe('inline');
+      expect(h.searchValue.textContent).toBe('"bar"');
+      expect(h.filterText2.style.display).toBe('none');
+    });
+
+    it("'#category-frontend' -> filterText1='Showing', filterValue1='Frontend' (option label), categoryTrigger inline-flex+pe:auto, searchValue hidden, filterText2 inline", async () => {
+      const { handleHashChange } = await setup(`${BROWSE}#category-frontend`);
+      handleHashChange();
+      const h = header();
+      expect(h.filterText1.style.display).toBe('inline');
+      expect(h.filterText1.textContent).toBe('Showing');
+      expect(h.filterValue1.textContent).toBe('Frontend');
+      expect(h.categoryTrigger.style.display).toBe('inline-flex');
+      expect(h.categoryTrigger.style.pointerEvents).toBe('auto');
+      expect(h.searchValue.style.display).toBe('none');
+      expect(h.filterText2.style.display).toBe('inline');
+    });
+
+    it("bare URL after '#tag-foo' (back/forward) -> header resets: filterValue1='All Categories', categoryTrigger pe:auto, searchValue hidden, filterText2 inline", async () => {
+      const { handleHashChange } = await setup(`${BROWSE}#tag-foo`);
+      handleHashChange();
+      // sanity: the tag state was applied first
+      expect(document.getElementById('filterValue1').textContent).toBe('#foo');
+
+      window.history.pushState({}, '', BROWSE); // clear hash (no hashchange fired)
+      handleHashChange();
+      const h = header();
+      expect(h.filterText1.style.display).toBe('inline');
+      expect(h.filterText1.textContent).toBe('Showing');
+      expect(h.filterValue1.textContent).toBe('All Categories');
+      expect(h.categoryTrigger.style.display).toBe('inline-flex');
+      expect(h.categoryTrigger.style.pointerEvents).toBe('auto');
+      expect(h.categoryTrigger.style.opacity).toBe('1');
+      expect(h.searchValue.style.display).toBe('none');
+      expect(h.filterText2.style.display).toBe('inline');
+    });
+  });
 });

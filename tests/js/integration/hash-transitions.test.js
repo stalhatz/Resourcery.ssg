@@ -131,3 +131,62 @@ describe('Hash transitions (integration): one hashchange per user action', () =>
     expect(document.getElementById('resultsCount').textContent).toBe('1 item');
   });
 });
+
+// B1 regression: hash-driven navigation (deep links, back/forward) must
+// refresh the filter header — the dropdown and grid already updated, but the
+// header ("Showing #tag", "Searching ...", category name, "All Categories")
+// went stale because only the atoms/dropdown/sidebar/cards were synced.
+describe('Hash-driven navigation refreshes the filter header (B1)', () => {
+  it('deep link #tag-foo shows "Showing #foo"; tag -> search transition shows "Searching \\"bar\\""', async () => {
+    const { state } = await setup();
+    window.location.hash = 'tag-foo';
+    await waitFor(() => expect(state.$activeTag.get()).toBe('foo'));
+    await waitFor(() => expect(document.getElementById('filterText1').textContent).toBe('Showing'));
+    expect(document.getElementById('filterValue1').textContent).toBe('#foo');
+    expect(document.getElementById('filterValue1').style.display).toBe('inline');
+    expect(document.getElementById('categoryTrigger').style.display).toBe('inline-flex');
+    expect(document.getElementById('categoryTrigger').style.pointerEvents).toBe('none');
+    expect(document.getElementById('searchValue').style.display).toBe('none');
+    expect(document.getElementById('filterText2').style.display).toBe('inline');
+
+    window.location.hash = 'search-bar';
+    await waitFor(() => expect(state.$activeSearch.get()).toBe('bar'));
+    await waitFor(() => expect(document.getElementById('filterText1').textContent).toBe('Searching'));
+    expect(document.getElementById('searchValue').textContent).toBe('"bar"');
+    expect(document.getElementById('searchValue').style.display).toBe('inline');
+    expect(document.getElementById('categoryTrigger').style.display).toBe('none');
+    expect(document.getElementById('filterText2').style.display).toBe('none');
+  });
+
+  it('search -> category transition shows the category label in filterValue1', async () => {
+    const { state } = await setup();
+    window.location.hash = 'search-bar';
+    await waitFor(() => expect(state.$activeSearch.get()).toBe('bar'));
+    await waitFor(() => expect(document.getElementById('filterText1').textContent).toBe('Searching'));
+
+    window.location.hash = 'category-frontend';
+    await waitFor(() => expect(state.$activeCategory.get()).toBe('frontend'));
+    await waitFor(() => expect(document.getElementById('filterValue1').textContent).toBe('Frontend'));
+    expect(document.getElementById('filterText1').textContent).toBe('Showing');
+    expect(document.getElementById('categoryTrigger').style.display).toBe('inline-flex');
+    expect(document.getElementById('categoryTrigger').style.pointerEvents).toBe('auto');
+    expect(document.getElementById('searchValue').style.display).toBe('none');
+    expect(document.getElementById('filterText2').style.display).toBe('inline');
+  });
+
+  it('tag -> bare URL (back to no filter) resets the header to "All Categories"', async () => {
+    const { state } = await setup();
+    window.location.hash = 'tag-foo';
+    await waitFor(() => expect(state.$activeTag.get()).toBe('foo'));
+    await waitFor(() => expect(document.getElementById('filterValue1').textContent).toBe('#foo'));
+
+    window.location.hash = '';
+    await waitFor(() => expect(state.$activeTag.get()).toBeNull());
+    await waitFor(() => expect(document.getElementById('filterValue1').textContent).toBe('All Categories'));
+    expect(document.getElementById('filterText1').textContent).toBe('Showing');
+    expect(document.getElementById('categoryTrigger').style.display).toBe('inline-flex');
+    expect(document.getElementById('categoryTrigger').style.pointerEvents).toBe('auto');
+    expect(document.getElementById('searchValue').style.display).toBe('none');
+    expect(document.getElementById('filterText2').style.display).toBe('inline');
+  });
+});

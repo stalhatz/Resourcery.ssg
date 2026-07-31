@@ -3,12 +3,13 @@
  *
  * On hashchange (or initial load), parses the hash, writes atoms via
  * bridgeFromHash, synchronises DOM side-effects (dropdown, sidebar active
- * states), and calls filterCards().
+ * states, filter header), and calls filterCards().
  */
 
 import { $activeTag, $activeSearch, $activeCategory, bridgeFromHash, batchAtomWrites } from './state.js';
 import { dom } from '../dom.js';
 import { filterCards } from './filter-cards.js';
+import { TagManager } from './tag-manager.js';
 
 export function handleHashChange() {
   if (!window.location.pathname.includes('browse.html')) return;
@@ -70,6 +71,12 @@ export function handleHashChange() {
           });
         }
       }
+
+      // Refresh the filter header (B1): the header must mirror the parsed
+      // hash state, not just the dropdown/sidebar/cards. updateFilterHeader
+      // reads the atoms set above plus dom.categoryFilter.value (synced
+      // above), so it must run after both.
+      TagManager.updateFilterHeader();
 
       filterCards();
     });
