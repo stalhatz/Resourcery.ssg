@@ -18,6 +18,8 @@ from bs4 import BeautifulSoup
 from PIL import Image
 import io
 
+from resourcery_ssg.io_utils import load_json, JsonLoadError
+
 try:
     from pyppeteer import launch
 
@@ -377,14 +379,67 @@ class ImageAcquirer:
         return links_data
 
 
+def acquire_images_from_config(config, *, force: bool = False) -> bool:
+    """Run the full acquire-images flow from a resolved config dict.
+
+    Reads ``acquire-images.links``, ``acquire-images.images_dir`` and
+    ``build.static_dir`` from *config* (read-only), loads the links file,
+    acquires images for all active links, backs the original file up to
+    ``.json.bak``, and writes the updated data back in place.
+
+    param: config — the resolved configuration dict (never mutated).
+    param: force — if True, re-acquire images even when they already exist.
+
+    Returns: True on success, False if the links file is missing or fails
+        to parse (in which case the data on disk is left untouched).
+
+    Side-effects: prints status messages; renames the links file to
+        ``.json.bak`` and writes the updated data back on success.
+    """
+
+    links_path = Path(config["acquire-images"]["links"])
+    images_dir = Path(config["acquire-images"]["images_dir"])
+    static_dir = Path(config["build"]["static_dir"])
+
+    if not links_path.exists():
+        print(f"⚠️  Links file not found: {links_path}")
+        return False
+
+    # Load links
+    try:
+        links_data = load_json(links_path)
+    except JsonLoadError as e:
+        print(f"⚠️  {e}")
+        return False
+
+    # Acquire images
+    acquirer = ImageAcquirer(
+        images_dir=images_dir,
+        static_dir=static_dir,
+        links_path=links_path,
+    )
+    updated_data = acquirer.acquire_all(links_data, force=force)
+
+    # Save updated links
+    backup_path = links_path.with_suffix(".json.bak")
+    links_path.rename(backup_path)
+
+    with open(links_path, "w", encoding="utf-8") as f:
+        json.dump(updated_data, f, indent=2, ensure_ascii=False)
+
+    print(f"\n✅ Updated {links_path}")
+    print(f"   Backup saved to: {backup_path}")
+
+    return True
+
+
 def main():
     """Run image acquisition from the command line.
 
-    Parses --links, --images-dir, and --force arguments, loads the links
-    data file, acquires images for all active links, backs up the original
-    file, and writes the updated data in place.
+    Parses --links, --images-dir, and --force arguments, loads the config,
+    and delegates to acquire_images_from_config.
 
-    Returns: 0 on success, 1 if the links file is not found.
+    Returns: 0 on success, 1 if the links file is missing or fails to parse.
 
     Side-effects: overwrites the links file (with a .json.bak backup);
         prints progress to stdout.
@@ -405,53 +460,18 @@ def main():
     parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
     args = parser.parse_args()
 
-    from resourcery_ssg.config import load_resourcery_config
+    from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
 
-    overrides = {}
-    for flag, cfg_key in [
-        ("links", "acquire-images.links"),
-        ("images_dir", "acquire-images.images_dir"),
-    ]:
-        val = getattr(args, flag, None)
-        if val is not None:
-            overrides[cfg_key] = val
+    overrides = build_cli_overrides(
+        args, "acquire-images", {"links": "links", "images_dir": "images_dir"}
+    )
 
     config = load_resourcery_config(
         config_path=args.config,
         overrides=overrides,
     )
 
-    links_path = Path(config["acquire-images"]["links"])
-    images_dir = Path(config["acquire-images"]["images_dir"])
-    static_dir = Path(config["build"]["static_dir"])
-
-    if not links_path.exists():
-        print(f"❌ Links file not found: {links_path}")
-        return 1
-
-    # Load links
-    with open(links_path, "r", encoding="utf-8") as f:
-        links_data = json.load(f)
-
-    # Acquire images
-    acquirer = ImageAcquirer(
-        images_dir=images_dir,
-        static_dir=static_dir,
-        links_path=links_path,
-    )
-    updated_data = acquirer.acquire_all(links_data, force=args.force)
-
-    # Save updated links
-    backup_path = links_path.with_suffix(".json.bak")
-    links_path.rename(backup_path)
-
-    with open(links_path, "w", encoding="utf-8") as f:
-        json.dump(updated_data, f, indent=2, ensure_ascii=False)
-
-    print(f"\n✅ Updated {links_path}")
-    print(f"   Backup saved to: {backup_path}")
-
-    return 0
+    return 0 if acquire_images_from_config(config, force=args.force) else 1
 
 
 if __name__ == "__main__":

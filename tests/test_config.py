@@ -1,12 +1,19 @@
 """Tests for the config module (src/resourcery_ssg/config.py)."""
 
 import os
+import argparse
 import yaml
 import pytest
 from pathlib import Path
 from types import MappingProxyType
 
-from resourcery_ssg.config import load_resourcery_config, ConfigError, _resolve_var, _deep_merge
+from resourcery_ssg.config import (
+    load_resourcery_config,
+    ConfigError,
+    build_cli_overrides,
+    _resolve_var,
+    _deep_merge,
+)
 
 
 class TestResolveVar:
@@ -61,6 +68,36 @@ class TestDeepMerge:
         result = _deep_merge(base, overlay)
         assert base == {"a": [1, 2]}
         assert result == {"a": [1, 2], "b": 3}
+
+
+class TestBuildCliOverrides:
+    @pytest.mark.unit
+    def test_builds_dotted_keys(self):
+        args = argparse.Namespace(data="x", output="y")
+        result = build_cli_overrides(
+            args, "build", {"data": "data_dir", "output": "output_dir"}
+        )
+        assert result == {"build.data_dir": "x", "build.output_dir": "y"}
+
+    @pytest.mark.unit
+    def test_skips_none_values(self):
+        args = argparse.Namespace(data=None, output="y")
+        result = build_cli_overrides(
+            args, "build", {"data": "data_dir", "output": "output_dir"}
+        )
+        assert result == {"build.output_dir": "y"}
+
+    @pytest.mark.unit
+    def test_tolerates_missing_attribute(self):
+        args = argparse.Namespace(data="x")
+        result = build_cli_overrides(
+            args, "build", {"data": "data_dir", "output": "output_dir"}
+        )
+        assert result == {"build.data_dir": "x"}
+
+    @pytest.mark.unit
+    def test_empty_mapping(self):
+        assert build_cli_overrides(argparse.Namespace(), "build", {}) == {}
 
 
 class TestLoadResourceryConfig:

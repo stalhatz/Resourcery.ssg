@@ -209,6 +209,35 @@ def load_resourcery_config(
     return _freeze(resolved)
 
 
+def build_cli_overrides(
+    args, section: str, flag_to_key: Dict[str, str]
+) -> Dict[str, Any]:
+    """Build a flat dotted-key overrides dict from a parsed argparse namespace.
+
+    Includes ``{section}.{key}`` for every ``flag, key`` pair in
+    *flag_to_key* only when the parsed value is not ``None`` — preserving the
+    "only explicitly passed flags override config" contract for
+    ``store_true, default=None`` flags (e.g. ``--multi-step``, ``--force``).
+    *args* is duck-typed via ``getattr``, so any object exposing the flag
+    attributes works (argparse.Namespace, SimpleNamespace, ...).
+
+    param: args — parsed CLI arguments (duck-typed via ``getattr``).
+    param: section — config section name used as the dotted-key prefix
+        (e.g. "build").
+    param: flag_to_key — mapping of argparse attribute name to config key
+        name (e.g. {"data": "data_dir"}).
+
+    Returns: dict with dotted keys suitable for
+        ``load_resourcery_config(overrides=...)``.
+    """
+    overrides: Dict[str, Any] = {}
+    for flag, key in flag_to_key.items():
+        val = getattr(args, flag, None)
+        if val is not None:
+            overrides[f"{section}.{key}"] = val
+    return overrides
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers for overrides and path resolution
 # ---------------------------------------------------------------------------

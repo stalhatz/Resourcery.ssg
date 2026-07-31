@@ -1,6 +1,7 @@
+import json
 import pytest
 from pathlib import Path
-from resourcery_ssg.image_acquirer import ImageAcquirer
+from resourcery_ssg.image_acquirer import ImageAcquirer, acquire_images_from_config
 
 
 @pytest.fixture
@@ -200,3 +201,91 @@ class TestIntegrationAcquireImages:
         }
         result = acquirer.acquire_all(links_data)
         assert "links" in result
+
+
+class TestAcquireImagesFromConfig:
+    """acquire_images_from_config: failure without side effects, success with backup."""
+
+    def _make_config(self, tmp_path: Path, links_name: str = "links.json") -> tuple:
+        """Build a config dict plus paths; images_dir sits inside static_dir."""
+        static_dir = tmp_path / "static"
+        images_dir = static_dir / "images" / "acquired"
+        links_path = tmp_path / links_name
+        config = {
+            "acquire-images": {
+                "links": str(links_path),
+                "images_dir": str(images_dir),
+            },
+            "build": {"static_dir": str(static_dir)},
+        }
+        return config, links_path
+
+    @pytest.mark.unit
+    def test_missing_links_file_returns_false(self, tmp_path: Path, capsys):
+        config, links_path = self._make_config(tmp_path)
+
+        assert acquire_images_from_config(config) is False
+        out = capsys.readouterr().out
+        assert "Links file not found" in out
+        assert str(links_path) in out
+        assert not links_path.with_suffix(".json.bak").exists()
+
+    @pytest.mark.unit
+    def test_invalid_json_returns_false_untouched(self, tmp_path: Path, capsys):
+        config, links_path = self._make_config(tmp_path)
+        links_path.write_text("{bad json", encoding="utf-8")
+
+        assert acquire_images_from_config(config) is False
+        out = capsys.readouterr().out
+        assert str(links_path) in out
+        # Data on disk untouched, no backup created
+        assert links_path.read_text(encoding="utf-8") == "{bad json"
+        assert not links_path.with_suffix(".json.bak").exists()
+
+    @pytest.mark.unit
+    def test_success_writes_backup_and_updated_data(
+        self, tmp_path: Path, monkeypatch, capsys
+    ):
+        config, links_path = self._make_config(tmp_path)
+        original = {"links": [{"id": "a", "status": "active", "url": "https://a.com"}]}
+        links_path.write_text(json.dumps(original), encoding="utf-8")
+        updated = {"links": [{"id": "a", "image": "/static/images/acquired/a.jpg"}]}
+
+        def mock_acquire_all(self, links_data, force=False):
+            return updated
+
+        monkeypatch.setattr(
+            "resourcery_ssg.image_acquirer.ImageAcquirer.acquire_all",
+            mock_acquire_all,
+        )
+
+        assert acquire_images_from_config(config) is True
+
+        # Backup holds the original content
+        backup_path = links_path.with_suffix(".json.bak")
+        assert backup_path.exists()
+        assert json.loads(backup_path.read_text(encoding="utf-8")) == original
+        # links.json holds the updated data
+        assert json.loads(links_path.read_text(encoding="utf-8")) == updated
+
+        out = capsys.readouterr().out
+        assert "✅ Updated" in out
+        assert "Backup saved to" in out
+
+    @pytest.mark.unit
+    def test_force_forwarded_to_acquire_all(self, tmp_path: Path, monkeypatch):
+        config, links_path = self._make_config(tmp_path)
+        links_path.write_text('{"links": []}', encoding="utf-8")
+        captured = {}
+
+        def mock_acquire_all(self, links_data, force=False):
+            captured["force"] = force
+            return links_data
+
+        monkeypatch.setattr(
+            "resourcery_ssg.image_acquirer.ImageAcquirer.acquire_all",
+            mock_acquire_all,
+        )
+
+        assert acquire_images_from_config(config, force=True) is True
+        assert captured["force"] is True

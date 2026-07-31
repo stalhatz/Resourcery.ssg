@@ -4,7 +4,6 @@ Build script for static link aggregation site.
 Renders Jinja2 templates with JSON data.
 """
 
-import json
 import mistune
 import random
 import os
@@ -12,27 +11,13 @@ import shutil
 import sys
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
+from resourcery_ssg.io_utils import load_json
 from resourcery_ssg.theme_constants import (
     get_heading_weight,
     get_heading_letter_spacing,
     resolve_heading,
 )
 from resourcery_ssg.token_gen import generate_theme_tokens
-
-
-def load_json(path):
-    """Load and parse a JSON file from disk.
-
-    path: filesystem path to the JSON file.
-
-    Returns: parsed dictionary contents.
-
-    FileNotFoundError: the file does not exist at path.
-    json.JSONDecodeError: the file contents are not valid JSON.
-    """
-
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
 def validate_data(config, links):
@@ -359,20 +344,18 @@ def main():
     parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
     args = parser.parse_args()
 
-    from resourcery_ssg.config import load_resourcery_config
+    from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
 
-    overrides = {}
-    # Map CLI flag names to config key names
-    flag_to_key = {
-        "data": "data_dir",
-        "templates": "templates_dir",
-        "static": "static_dir",
-        "output": "output_dir",
-    }
-    for flag, key in flag_to_key.items():
-        val = getattr(args, flag, None)
-        if val is not None:
-            overrides[f"build.{key}"] = val
+    overrides = build_cli_overrides(
+        args,
+        "build",
+        {
+            "data": "data_dir",
+            "templates": "templates_dir",
+            "static": "static_dir",
+            "output": "output_dir",
+        },
+    )
 
     config = load_resourcery_config(
         config_path=args.config,

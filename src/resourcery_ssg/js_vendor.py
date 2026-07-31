@@ -8,12 +8,13 @@ Run before build.py:
     poetry run python js_vendor.py
 """
 
-import json
 import os
 import re
 import sys
 import urllib.request
 from pathlib import Path
+
+from resourcery_ssg.io_utils import loads_json, JsonLoadError
 
 
 def read_cached_nanostores(vendor_path: Path) -> tuple[str, str] | None:
@@ -143,8 +144,11 @@ def acquire_js(
 
     # Load package.json
     try:
-        pkg = json.loads(package_json_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
+        pkg = loads_json(
+            package_json_path.read_text(encoding="utf-8"),
+            path=package_json_path,
+        )
+    except JsonLoadError as e:
         print(
             f"Error: package.json is not valid JSON: {e}",
             file=sys.stderr,
@@ -221,17 +225,13 @@ def main():
     )
     args = parser.parse_args()
 
-    from resourcery_ssg.config import load_resourcery_config
+    from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
 
-    overrides = {}
-    flag_to_key = {
-        "package_json": "package_json_path",
-        "vendor_dir": "vendor_dir",
-    }
-    for flag, key in flag_to_key.items():
-        val = getattr(args, flag, None)
-        if val is not None:
-            overrides[f"acquire-js.{key}"] = val
+    overrides = build_cli_overrides(
+        args,
+        "acquire-js",
+        {"package_json": "package_json_path", "vendor_dir": "vendor_dir"},
+    )
 
     config = load_resourcery_config(
         config_path=args.config,

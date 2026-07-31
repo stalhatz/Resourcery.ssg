@@ -132,11 +132,16 @@ class TestRunIngestHappyPath:
 
         ``_run_ingest`` imports ``run_ingestion``/``run_multi_step_ingestion``
         *inside* the function, so the module must be replaced in sys.modules
-        for the import to pick up the fakes.
+        for the import to pick up the fakes. The real ``build_stage_config``
+        is kept so the stage-config parsing still runs against production
+        code.
         """
+        from resourcery_ssg.data_ingestion import build_stage_config
+
         fake = types.SimpleNamespace(
             run_ingestion=mock.Mock(return_value=None),
             run_multi_step_ingestion=mock.Mock(return_value=None),
+            build_stage_config=build_stage_config,
         )
         monkeypatch.setitem(sys.modules, "resourcery_ssg.data_ingestion", fake)
         return fake

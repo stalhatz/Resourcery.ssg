@@ -8,15 +8,15 @@ validate against the project's JSON Schemas.
 """
 
 import argparse
-import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
+from resourcery_ssg.io_utils import loads_json, JsonLoadError
 from resourcery_ssg.validate import DataValidator
 
 
@@ -398,6 +398,73 @@ def _resolve_stage_setting(step_key, stage_config, setting_key, global_value):
     return global_value
 
 
+def build_stage_config(
+    stages_cfg,
+    *,
+    stage_keys: Optional[list] = None,
+    multi_step: bool = True,
+) -> Tuple[Optional[dict], Optional[list]]:
+    """Build the per-stage config and requested-stage list from ``ingest.stages``.
+
+    Validates stage keys unconditionally (unknown key → stderr + exit 1).
+    With ``multi_step`` true, builds ``requested_stages`` in pipeline order
+    and ``stage_config`` keeping only stages whose overrides dict has at
+    least one non-``None`` value. With ``multi_step`` false, prints the
+    canonical warning and ignores the stages configuration.
+
+    param: stages_cfg — the ``ingest.stages`` config subsection (may be a
+        frozen MappingProxyType, a plain dict, or None/empty).
+    param: stage_keys — valid stage keys in pipeline order; defaults to
+        ["site.config", "links", "design"].
+    param: multi_step — whether multi-step mode is enabled.
+
+    Returns: (stage_config, requested_stages) tuple; both None when the
+        configuration is absent or ignored (multi_step false).
+
+    SystemExit: exit 1 if stages_cfg contains an unknown stage key.
+    """
+    if stage_keys is None:
+        stage_keys = ["site.config", "links", "design"]
+
+    if not stages_cfg:
+        return None, None
+
+    # Always validate stage keys (canonical data_ingestion.py order)
+    for key in stages_cfg:
+        if key not in stage_keys:
+            print(
+                f"Error: Unknown stage key '{key}' in config.yaml ingest.stages. "
+                f"Valid keys are: {', '.join(stage_keys)}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    if not multi_step:
+        print(
+            "⚠️  Warning: 'stages:' is configured but 'multi_step' is false. "
+            "Per-stage configuration requires multi_step mode. "
+            "Ignoring stages configuration.",
+            file=sys.stderr,
+        )
+        return None, None
+
+    # Build requested_stages in pipeline order
+    requested_stages = [k for k in stage_keys if k in stages_cfg]
+
+    # Build stage_config: only include stages that have actual overrides
+    stage_config = {}
+    for key in requested_stages:
+        overrides = stages_cfg[key]
+        if isinstance(overrides, dict) or hasattr(overrides, "items"):
+            # Only include if there are actual overrides
+            filtered = {k: v for k, v in overrides.items() if v is not None}
+            if filtered:
+                stage_config[key] = filtered
+        # If overrides is None (YAML empty value), no overrides — skip
+
+    return stage_config, requested_stages
+
+
 def run_multi_step_ingestion(
     note_path: Path,
     site_prompt_path: Path,
@@ -740,8 +807,8 @@ def run_multi_step_ingestion(
                 step_validator.load_schemas()
 
                 try:
-                    output_data = json.loads(last_output_content)
-                except json.JSONDecodeError as e:
+                    output_data = loads_json(last_output_content, path=output_path)
+                except JsonLoadError as e:
                     last_validation_errors = [f"Invalid JSON: {e}"]
                     if attempt < effective_max_retries:
                         print(
@@ -948,23 +1015,22 @@ def main():
     args = parser.parse_args()
 
     # Load config
-    from resourcery_ssg.config import load_resourcery_config
+    from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
 
     # Build CLI overrides (only for values that were explicitly provided)
-    overrides = {}
-    flag_to_key = {
-        "schemas": "schemas_dir",
-        "prompt": "prompt",
-        "model": "model",
-        "output": "output_dir",
-        "opencode_path": "opencode_bin",
-        "multi_step": "multi_step",
-        "max_retries": "max_retries",
-    }
-    for flag, key in flag_to_key.items():
-        val = getattr(args, flag, None)
-        if val is not None:
-            overrides[f"ingest.{key}"] = val
+    overrides = build_cli_overrides(
+        args,
+        "ingest",
+        {
+            "schemas": "schemas_dir",
+            "prompt": "prompt",
+            "model": "model",
+            "output": "output_dir",
+            "opencode_path": "opencode_bin",
+            "multi_step": "multi_step",
+            "max_retries": "max_retries",
+        },
+    )
 
     config = load_resourcery_config(
         config_path=args.config,
@@ -1016,47 +1082,9 @@ def main():
             sys.exit(1)
 
     # Process stages configuration (per-stage overrides and selective execution)
-    # Valid stage keys in pipeline order
-    STAGE_KEYS = ["site.config", "links", "design"]
-
-    stage_config = None
-    requested_stages = None
-
-    if stages_cfg:
-        # Validate stage keys
-        for key in stages_cfg:
-            if key not in STAGE_KEYS:
-                print(
-                    f"Error: Unknown stage key '{key}' in config.yaml ingest.stages. "
-                    f"Valid keys are: {', '.join(STAGE_KEYS)}",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-
-        # Build requested_stages in pipeline order
-        requested_stages = [k for k in STAGE_KEYS if k in stages_cfg]
-
-        # Build stage_config: only include stages that have actual overrides
-        stage_config = {}
-        for key in requested_stages:
-            overrides = stages_cfg[key]
-            if isinstance(overrides, dict) or hasattr(overrides, "items"):
-                # Only include if there are actual overrides
-                filtered = {k: v for k, v in overrides.items() if v is not None}
-                if filtered:
-                    stage_config[key] = filtered
-            # If overrides is None (YAML empty value), no overrides — skip
-
-        # Warn when stages: is used with multi_step: false
-        if not multi_step:
-            print(
-                "⚠️  Warning: 'stages:' is configured but 'multi_step' is false. "
-                "Per-stage configuration requires multi_step mode. "
-                "Ignoring stages configuration.",
-                file=sys.stderr,
-            )
-            stage_config = None
-            requested_stages = None
+    stage_config, requested_stages = build_stage_config(
+        stages_cfg, multi_step=multi_step
+    )
 
     try:
         if multi_step:

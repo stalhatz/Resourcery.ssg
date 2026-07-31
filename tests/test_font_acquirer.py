@@ -34,6 +34,12 @@ class TestReadCachedFonts:
         css_file.write_text("no comment here", encoding="utf-8")
         assert read_cached_fonts(css_file) == []
 
+    @pytest.mark.unit
+    def test_empty_when_comment_is_not_valid_json(self, tmp_path: Path):
+        css_file = tmp_path / "fonts.css"
+        css_file.write_text("/* [not json */", encoding="utf-8")
+        assert read_cached_fonts(css_file) == []
+
 
 class TestIsCacheValid:
     @pytest.mark.unit

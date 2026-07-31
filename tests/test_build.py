@@ -4,13 +4,13 @@ import pytest
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 from resourcery_ssg.build import (
-    load_json,
     validate_data,
     shuffle_filter,
     build_category_map,
     build_all_tags,
     build_site,
 )
+from resourcery_ssg.io_utils import load_json, JsonLoadError
 
 
 class TestLoadJson:
@@ -21,15 +21,18 @@ class TestLoadJson:
 
     @pytest.mark.unit
     def test_raises_on_missing_file(self, tmp_path: Path):
-        with pytest.raises(FileNotFoundError):
-            load_json(tmp_path / "nonexistent.json")
+        missing = tmp_path / "nonexistent.json"
+        with pytest.raises(JsonLoadError) as exc_info:
+            load_json(missing)
+        assert exc_info.value.path == missing
 
     @pytest.mark.unit
     def test_raises_on_invalid_json(self, tmp_path: Path):
         bad = tmp_path / "bad.json"
         bad.write_text("{bad", encoding="utf-8")
-        with pytest.raises(json.JSONDecodeError):
+        with pytest.raises(JsonLoadError) as exc_info:
             load_json(bad)
+        assert exc_info.value.path == bad
 
 
 class TestValidateData:

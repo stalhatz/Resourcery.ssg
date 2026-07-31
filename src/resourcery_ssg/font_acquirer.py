@@ -16,6 +16,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
+from resourcery_ssg.io_utils import load_json, loads_json, JsonLoadError
 from resourcery_ssg.theme_constants import get_effective_weights, weights_to_api_param
 
 GOOGLE_FONTS_API = "https://fonts.googleapis.com/css2"
@@ -57,7 +58,7 @@ def read_cached_fonts(fonts_css: Path) -> list:
     Returns: list of font name strings, or an empty list if the file
         does not exist or the metadata comment is missing or malformed.
 
-    json.JSONDecodeError: caught internally, returns empty list.
+    JsonLoadError: caught internally, returns empty list.
     """
 
     if not fonts_css.exists():
@@ -67,8 +68,8 @@ def read_cached_fonts(fonts_css: Path) -> list:
     if not match:
         return []
     try:
-        return json.loads(match.group(1))
-    except json.JSONDecodeError:
+        return loads_json(match.group(1), source="fonts.css")
+    except JsonLoadError:
         return []
 
 
@@ -106,17 +107,15 @@ def _load_config(data_dir: Path) -> dict:
 
     Returns: dictionary of site configuration with ``theme`` populated.
 
-    FileNotFoundError: site.config.json does not exist.
-    json.JSONDecodeError: either file is not valid JSON.
+    JsonLoadError: site.config.json does not exist or either file is not
+        valid JSON.
     """
 
-    with open(data_dir / "site.config.json", "r", encoding="utf-8") as f:
-        config = json.load(f)
+    config = load_json(data_dir / "site.config.json")
 
     design_path = data_dir / "design.json"
     if design_path.exists():
-        with open(design_path, "r", encoding="utf-8") as f:
-            design = json.load(f)
+        design = load_json(design_path)
         theme = design.get("theme", {})
         if theme:
             config["theme"] = theme
@@ -418,19 +417,13 @@ def main():
     parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
     args = parser.parse_args()
 
-    from resourcery_ssg.config import load_resourcery_config
+    from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
 
-    overrides = {}
-    # Map CLI flag names to config key names
-    flag_to_key = {
-        "data": "data_dir",
-        "fonts_dir": "fonts_dir",
-        "css_dir": "css_dir",
-    }
-    for flag, key in flag_to_key.items():
-        val = getattr(args, flag, None)
-        if val is not None:
-            overrides[f"acquire-fonts.{key}"] = val
+    overrides = build_cli_overrides(
+        args,
+        "acquire-fonts",
+        {"data": "data_dir", "fonts_dir": "fonts_dir", "css_dir": "css_dir"},
+    )
 
     config = load_resourcery_config(
         config_path=args.config,

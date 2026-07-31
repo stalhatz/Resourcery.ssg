@@ -4,12 +4,13 @@ Validation script for Static Link Aggregation Website.
 Validates data files against JSON schemas and performs cross-validation.
 """
 
-import json
 import re
 import sys
 from pathlib import Path
 from jsonschema import validate, ValidationError, SchemaError
 from typing import Dict, List, Set, Tuple, Any, Optional
+
+from resourcery_ssg.io_utils import load_json, JsonLoadError
 
 
 # ============================================================================
@@ -287,27 +288,6 @@ class DataValidator:
         self.links_schema: Dict = {}
         self.design_schema: Dict = {}
 
-    def load_json(self, path: Path) -> Dict:
-        """Load and parse a JSON file, recording errors on failure.
-
-        path: filesystem path to the JSON file.
-
-        Returns: parsed dictionary, or an empty dict on failure.
-
-        FileNotFoundError: caught internally, appended to self.errors.
-        json.JSONDecodeError: caught internally, appended to self.errors.
-        """
-
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except FileNotFoundError:
-            self.errors.append(f"❌ File not found: {path}")
-            return {}
-        except json.JSONDecodeError as e:
-            self.errors.append(f"❌ Invalid JSON in {path}: {e}")
-            return {}
-
     def load_schemas(self) -> bool:
         """Load all JSON schema files from the schemas directory.
 
@@ -318,9 +298,21 @@ class DataValidator:
         links_schema_path = self.schemas_dir / "links.schema.json"
         design_schema_path = self.schemas_dir / "design.schema.json"
 
-        self.config_schema = self.load_json(config_schema_path)
-        self.links_schema = self.load_json(links_schema_path)
-        self.design_schema = self.load_json(design_schema_path)
+        try:
+            self.config_schema = load_json(config_schema_path)
+        except JsonLoadError as e:
+            self.errors.append(f"❌ {e}")
+            self.config_schema = {}
+        try:
+            self.links_schema = load_json(links_schema_path)
+        except JsonLoadError as e:
+            self.errors.append(f"❌ {e}")
+            self.links_schema = {}
+        try:
+            self.design_schema = load_json(design_schema_path)
+        except JsonLoadError as e:
+            self.errors.append(f"❌ {e}")
+            self.design_schema = {}
 
         if not self.config_schema or not self.links_schema or not self.design_schema:
             return False
@@ -337,9 +329,21 @@ class DataValidator:
         links_path = self.data_dir / "links.json"
         design_path = self.data_dir / "design.json"
 
-        self.config_data = self.load_json(config_path)
-        self.links_data = self.load_json(links_path)
-        self.design_data = self.load_json(design_path)
+        try:
+            self.config_data = load_json(config_path)
+        except JsonLoadError as e:
+            self.errors.append(f"❌ {e}")
+            self.config_data = {}
+        try:
+            self.links_data = load_json(links_path)
+        except JsonLoadError as e:
+            self.errors.append(f"❌ {e}")
+            self.links_data = {}
+        try:
+            self.design_data = load_json(design_path)
+        except JsonLoadError as e:
+            self.errors.append(f"❌ {e}")
+            self.design_data = {}
 
         if not self.config_data or not self.links_data or not self.design_data:
             return False
@@ -699,17 +703,11 @@ def main():
     parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
     args = parser.parse_args()
 
-    from resourcery_ssg.config import load_resourcery_config
+    from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
 
-    overrides = {}
-    flag_to_key = {
-        "data": "data_dir",
-        "schemas": "schemas_dir",
-    }
-    for flag, key in flag_to_key.items():
-        val = getattr(args, flag, None)
-        if val is not None:
-            overrides[f"validate.{key}"] = val
+    overrides = build_cli_overrides(
+        args, "validate", {"data": "data_dir", "schemas": "schemas_dir"}
+    )
 
     config = load_resourcery_config(
         config_path=args.config,

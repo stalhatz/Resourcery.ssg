@@ -1,4 +1,3 @@
-import json
 import pytest
 from pathlib import Path
 from resourcery_ssg.validate import DataValidator
@@ -10,28 +9,6 @@ def validator(testdata_dir: Path) -> DataValidator:
         data_dir=testdata_dir,
         schemas_dir=testdata_dir.parent.parent / "schemas",  # project root schemas/
     )
-
-
-class TestLoadJson:
-    @pytest.mark.unit
-    def test_valid_json(self, validator, testdata_dir: Path):
-        result = validator.load_json(testdata_dir / "site.config.json")
-        assert isinstance(result, dict)
-        assert "site_info" in result
-
-    @pytest.mark.unit
-    def test_file_not_found(self, validator, tmp_path: Path):
-        result = validator.load_json(tmp_path / "nonexistent.json")
-        assert result == {}
-        assert any("not found" in e for e in validator.errors)
-
-    @pytest.mark.unit
-    def test_invalid_json(self, validator, tmp_path: Path):
-        bad_file = tmp_path / "bad.json"
-        bad_file.write_text("{invalid json}", encoding="utf-8")
-        result = validator.load_json(bad_file)
-        assert result == {}
-        assert any("Invalid JSON" in e for e in validator.errors)
 
 
 class TestLoadSchemas:
@@ -47,6 +24,12 @@ class TestLoadSchemas:
         assert "title" in validator.config_schema
         assert "title" in validator.links_schema
 
+    @pytest.mark.unit
+    def test_missing_schema_file_returns_false_and_records_error(self, tmp_path: Path):
+        validator = DataValidator(data_dir=tmp_path, schemas_dir=tmp_path / "noschemas")
+        assert validator.load_schemas() is False
+        assert any("site.config.schema.json" in e for e in validator.errors)
+
 
 class TestLoadData:
     @pytest.mark.unit
@@ -54,6 +37,30 @@ class TestLoadData:
         assert validator.load_data() is True
         assert "site_info" in validator.config_data
         assert "links" in validator.links_data
+
+    @pytest.mark.unit
+    def test_missing_data_file_returns_false_and_records_error(self, tmp_path: Path):
+        validator = DataValidator(
+            data_dir=tmp_path,
+            schemas_dir=tmp_path.parent.parent / "schemas",
+        )
+        assert validator.load_data() is False
+        assert any("site.config.json" in e for e in validator.errors)
+
+    @pytest.mark.unit
+    def test_invalid_json_returns_false_and_records_error(self, tmp_path: Path):
+        (tmp_path / "site.config.json").write_text("{bad", encoding="utf-8")
+        (tmp_path / "links.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "design.json").write_text("{}", encoding="utf-8")
+        validator = DataValidator(
+            data_dir=tmp_path,
+            schemas_dir=tmp_path.parent.parent / "schemas",
+        )
+        assert validator.load_data() is False
+        assert any(
+            "site.config.json" in e and "Failed to parse" in e
+            for e in validator.errors
+        )
 
 
 class TestValidateSchema:

@@ -5,10 +5,12 @@ from types import MappingProxyType
 import pytest
 from pathlib import Path
 from resourcery_ssg.validate import DataValidator
+from resourcery_ssg.io_utils import load_json
 from resourcery_ssg.data_ingestion import (
     run_ingestion,
     run_multi_step_ingestion,
     _resolve_stage_setting,
+    build_stage_config,
 )
 
 
@@ -89,26 +91,8 @@ class TestResolveStageSetting:
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: stage_config building (extracted from config dict)
+# Unit tests: stage_config building (production helper build_stage_config)
 # ---------------------------------------------------------------------------
-
-
-STAGE_KEYS = ["site.config", "links", "design"]
-
-
-def _build_stage_config(stages_cfg):
-    """Extract the stage_config building logic to test it in isolation.
-
-    Mirrors the logic in main() and _run_ingest().
-    """
-    stage_config = {}
-    for key in [k for k in STAGE_KEYS if k in stages_cfg]:
-        overrides = stages_cfg[key]
-        if isinstance(overrides, dict) or hasattr(overrides, "items"):
-            filtered = {k: v for k, v in overrides.items() if v is not None}
-            if filtered:
-                stage_config[key] = filtered
-    return stage_config
 
 
 class TestBuildStageConfig:
@@ -119,39 +103,45 @@ class TestBuildStageConfig:
         stages = MappingProxyType({
             "design": MappingProxyType({"model": "claude-sonnet", "max_retries": 5}),
         })
-        result = _build_stage_config(stages)
-        assert result == {"design": {"model": "claude-sonnet", "max_retries": 5}}
+        stage_config, requested_stages = build_stage_config(stages)
+        assert stage_config == {"design": {"model": "claude-sonnet", "max_retries": 5}}
+        assert requested_stages == ["design"]
 
     def test_plain_dict_overrides_extracted(self):
         stages = {
             "design": {"model": "claude-sonnet", "max_retries": 5},
         }
-        result = _build_stage_config(stages)
-        assert result == {"design": {"model": "claude-sonnet", "max_retries": 5}}
+        stage_config, requested_stages = build_stage_config(stages)
+        assert stage_config == {"design": {"model": "claude-sonnet", "max_retries": 5}}
+        assert requested_stages == ["design"]
 
     def test_bare_stage_not_included(self):
         """A stage listed with no overrides (empty dict) should not appear."""
         stages = {"site.config": {}}
-        result = _build_stage_config(stages)
-        assert result == {}
+        stage_config, requested_stages = build_stage_config(stages)
+        assert stage_config == {}
+        assert requested_stages == ["site.config"]
 
     def test_bare_stage_mapping_proxy_not_included(self):
         stages = MappingProxyType({
             "site.config": MappingProxyType({}),
         })
-        result = _build_stage_config(stages)
-        assert result == {}
+        stage_config, requested_stages = build_stage_config(stages)
+        assert stage_config == {}
+        assert requested_stages == ["site.config"]
 
     def test_stage_with_only_model(self):
         stages = {"design": {"model": "claude-sonnet"}}
-        result = _build_stage_config(stages)
-        assert result == {"design": {"model": "claude-sonnet"}}
+        stage_config, requested_stages = build_stage_config(stages)
+        assert stage_config == {"design": {"model": "claude-sonnet"}}
+        assert requested_stages == ["design"]
 
     def test_stage_with_none_overrides_skipped(self):
         """A None value (empty YAML) should be skipped entirely."""
         stages = {"design": None}
-        result = _build_stage_config(stages)
-        assert result == {}
+        stage_config, requested_stages = build_stage_config(stages)
+        assert stage_config == {}
+        assert requested_stages == ["design"]
 
     def test_multiple_stages_mixed(self):
         stages = MappingProxyType({
@@ -159,11 +149,12 @@ class TestBuildStageConfig:
             "design": MappingProxyType({"model": "claude-sonnet"}),
             "links": MappingProxyType({"max_retries": 10}),
         })
-        result = _build_stage_config(stages)
-        assert result == {
+        stage_config, requested_stages = build_stage_config(stages)
+        assert stage_config == {
             "design": {"model": "claude-sonnet"},
             "links": {"max_retries": 10},
         }
+        assert requested_stages == ["site.config", "links", "design"]
 
     def test_only_stages_with_overrides_included(self):
         """Only stages that have non-None overrides appear in stage_config."""
@@ -172,11 +163,39 @@ class TestBuildStageConfig:
             "links": {},
             "design": {"max_retries": 5},
         }
-        result = _build_stage_config(stages)
-        assert result == {
+        stage_config, requested_stages = build_stage_config(stages)
+        assert stage_config == {
             "site.config": {"model": "gpt-4o"},
             "design": {"max_retries": 5},
         }
+        assert requested_stages == ["site.config", "links", "design"]
+
+    def test_unknown_stage_key_exits_1(self, capsys):
+        stages = {"bogus-stage": {}}
+        with pytest.raises(SystemExit) as exc_info:
+            build_stage_config(stages)
+        assert exc_info.value.code == 1
+        assert "Unknown stage key" in capsys.readouterr().err
+
+    def test_multi_step_false_warns_and_returns_none(self, capsys):
+        stages = {"design": {"model": "claude-sonnet"}}
+        stage_config, requested_stages = build_stage_config(stages, multi_step=False)
+        assert stage_config is None
+        assert requested_stages is None
+        err = capsys.readouterr().err
+        assert "'stages:' is configured but 'multi_step' is false" in err
+
+    def test_falsy_stages_cfg_returns_none(self):
+        for stages in (None, {}):
+            stage_config, requested_stages = build_stage_config(stages)
+            assert stage_config is None
+            assert requested_stages is None
+
+    def test_multi_step_false_without_stages_no_warning(self, capsys):
+        stage_config, requested_stages = build_stage_config({}, multi_step=False)
+        assert stage_config is None
+        assert requested_stages is None
+        assert capsys.readouterr().err == ""
 
 
 # Root of the test directory — used to locate fixtures and project dirs
@@ -231,9 +250,9 @@ def test_data_ingestion_e2e(tmp_path, pytestconfig):
     assert validator.load_schemas(), "Failed to load schemas"
 
     # Load generated data
-    validator.config_data = validator.load_json(output_dir / "site.config.json")
-    validator.links_data = validator.load_json(output_dir / "links.json")
-    validator.design_data = validator.load_json(output_dir / "design.json")
+    validator.config_data = load_json(output_dir / "site.config.json")
+    validator.links_data = load_json(output_dir / "links.json")
+    validator.design_data = load_json(output_dir / "design.json")
     assert validator.config_data, "site.config.json is empty/invalid"
     assert validator.links_data, "links.json is empty/invalid"
     assert validator.design_data, "design.json is empty/invalid"
@@ -312,9 +331,9 @@ def test_data_ingestion_multi_step_e2e(tmp_path, pytestconfig):
     )
     assert validator.load_schemas()
 
-    validator.config_data = validator.load_json(output_dir / "site.config.json")
-    validator.links_data = validator.load_json(output_dir / "links.json")
-    validator.design_data = validator.load_json(output_dir / "design.json")
+    validator.config_data = load_json(output_dir / "site.config.json")
+    validator.links_data = load_json(output_dir / "links.json")
+    validator.design_data = load_json(output_dir / "design.json")
 
     assert validator.config_data
     assert validator.links_data

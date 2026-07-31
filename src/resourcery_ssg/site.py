@@ -148,34 +148,12 @@ COMMAND_FLAGS = {
 }
 
 
-def _extract_overrides(args, command: str, known_config_keys: list) -> dict:
-    """Build a CLI overrides dict from parsed args for a specific command.
-
-    Args:
-        args: Parsed argparse namespace.
-        command: The config section name (e.g. "build", "validate").
-        known_config_keys: List of config key names to extract.
-
-    Returns:
-        Dict with dotted keys suitable for load_resourcery_config(overrides=...).
-    """
-    config_to_arg = {v: k for k, v in ARG_TO_CONFIG_KEY.items()}
-    overrides = {}
-    for config_key in known_config_keys:
-        arg_name = config_to_arg.get(config_key)
-        if arg_name and hasattr(args, arg_name):
-            val = getattr(args, arg_name)
-            if val is not None:
-                overrides[f"{command}.{config_key}"] = val
-    return overrides
-
-
 def main():
     """Parse arguments, load config, and dispatch to the requested subcommand."""
     parser = _build_parser()
     args = parser.parse_args()
 
-    from resourcery_ssg.config import load_resourcery_config
+    from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
 
     if args.command == "all":
         _run_all(args)
@@ -186,7 +164,10 @@ def main():
         sys.exit(1)
 
     known_flags = COMMAND_FLAGS[args.command]
-    overrides = _extract_overrides(args, args.command, known_flags)
+    flag_to_key = {
+        arg: key for arg, key in ARG_TO_CONFIG_KEY.items() if key in known_flags
+    }
+    overrides = build_cli_overrides(args, args.command, flag_to_key)
 
     config = load_resourcery_config(
         config_path=args.config,
@@ -214,33 +195,9 @@ def main():
         acquire_fonts(**config["acquire-fonts"])
 
     elif args.command == "acquire-images":
-        from resourcery_ssg.image_acquirer import ImageAcquirer
-        import json
+        from resourcery_ssg.image_acquirer import acquire_images_from_config
 
-        links_path = Path(config["acquire-images"]["links"])
-        images_dir = Path(config["acquire-images"]["images_dir"])
-
-        if not links_path.exists():
-            print(f"❌ Links file not found: {links_path}")
-            sys.exit(1)
-
-        with open(links_path, "r", encoding="utf-8") as f:
-            links_data = json.load(f)
-
-        acquirer = ImageAcquirer(
-            images_dir=images_dir,
-            static_dir=config["build"]["static_dir"],
-            links_path=links_path,
-        )
-        updated_data = acquirer.acquire_all(links_data, force=getattr(args, "force", False))
-
-        backup_path = links_path.with_suffix(".json.bak")
-        links_path.rename(backup_path)
-
-        with open(links_path, "w", encoding="utf-8") as f:
-            json.dump(updated_data, f, indent=2, ensure_ascii=False)
-
-        print(f"\n✅ Updated {links_path}")
+        sys.exit(0 if acquire_images_from_config(config, force=args.force) else 1)
 
     elif args.command == "acquire-js":
         from resourcery_ssg.js_vendor import acquire_js
@@ -300,7 +257,11 @@ def _run_ingest(config, args=None):
             print(f"Error: {label} path does not exist: {path_value}", file=sys.stderr)
             sys.exit(1)
 
-    from resourcery_ssg.data_ingestion import run_ingestion, run_multi_step_ingestion
+    from resourcery_ssg.data_ingestion import (
+        run_ingestion,
+        run_multi_step_ingestion,
+        build_stage_config,
+    )
 
     multi_step = ingest_cfg.get("multi_step", False)
     max_retries = ingest_cfg.get("max_retries", 3)
@@ -308,33 +269,9 @@ def _run_ingest(config, args=None):
 
     # Process stages configuration (per-stage overrides and selective execution)
     stages_cfg = ingest_cfg.get("stages")
-    STAGE_KEYS = ["site.config", "links", "design"]
-
-    stage_config = None
-    requested_stages = None
-
-    if stages_cfg and multi_step:
-        # Validate stage keys
-        for key in stages_cfg:
-            if key not in STAGE_KEYS:
-                print(
-                    f"Error: Unknown stage key '{key}' in config.yaml ingest.stages. "
-                    f"Valid keys are: {', '.join(STAGE_KEYS)}",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-
-        # Build requested_stages in pipeline order
-        requested_stages = [k for k in STAGE_KEYS if k in stages_cfg]
-
-        # Build stage_config: only include stages that have actual overrides
-        stage_config = {}
-        for key in requested_stages:
-            overrides = stages_cfg[key]
-            if isinstance(overrides, dict) or hasattr(overrides, "items"):
-                filtered = {k: v for k, v in overrides.items() if v is not None}
-                if filtered:
-                    stage_config[key] = filtered
+    stage_config, requested_stages = build_stage_config(
+        stages_cfg, multi_step=multi_step
+    )
 
     if multi_step:
         prompts_dir = Path(ingest_cfg["prompt"]).resolve().parent
@@ -409,24 +346,28 @@ def _run_all(args):
     Ingestion is optional — skipped if no ``ingest.model`` is configured.
     Stops on first failure.
     """
-    from resourcery_ssg.config import load_resourcery_config
+    from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
 
-    overrides = _extract_overrides(args, "build", COMMAND_FLAGS["build"])
+    def _flag_to_key(command):
+        known_keys = COMMAND_FLAGS[command]
+        return {arg: key for arg, key in ARG_TO_CONFIG_KEY.items() if key in known_keys}
+
+    overrides = build_cli_overrides(args, "build", _flag_to_key("build"))
     # Also extract flags for other commands — they share some flags with build
     overrides.update(
-        _extract_overrides(args, "validate", COMMAND_FLAGS["validate"])
+        build_cli_overrides(args, "validate", _flag_to_key("validate"))
     )
     overrides.update(
-        _extract_overrides(args, "acquire-fonts", COMMAND_FLAGS["acquire-fonts"])
+        build_cli_overrides(args, "acquire-fonts", _flag_to_key("acquire-fonts"))
     )
     overrides.update(
-        _extract_overrides(args, "acquire-images", COMMAND_FLAGS["acquire-images"])
+        build_cli_overrides(args, "acquire-images", _flag_to_key("acquire-images"))
     )
     overrides.update(
-        _extract_overrides(args, "ingest", COMMAND_FLAGS["ingest"])
+        build_cli_overrides(args, "ingest", _flag_to_key("ingest"))
     )
     overrides.update(
-        _extract_overrides(args, "acquire-js", COMMAND_FLAGS["acquire-js"])
+        build_cli_overrides(args, "acquire-js", _flag_to_key("acquire-js"))
     )
 
     config = load_resourcery_config(
@@ -496,31 +437,9 @@ def _run_all(args):
     print("\n" + "=" * 60)
     print(f"STEP {step}/{total_steps}: Acquire images")
     print("=" * 60)
-    from resourcery_ssg.image_acquirer import ImageAcquirer
-    import json
+    from resourcery_ssg.image_acquirer import acquire_images_from_config
 
-    links_path = Path(config["acquire-images"]["links"])
-    images_dir = Path(config["acquire-images"]["images_dir"])
-
-    if links_path.exists():
-        with open(links_path, "r", encoding="utf-8") as f:
-            links_data = json.load(f)
-
-        acquirer = ImageAcquirer(
-            images_dir=images_dir,
-            static_dir=config["build"]["static_dir"],
-            links_path=links_path,
-        )
-        updated_data = acquirer.acquire_all(links_data, force=getattr(args, "force", False))
-
-        backup_path = links_path.with_suffix(".json.bak")
-        links_path.rename(backup_path)
-
-        with open(links_path, "w", encoding="utf-8") as f:
-            json.dump(updated_data, f, indent=2, ensure_ascii=False)
-        print("\n✓ Images acquired.")
-    else:
-        print(f"  ⚠️  Links file not found: {links_path} — skipping image acquisition")
+    acquire_images_from_config(config, force=getattr(args, "force", False))
 
     # 5. Build
     step += 1
