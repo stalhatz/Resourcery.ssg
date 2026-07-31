@@ -65,6 +65,38 @@ describe('tag-manager.js', () => {
     expect(state.$visibleCards.get()).toEqual(['rd']);
   });
 
+  // B7 regression: tags made only of non-ASCII letters (Greek, Cyrillic,
+  // CJK, …) must slugify to a non-empty Unicode slug. The pre-fix char-class
+  // strip /[^\w\-]+/ without the 'u' flag treated \w as ASCII-only, so
+  // 'δύο' -> '' and the whole tag filter silently no-op'd (empty slug is
+  // falsy in setActiveTag's `if (slug)` branch).
+  it("slugify('δύο'): Greek tag slugifies to 'δυο', not ''", async () => {
+    const { TagManager } = await setup();
+    expect(TagManager.slugify('δύο')).toBe('δυο');
+  });
+
+  it("slugify('тест'): Cyrillic tag slugifies to 'тест', not '' (sanity)", async () => {
+    const { TagManager } = await setup();
+    expect(TagManager.slugify('тест')).toBe('тест');
+    expect(TagManager.slugify('日本語')).toBe('日本語');
+  });
+
+  it("setActiveTag('δύο', true): $activeTag='δυο', hash '#tag-δυο' (URL-encoded), matches raw data-tags 'δύο'", async () => {
+    const html = `
+      <article class="link-card" id="gr" data-title="Δύο" data-tags="δύο" data-category="frontend"></article>
+      <article class="link-card" id="js" data-title="JS" data-tags="JavaScript" data-category="frontend"></article>
+    `;
+    const { state, TagManager } = await setup(BROWSE, html);
+    TagManager.setActiveTag('δύο', true);
+    expect(state.$activeTag.get()).toBe('δυο');
+    expect(state.$activeSearch.get()).toBeNull();
+    expect(state.$activeCategory.get()).toBeNull();
+    // Browsers percent-encode the fragment; decode to compare with the raw slug
+    expect(window.location.hash.startsWith('#tag-')).toBe(true);
+    expect(decodeURIComponent(window.location.hash)).toBe('#tag-δυο');
+    expect(state.$visibleCards.get()).toEqual(['gr']);
+  });
+
   it('setActiveTag(null,true) with no category: history.pushState clears the hash', async () => {
     const { TagManager } = await setup();
     window.location.hash = '#tag-foo';

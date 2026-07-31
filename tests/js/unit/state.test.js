@@ -60,6 +60,8 @@ describe('state.js', () => {
       <article class="link-card" id="fr" data-title="Français" data-tags="Français" data-category="frontend"></article>
       <article class="link-card" id="ml" data-title="ML" data-tags="machine learning" data-category="ai"></article>
       <article class="link-card" id="plain" data-title="Plain" data-tags="JavaScript" data-category="frontend"></article>
+      <article class="link-card" id="gr" data-title="Δύο" data-tags="δύο" data-category="frontend"></article>
+      <article class="link-card" id="ru" data-title="Тест" data-tags="тест" data-category="frontend"></article>
     `;
 
     it("matches raw tag 'R&D' when $activeTag is the slug 'rd'", async () => {
@@ -78,6 +80,20 @@ describe('state.js', () => {
       const s = await fresh({ html: SPECIAL_CARDS });
       s.$activeTag.set('machine-learning');
       expect(s.$visibleCards.get()).toEqual(['ml']);
+    });
+
+    // B7 regression: non-ASCII tags (Greek, Cyrillic, …) must match. The
+    // pre-fix char-class strip produced an empty slug, so the filter no-op'd.
+    it("matches raw tag 'δύο' when $activeTag is the slug 'δυο' (Greek)", async () => {
+      const s = await fresh({ html: SPECIAL_CARDS });
+      s.$activeTag.set('δυο');
+      expect(s.$visibleCards.get()).toEqual(['gr']);
+    });
+
+    it("matches raw tag 'тест' when $activeTag is 'тест' (Cyrillic)", async () => {
+      const s = await fresh({ html: SPECIAL_CARDS });
+      s.$activeTag.set('тест');
+      expect(s.$visibleCards.get()).toEqual(['ru']);
     });
 
     it("'C++' and 'C#' both slug to 'c'; slug 'c' matches both (known collision)", async () => {
