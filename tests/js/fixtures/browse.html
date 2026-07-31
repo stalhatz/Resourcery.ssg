@@ -1,0 +1,161 @@
+<!-- tests/js/fixtures/browse.html
+     Full DOM the browse-page modules need. Carries every id cached by
+     static/js/dom.js plus the structures the modules walk (.link-card,
+     .category-trigger / .subcategory-list / .subcategory-link, .card-tags .tag,
+     .filter-dropdown / .filter-dropdown-option, modal shell). -->
+<!doctype html>
+<html data-theme="light">
+  <head><meta charset="utf-8" /><title>Browse</title></head>
+  <body data-entry-animation="fade-slide-up">
+    <!-- search -->
+    <input id="searchInput" type="text" />
+    <div id="searchSuggestions" class="search-suggestions"></div>
+    <span id="searchValue"></span>
+
+    <!-- category dropdown (custom + native select) -->
+    <button id="categoryTrigger" aria-expanded="false" aria-haspopup="listbox">Category</button>
+    <select id="categoryFilter">
+      <option value="">All Categories</option>
+      <option value="frontend">Frontend</option>
+      <option value="backend">Backend</option>
+      <option value="devops">DevOps</option>
+      <option value="web">Web</option>
+    </select>
+    <div id="categoryDropdown" class="filter-dropdown">
+      <button class="filter-dropdown-option" data-value="">All Categories</button>
+      <button class="filter-dropdown-option" data-value="frontend">Frontend</button>
+      <button class="filter-dropdown-option" data-value="backend">Backend</button>
+      <button class="filter-dropdown-option" data-value="devops">DevOps</button>
+      <button class="filter-dropdown-option" data-value="web">Web</button>
+    </div>
+
+    <!-- sort dropdown (custom + native select) -->
+    <button id="sortTrigger" aria-expanded="false" aria-haspopup="listbox">Sort</button>
+    <select id="sortFilter">
+      <option value="newest">Newest</option>
+      <option value="oldest">Oldest</option>
+      <option value="alphabetical">Alphabetical</option>
+    </select>
+    <div id="sortDropdown" class="filter-dropdown">
+      <button class="filter-dropdown-option" data-value="newest">Newest</button>
+      <button class="filter-dropdown-option" data-value="oldest">Oldest</button>
+      <button class="filter-dropdown-option" data-value="alphabetical">Alphabetical</button>
+    </div>
+
+    <!-- theme + sidebar -->
+    <button id="themeToggle">Theme</button>
+    <button id="sidebarToggle">Sidebar</button>
+    <aside id="sidebar">
+      <button class="category-trigger" data-category-id="web" aria-controls="subcat-web" aria-expanded="false">Web</button>
+      <ul id="subcat-web" class="subcategory-list">
+        <li><a class="subcategory-link" data-category="frontend" href="#">Frontend</a></li>
+        <li><a class="subcategory-link" data-category="backend" href="#">Backend</a></li>
+      </ul>
+      <button class="category-trigger" data-category-id="devops" aria-controls="subcat-devops" aria-expanded="false">DevOps</button>
+      <ul id="subcat-devops" class="subcategory-list">
+        <li><a class="subcategory-link" data-category="devops" href="#">DevOps</a></li>
+      </ul>
+    </aside>
+
+    <!-- filter header -->
+    <span id="filterText1"></span>
+    <span id="filterText2"></span>
+    <span id="filterValue1"></span>
+
+    <!-- results -->
+    <div id="resultsCount"></div>
+    <div id="noResults" style="display:none;"></div>
+
+    <!-- cards -->
+    <div id="linksGrid">
+      <article class="link-card" id="card-1"
+        data-title="Alpha Tool"
+        data-summary="Short summary"
+        data-description="Full alpha description"
+        data-category="frontend"
+        data-tags="JavaScript,React,Frontend"
+        data-pricing="Free"
+        data-language="JavaScript"
+        data-url="https://alpha.example.com"
+        data-image="img1.jpg"
+        data-created="2024-01-15">
+        <div class="card-tags">
+          <span class="tag" data-tag="JavaScript">JavaScript</span>
+          <span class="tag" data-tag="React">React</span>
+          <span class="tag" data-tag="Frontend">Frontend</span>
+        </div>
+      </article>
+
+      <article class="link-card" id="card-2"
+        data-title="Beta Library"
+        data-summary="Beta summary"
+        data-category="backend"
+        data-tags="Python,API,Backend"
+        data-pricing="Paid"
+        data-language="Python"
+        data-url="https://beta.example.com"
+        data-image="img2.jpg"
+        data-created="2024-03-20">
+        <!-- no data-description -> modal falls back to summary -->
+        <div class="card-tags">
+          <span class="tag" data-tag="Python">Python</span>
+          <span class="tag" data-tag="API">API</span>
+          <span class="tag" data-tag="Backend">Backend</span>
+        </div>
+      </article>
+
+      <article class="link-card" id="card-3"
+        data-title="Gamma Service"
+        data-summary="Gamma summary"
+        data-description="Gamma description"
+        data-category="devops"
+        data-tags="Docker,Kubernetes,DevOps"
+        data-pricing="Paid"
+        data-language="Go"
+        data-url="https://gamma.example.com"
+        data-created="2024-02-10">
+        <!-- no data-image -> modal uses placeholder /static/images/placeholders/devops.jpg -->
+        <div class="card-tags">
+          <span class="tag" data-tag="Docker">Docker</span>
+          <span class="tag" data-tag="Kubernetes">Kubernetes</span>
+          <span class="tag" data-tag="DevOps">DevOps</span>
+        </div>
+      </article>
+
+      <article class="link-card" id="card-4"
+        data-title="Delta App"
+        data-summary="Delta summary"
+        data-description="Delta description"
+        data-category="frontend"
+        data-tags="Vue,JavaScript"
+        data-pricing="Freemium"
+        data-language="TypeScript"
+        data-url="https://delta.example.com"
+        data-image="img4.jpg"
+        data-created="2023-12-01">
+        <div class="card-tags">
+          <span class="tag" data-tag="Vue">Vue</span>
+          <span class="tag" data-tag="JavaScript">JavaScript</span>
+        </div>
+      </article>
+    </div>
+
+    <!-- modal shell -->
+    <div id="modalOverlay" style="display:none;">
+      <div id="modal" tabindex="-1" role="dialog">
+        <button id="modalClose">Close</button>
+        <button id="modalShare">🔗</button>
+        <a id="modalVisit" href="#">Visit</a>
+        <div id="modalImage"></div>
+        <div id="modalTags"></div>
+        <h2 id="modalTitle"></h2>
+        <p id="modalSummary"></p>
+        <p id="modalDescription"></p>
+        <p id="modalCategory"></p>
+        <p id="modalPricing"></p>
+        <p id="modalLanguage"></p>
+        <a id="shareTwitter" href="#">Share on Twitter</a>
+      </div>
+    </div>
+  </body>
+</html>

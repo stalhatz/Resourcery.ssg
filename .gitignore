@@ -50,3 +50,6 @@ AGENTS.local.md
 # Pipeline workspace
 workspace/
 userdata/
+
+# Node (Vitest + jsdom dev-only test toolchain)
+node_modules/

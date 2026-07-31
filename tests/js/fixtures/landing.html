@@ -1,0 +1,15 @@
+<!-- tests/js/fixtures/landing.html
+     Minimal landing-page DOM. #searchInput with a parent wrapper (the
+     setupSearchSuggestions code mutates searchInput.parentNode.style.position
+     and appends the suggestions box to it). window.ALL_TAGS is NOT in the file
+     — it is seeded per test via loadFresh({ globals: { ALL_TAGS: [...] } }),
+     mirroring how build.py inlines it into base.html. -->
+<!doctype html>
+<html data-theme="light">
+  <head><meta charset="utf-8" /><title>Landing</title></head>
+  <body>
+    <div class="search-wrapper">
+      <input id="searchInput" type="text" />
+    </div>
+  </body>
+</html>
