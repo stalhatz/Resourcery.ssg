@@ -1,7 +1,7 @@
 ---
 size: big
 modified_date: 2026-05-11
-implemented_git_tag: d405920
+implemented_git_tag: specs/refactors/data_design_split.md/implemented
 ---
 
 # Split Data from Design in JSON Schema

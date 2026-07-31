@@ -2,6 +2,7 @@ import json
 import sys
 import pytest
 from pathlib import Path
+from jinja2 import Environment, FileSystemLoader
 from resourcery_ssg.build import (
     load_json,
     validate_data,
@@ -105,6 +106,65 @@ class TestIntegrationBuild:
         assert not (build_paths["output_dir"] / "prompt.html").exists()
         index_html = (build_paths["output_dir"] / "index.html").read_text("utf-8")
         assert "attribution-note" not in index_html
+
+
+class TestSearchBarFeatureFlag:
+    """Regression: search bar disappeared despite features.search.enabled=true.
+
+    The template reads config.features.search.enabled (single nesting, per
+    specs/refactors/data_design_split.md). The schema accidentally gained an
+    extra nesting level (features.search.search.enabled) which made the flag
+    resolve to falsy and hid the search bar.
+    """
+
+    @staticmethod
+    def _render_base(config: dict, links: dict) -> str:
+        env = Environment(loader=FileSystemLoader("templates"), autoescape=True)
+        return env.get_template("base.html").render(
+            config=config,
+            links=links,
+            category_map=build_category_map(config),
+            all_tags=build_all_tags(links),
+            theme_tokens={},
+            heading_weight="normal",
+            heading_letter_spacing="normal",
+            attribution_enabled=False,
+        )
+
+    @pytest.mark.unit
+    def test_schema_pins_single_nesting_for_search_flag(self, testdata_dir: Path):
+        """The schema must declare features.search.enabled (not .search.search.enabled)."""
+        schema = json.loads(
+            (testdata_dir.parent.parent / "schemas" / "site.config.schema.json")
+            .read_text(encoding="utf-8")
+        )
+        search_schema = schema["properties"]["features"]["properties"]["search"]["properties"]
+        assert "enabled" in search_schema
+        assert "search" not in search_schema
+
+    @pytest.mark.unit
+    def test_committed_configs_resolve_search_enabled(self):
+        """Every committed site.config.json must expose features.search.enabled as a bool."""
+        root = Path(__file__).parent.parent
+        config_files = [root / "data" / "site.config.json"]
+        config_files += sorted((root / "userdata").glob("*/data/site.config.json"))
+        assert config_files, "no site.config.json files found"
+        for path in config_files:
+            config = json.loads(path.read_text(encoding="utf-8"))
+            enabled = config.get("features", {}).get("search", {}).get("enabled")
+            assert isinstance(enabled, bool), f"{path}: features.search.enabled is {enabled!r}"
+
+    @pytest.mark.unit
+    def test_search_bar_rendered_with_committed_config(self):
+        """Rendering base.html with the real data/site.config.json must emit the search input."""
+        root = Path(__file__).parent.parent
+        config = json.loads((root / "data" / "site.config.json").read_text(encoding="utf-8"))
+        design = json.loads((root / "data" / "design.json").read_text(encoding="utf-8"))
+        links = json.loads((root / "data" / "links.json").read_text(encoding="utf-8"))
+        config["theme"] = design["theme"]  # build.py merges design.json into config
+
+        html = self._render_base(config, links)
+        assert 'id="searchInput"' in html
 
 
 class TestMarkdownConversion:

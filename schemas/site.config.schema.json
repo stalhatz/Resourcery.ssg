@@ -113,12 +113,7 @@
         "search": {
           "type": "object",
           "properties": {
-            "search": {
-              "type": "object",
-              "properties": {
-                "enabled":   { "type": "boolean", "description": "Whether the search feature is active on the site. Set to false to hide the search bar and disable search functionality entirely." }
-              }
-            }
+            "enabled":   { "type": "boolean", "description": "Whether the search feature is active on the site. Set to false to hide the search bar and disable search functionality entirely." }
           }
         },
         "dark_mode": {
