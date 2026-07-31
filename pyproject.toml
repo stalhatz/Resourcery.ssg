@@ -8,7 +8,7 @@ packages = [{ include = "resourcery_ssg", from = "src" }]
 include = ["src/resourcery_ssg/config.yaml"]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.10"
 jinja2 = "^3.0.0"
 jsonschema = "^4.0.0"
 pyyaml = "^6.0.0"
