@@ -122,6 +122,48 @@ describe('state.js', () => {
     });
   });
 
+  // B9 regression: free-text search must fold diacritics (NFD + combining
+  // mark strip + lowercase — the same normalization slugify applies to tags),
+  // so 'francais' matches 'Français' and 'δυο' matches 'δύο' in BOTH
+  // directions (accented query ↔ unaccented content).
+  describe('$visibleCards: search matching folds diacritics (B9)', () => {
+    const B9_CARDS = `
+      <article class="link-card" id="fr" data-title="Français" data-tags="Français" data-category="frontend"></article>
+      <article class="link-card" id="gr" data-title="Δύο" data-tags="δύο" data-category="frontend"></article>
+      <article class="link-card" id="plain" data-title="Plain" data-tags="JavaScript" data-category="frontend"></article>
+    `;
+
+    it("search 'francais' (unaccented) matches the accented title 'Français'", async () => {
+      const s = await fresh({ html: B9_CARDS });
+      s.$activeSearch.set('francais');
+      expect(s.$visibleCards.get()).toEqual(['fr']);
+    });
+
+    it("search 'français' (accented) matches the accented title 'Français' (same-fold direction)", async () => {
+      const s = await fresh({ html: B9_CARDS });
+      s.$activeSearch.set('français');
+      expect(s.$visibleCards.get()).toEqual(['fr']);
+    });
+
+    it("search 'δυο' (unaccented Greek) matches the tag 'δύο'", async () => {
+      const s = await fresh({ html: B9_CARDS });
+      s.$activeSearch.set('δυο');
+      expect(s.$visibleCards.get()).toEqual(['gr']);
+    });
+
+    it("search 'δύο' (accented Greek) matches the tag 'δύο' (same-fold direction)", async () => {
+      const s = await fresh({ html: B9_CARDS });
+      s.$activeSearch.set('δύο');
+      expect(s.$visibleCards.get()).toEqual(['gr']);
+    });
+
+    it('non-matching ASCII search still excludes accented cards (no false positives)', async () => {
+      const s = await fresh({ html: B9_CARDS });
+      s.$activeSearch.set('zzz');
+      expect(s.$visibleCards.get()).toEqual([]);
+    });
+  });
+
   it('$visibleCards: search filter matches title/summary/tags substring, case-insensitive', async () => {
     const s = await fresh();
     s.$activeSearch.set('CAR'); // summary "Red car"
@@ -196,6 +238,35 @@ describe('state.js', () => {
     expect(applied).toEqual({ tag: null, search: 'bar baz', category: null });
   });
 
+  // B8 regression: the browser percent-encodes non-ASCII fragments (writing
+  // 'tag-δυο' makes location.hash read '#tag-%CE%B4%CF%85%CE%BF'), so the tag
+  // branch must decode like the search branch does — otherwise the atom
+  // carries the raw encoding and slug-matching ('δυο' vs '%CE%B4%CF%85%CE%BF')
+  // fails, leaving 0 cards.
+  it("bridgeFromHash: '#tag-%CE%B4%CF%85%CE%BF' -> {tag:'δυο', …} (percent-encoded tag is decoded)", async () => {
+    const s = await fresh({ url: `${BROWSE}#tag-%CE%B4%CF%85%CE%BF` });
+    let applied = null;
+    s.bridgeFromHash((next) => (applied = next));
+    expect(applied).toEqual({ tag: 'δυο', search: null, category: null });
+  });
+
+  // B8 / E4 regression: malformed percent-sequences (a hand-typed '#tag-%' or
+  // '#search-%') must NOT throw URIError — the hash handler must survive and
+  // fall back to the raw segment (the filter simply won't match garbage).
+  it("bridgeFromHash: malformed '#tag-%' does not throw; falls back to raw segment '%'", async () => {
+    const s = await fresh({ url: `${BROWSE}#tag-%` });
+    let applied = null;
+    expect(() => s.bridgeFromHash((next) => (applied = next))).not.toThrow();
+    expect(applied).toEqual({ tag: '%', search: null, category: null });
+  });
+
+  it("bridgeFromHash: malformed '#search-%' does not throw; falls back to raw segment '%'", async () => {
+    const s = await fresh({ url: `${BROWSE}#search-%` });
+    let applied = null;
+    expect(() => s.bridgeFromHash((next) => (applied = next))).not.toThrow();
+    expect(applied).toEqual({ tag: null, search: '%', category: null });
+  });
+
   it("bridgeFromHash: '#category-x' -> {category:'x', …}", async () => {
     const s = await fresh({ url: `${BROWSE}#category-x` });
     let applied = null;
@@ -246,6 +317,21 @@ describe('state.js', () => {
     s.$activeSearch.set(null);
     s.$activeCategory.set('web');
     expect(window.location.hash).toBe('#category-web');
+  });
+
+  // B8 regression: serialiseHash must encode the tag segment exactly like the
+  // search segment. Writing the raw 'tag-δυο' would make the browser report
+  // '#tag-%CE%B4%CF%85%CE%BF', so writeHash's `hash !== location.hash`
+  // comparison (and the atom->hash round-trip) would never be stable.
+  it("bridgeToHash: '$activeTag=δυο' writes the percent-encoded form '#tag-%CE%B4%CF%85%CE%BF'", async () => {
+    const s = await fresh();
+    s.bridgeToHash({
+      $activeTag: s.$activeTag,
+      $activeSearch: s.$activeSearch,
+      $activeCategory: s.$activeCategory,
+    });
+    s.$activeTag.set('δυο');
+    expect(window.location.hash).toBe('#tag-%CE%B4%CF%85%CE%BF');
   });
 
   it('bridgeToHash: no-op when serialised hash already equals window.location.hash', async () => {
@@ -391,6 +477,9 @@ describe('state.js', () => {
       { name: '#search-bar%20baz', url: `${BROWSE}#search-bar%20baz` },
       { name: '#category-x', url: `${BROWSE}#category-x` },
       { name: "bare ''/empty", url: BROWSE },
+      // B8: an encoded Greek tag decodes to 'δυο' and serialises back to the
+      // identical encoded hash — decode(encode(x)) === x round-trip.
+      { name: '#tag-%CE%B4%CF%85%CE%BF (encoded Greek)', url: `${BROWSE}#tag-%CE%B4%CF%85%CE%BF` },
     ];
 
     for (const c of cases) {

@@ -67,6 +67,28 @@ describe('handle-hash-change.js', () => {
     expect(document.getElementById('resultsCount').textContent).toBe('0 items');
   });
 
+  // B8 / E4 regression: a hand-typed malformed percent-sequence ('#tag-%' or
+  // '#search-%') must NOT crash the hashchange handler with URIError. The
+  // atoms end up holding the raw segment (non-matching — the filter simply
+  // shows 0 items), the header shows the raw form, and filterCards still runs.
+  it("handleHashChange: malformed '#tag-%' does not throw; atom='%', filter runs, header shows '#%'", async () => {
+    const { state, handleHashChange } = await setup(`${BROWSE}#tag-%`);
+    expect(() => handleHashChange()).not.toThrow();
+    expect(state.$activeTag.get()).toBe('%');
+    expect(state.$activeSearch.get()).toBeNull();
+    expect(state.$activeCategory.get()).toBeNull();
+    expect(document.getElementById('resultsCount').textContent).toBe('0 items');
+    expect(document.getElementById('filterValue1').textContent).toBe('#%');
+  });
+
+  it("handleHashChange: malformed '#search-%' does not throw; atom='%', filter runs", async () => {
+    const { state, handleHashChange } = await setup(`${BROWSE}#search-%`);
+    expect(() => handleHashChange()).not.toThrow();
+    expect(state.$activeSearch.get()).toBe('%');
+    expect(state.$activeTag.get()).toBeNull();
+    expect(document.getElementById('resultsCount').textContent).toBe('0 items');
+  });
+
   it('handleHashChange: calls filterCards() (browse page)', async () => {
     const { handleHashChange } = await setup(BROWSE); // no hash -> all visible
     handleHashChange();

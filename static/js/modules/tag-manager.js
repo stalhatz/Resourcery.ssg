@@ -7,7 +7,7 @@
  */
 
 import { $activeTag, $activeSearch, $activeCategory, batchAtomWrites } from './state.js';
-import { slugify } from './slugify.js';
+import { slugify, foldDiacritics } from './slugify.js';
 import { dom } from '../dom.js';
 import { filterCards } from './filter-cards.js';
 
@@ -230,12 +230,14 @@ export const TagManager = {
         var value = searchInput.value.trim();
 
         if (value.length >= 1) {
+          // B9: fold diacritics on both the query and the tag so 'francais'
+          // suggests 'Français' and 'δυο' suggests 'δύο'.
           var query = value.startsWith('#')
-            ? value.substring(1).toLowerCase()
-            : value.toLowerCase();
+            ? foldDiacritics(value.substring(1))
+            : foldDiacritics(value);
           var matches = self.allTags
             .filter(function (tag) {
-              return tag.toLowerCase().includes(query);
+              return foldDiacritics(tag).includes(query);
             })
             .slice(0, 8);
 

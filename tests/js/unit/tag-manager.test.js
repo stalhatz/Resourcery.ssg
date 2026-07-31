@@ -97,6 +97,30 @@ describe('tag-manager.js', () => {
     expect(state.$visibleCards.get()).toEqual(['gr']);
   });
 
+  // B8 regression: the atom carries the DECODED slug and the URL the ENCODED
+  // form; the hashchange round-trip (parse the URL the browser reports) must
+  // decode back to the same slug so slug-matching keeps working. Exercise the
+  // real user tag with a capital delta ('Δύο').
+  it("setActiveTag('Δύο', true): atom 'δυο', encoded hash '#tag-%CE%B4%CF%85%CE%BF'; round-trip parse decodes back to 'δυο' and matches raw data-tags 'Δύο'", async () => {
+    const html = `
+      <article class="link-card" id="gr" data-title="Δύο" data-tags="Δύο" data-category="frontend"></article>
+      <article class="link-card" id="js" data-title="JS" data-tags="JavaScript" data-category="frontend"></article>
+    `;
+    const { state, TagManager } = await setup(BROWSE, html);
+    TagManager.setActiveTag('Δύο', true);
+    // atom carries the decoded slug (header display '#' + atom shows '#δυο')
+    expect(state.$activeTag.get()).toBe('δυο');
+    // the URL holds the percent-encoded form, exactly as a browser reports it
+    expect(window.location.hash).toBe('#tag-%CE%B4%CF%85%CE%BF');
+    // round-trip: the hashchange handler parses that hash and re-applies it
+    let parsed = null;
+    state.bridgeFromHash((next) => (parsed = next));
+    expect(parsed).toEqual({ tag: 'δυο', search: null, category: null });
+    state.$activeTag.set(parsed.tag);
+    expect(state.$activeTag.get()).toBe('δυο');
+    expect(state.$visibleCards.get()).toEqual(['gr']);
+  });
+
   it('setActiveTag(null,true) with no category: history.pushState clears the hash', async () => {
     const { TagManager } = await setup();
     window.location.hash = '#tag-foo';
@@ -325,6 +349,44 @@ describe('tag-manager.js', () => {
       input2.dispatchEvent(new Event('input'));
       vi.advanceTimersByTime(200);
       expect(document.getElementById('searchSuggestions').querySelectorAll('.suggestion-item').length).toBe(8);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // B9 regression: suggestions must fold diacritics on BOTH the query and the
+  // tag, so 'francais' suggests 'Français' and 'δυο' suggests 'δύο' (with and
+  // without the '#'-prefix). The rendered item keeps the original tag text.
+  it('setupSearchSuggestions: query "francais" suggests tag "Français"; "#δυο" suggests "δύο" (diacritic folding)', async () => {
+    vi.useFakeTimers();
+    try {
+      const { TagManager } = await setup(LANDING, LANDING_FIX(), {
+        ALL_TAGS: ['Français', 'δύο', 'JavaScript'],
+      });
+      TagManager.init();
+      const input = document.getElementById('searchInput');
+      const box = () => document.getElementById('searchSuggestions');
+
+      input.value = 'francais';
+      input.dispatchEvent(new Event('input'));
+      vi.advanceTimersByTime(200);
+      let items = box().querySelectorAll('.suggestion-item');
+      expect(items.length).toBe(1);
+      expect(items[0].textContent).toBe('Français'); // original casing/accents preserved
+
+      input.value = '#franc';
+      input.dispatchEvent(new Event('input'));
+      vi.advanceTimersByTime(200);
+      items = box().querySelectorAll('.suggestion-item');
+      expect(items.length).toBe(1);
+      expect(items[0].textContent).toBe('#Français'); // '#'-prefix rendered
+
+      input.value = '#δυο';
+      input.dispatchEvent(new Event('input'));
+      vi.advanceTimersByTime(200);
+      items = box().querySelectorAll('.suggestion-item');
+      expect(items.length).toBe(1);
+      expect(items[0].textContent).toBe('#δύο');
     } finally {
       vi.useRealTimers();
     }

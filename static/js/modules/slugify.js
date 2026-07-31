@@ -1,4 +1,21 @@
 /**
+ * Fold diacritics: NFD-normalize, strip combining marks, lowercase.
+ * The shared normalization for tag slugs (via slugify) and free-text search
+ * matching/suggestions — 'Français' and 'francais' (and 'δύο'/'δυο') fold to
+ * the same string, so accented and unaccented forms match each other.
+ *
+ * @param {*} text
+ * @returns {string}
+ */
+export function foldDiacritics(text) {
+  return text
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+/**
  * Slugify a tag name into its canonical URL/atom form.
  *
  * Single source of truth for tag normalization. The URL hash and the
@@ -12,11 +29,7 @@
  * @returns {string}
  */
 export function slugify(text) {
-  return text
-    .toString()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
+  return foldDiacritics(text)
     .trim()
     .replace(/\s+/g, '-')
     .replace(/[^\p{L}\p{N}_\-]+/gu, '')

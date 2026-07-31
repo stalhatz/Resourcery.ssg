@@ -7,7 +7,7 @@
  */
 
 import { atom, computed } from '../vendor/nanostores.js';
-import { slugify } from './slugify.js';
+import { slugify, foldDiacritics } from './slugify.js';
 
 // ---------------------------------------------------------------------------
 // Batched atom writes — one URL-hash write per logical transition
@@ -86,8 +86,16 @@ export const $visibleCards = computed(
       const summary = (el.dataset.summary || '').toLowerCase();
 
       if (search) {
-        const lower = search.toLowerCase();
-        return title.includes(lower) || summary.includes(lower) || tags.includes(lower);
+        // B9: fold diacritics so 'francais' matches 'Français' and 'δυο'
+        // matches 'δύο' (and vice versa). The same normalization slugify
+        // applies to tags. Folding happens only inside this branch — the
+        // tag branch below keeps the raw/lowercase tags for slugify().
+        const folded = foldDiacritics(search);
+        return (
+          foldDiacritics(title).includes(folded) ||
+          foldDiacritics(summary).includes(folded) ||
+          foldDiacritics(tags).includes(folded)
+        );
       }
       if (tag) {
         // $activeTag carries the SLUGGED tag (see TagManager.setActiveTag /
@@ -110,6 +118,28 @@ export const $visibleCards = computed(
 // ---------------------------------------------------------------------------
 
 /**
+ * Decode a percent-encoded URL-hash segment. Browsers percent-encode
+ * non-ASCII characters in the fragment (writing 'tag-δυο' makes
+ * location.hash read '#tag-%CE%B4%CF%85%CE%BF'), so tag and search segments
+ * must both be decoded on the way in.
+ *
+ * A malformed sequence (e.g. a hand-typed '#tag-%' or '#search-%') would
+ * throw URIError; fall back to the raw segment so the hashchange handler
+ * never crashes — the filter simply won't match garbage.
+ *
+ * @param {string} segment
+ * @returns {string}
+ */
+function decodeHashSegment(segment) {
+  try {
+    return decodeURIComponent(segment);
+  } catch (e) {
+    if (e instanceof URIError) return segment;
+    throw e;
+  }
+}
+
+/**
  * Parse a URL hash fragment into filter state.
  *
  * @param {string} hash - window.location.hash (or empty string)
@@ -117,8 +147,8 @@ export const $visibleCards = computed(
  */
 function parseHash(hash) {
   const h = hash || '';
-  if (h.startsWith('#search-')) return { tag: null, search: decodeURIComponent(h.slice(8)), category: null };
-  if (h.startsWith('#tag-')) return { tag: h.slice(5), search: null, category: null };
+  if (h.startsWith('#search-')) return { tag: null, search: decodeHashSegment(h.slice(8)), category: null };
+  if (h.startsWith('#tag-')) return { tag: decodeHashSegment(h.slice(5)), search: null, category: null };
   if (h.startsWith('#category-')) return { tag: null, search: null, category: h.slice(10) };
   return { tag: null, search: null, category: null };
 }
@@ -126,13 +156,19 @@ function parseHash(hash) {
 /**
  * Serialise filter atoms into a URL hash string.
  *
+ * Tag and search segments are percent-encoded so the written URL is always
+ * the normalized form — matching what the browser reports in
+ * window.location.hash, which keeps writeHash's comparison stable (both
+ * sides encoded) and the hash round-trip idempotent. ASCII values are
+ * unaffected (encodeURIComponent('foo') === 'foo').
+ *
  * @param {string|null} tag
  * @param {string|null} search
  * @param {string|null} category
  * @returns {string}
  */
 function serialiseHash(tag, search, category) {
-  if (tag) return `#tag-${tag}`;
+  if (tag) return `#tag-${encodeURIComponent(tag)}`;
   if (search) return `#search-${encodeURIComponent(search)}`;
   if (category) return `#category-${category}`;
   return '';

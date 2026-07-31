@@ -82,4 +82,87 @@ describe('URL hash deep-linking (integration)', () => {
     expect(document.getElementById('js').style.display).toBe('none');
     expect(document.getElementById('resultsCount').textContent).toBe('1 item');
   });
+
+  // B8 regression: a deep link carrying the PERCENT-ENCODED Greek tag
+  // ('#tag-%CE%B4%CF%85%CE%BF') must decode to the slug 'δυο' and match a card
+  // whose raw data-tags hold 'δύο' end to end — and the header must show the
+  // DECODED '#δυο', not the raw encoding. (The browser always reports the
+  // encoded fragment, so this is the form real deep links and the click-path
+  // hashchange round-trip take.)
+  it("deep link '#tag-%CE%B4%CF%85%CE%BF': atom 'δυο', card with raw tag 'δύο' visible, header shows '#δυο', hash round-trips unchanged", async () => {
+    const html = `
+      <span id="filterText1"></span><span id="filterText2"></span><span id="filterValue1"></span>
+      <span id="searchValue"></span>
+      <span id="resultsCount"></span>
+      <article class="link-card" id="gr" data-title="Δύο" data-tags="δύο" data-category="frontend"></article>
+      <article class="link-card" id="js" data-title="JS" data-tags="JavaScript" data-category="frontend"></article>
+    `;
+    const url = `${BROWSE}#tag-%CE%B4%CF%85%CE%BF`;
+    const state = await loadFresh('static/js/modules/state.js', { url, html });
+    await loadFresh('static/js/modules/tag-manager.js', { url });
+    await loadFresh('static/js/modules/entry-animator.js', { url });
+    const hhc = await loadFresh('static/js/modules/handle-hash-change.js', { url });
+    await loadFresh('static/js/modules/filter-cards.js', { url });
+    const loadHash = window.location.hash;
+
+    state.bridgeToHash({
+      $activeTag: state.$activeTag,
+      $activeSearch: state.$activeSearch,
+      $activeCategory: state.$activeCategory,
+    });
+    hhc.handleHashChange();
+
+    // atom carries the DECODED slug; slug-matching finds the raw 'δύο' card
+    expect(state.$activeTag.get()).toBe('δυο');
+    expect(state.$activeSearch.get()).toBeNull();
+    expect(state.$activeCategory.get()).toBeNull();
+    expect(document.getElementById('gr').style.display).toBe('');
+    expect(document.getElementById('js').style.display).toBe('none');
+    expect(document.getElementById('resultsCount').textContent).toBe('1 item');
+    // header shows the decoded slug, not the percent-encoding
+    expect(document.getElementById('filterValue1').textContent).toBe('#δυο');
+    // round-trip idempotence: serialise(parse(H)) === H -> hash unchanged
+    expect(window.location.hash).toBe(loadHash);
+  });
+
+  // B9 regression: a deep link with an UNACCENTED search term
+  // ('#search-francais') must match a card whose title holds the ACCENTED
+  // form ('Français') end to end — parseHash -> atoms -> handleHashChange ->
+  // filterCards (diacritic folding in the $visibleCards search branch).
+  it("deep link '#search-francais': search atom 'francais' shows the accented 'Français' card, header shows the quoted term", async () => {
+    const html = `
+      <span id="filterText1"></span><span id="filterText2"></span><span id="filterValue1"></span>
+      <span id="searchValue"></span>
+      <span id="resultsCount"></span>
+      <article class="link-card" id="fr" data-title="Français" data-tags="Français" data-category="frontend"></article>
+      <article class="link-card" id="js" data-title="JS" data-tags="JavaScript" data-category="frontend"></article>
+    `;
+    const url = `${BROWSE}#search-francais`;
+    const state = await loadFresh('static/js/modules/state.js', { url, html });
+    await loadFresh('static/js/modules/tag-manager.js', { url });
+    await loadFresh('static/js/modules/entry-animator.js', { url });
+    const hhc = await loadFresh('static/js/modules/handle-hash-change.js', { url });
+    await loadFresh('static/js/modules/filter-cards.js', { url });
+    const loadHash = window.location.hash;
+
+    state.bridgeToHash({
+      $activeTag: state.$activeTag,
+      $activeSearch: state.$activeSearch,
+      $activeCategory: state.$activeCategory,
+    });
+    hhc.handleHashChange();
+
+    // search atom carries the raw term; folding happens in $visibleCards
+    expect(state.$activeSearch.get()).toBe('francais');
+    expect(state.$activeTag.get()).toBeNull();
+    expect(state.$activeCategory.get()).toBeNull();
+    expect(document.getElementById('fr').style.display).toBe('');
+    expect(document.getElementById('js').style.display).toBe('none');
+    expect(document.getElementById('resultsCount').textContent).toBe('1 item');
+    // header shows the quoted search term ('Searching ... "francais"')
+    expect(document.getElementById('filterText1').textContent).toBe('Searching');
+    expect(document.getElementById('searchValue').textContent).toBe('"francais"');
+    // round-trip idempotence: serialise(parse(H)) === H -> hash unchanged
+    expect(window.location.hash).toBe(loadHash);
+  });
 });
