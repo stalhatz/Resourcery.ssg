@@ -29,6 +29,42 @@ describe('tag-manager.js', () => {
     expect(window.location.hash).toBe('#tag-foo');
   });
 
+  // B3 regression: setActiveTag slugifies ('C++' -> 'c', 'machine learning'
+  // -> 'machine-learning'); $visibleCards must match cards whose raw
+  // data-tags hold the un-slugified form.
+  it("setActiveTag('C++', true): slug atom 'c' + hash '#tag-c' match a card with raw data-tags 'C++'", async () => {
+    const html = `
+      <article class="link-card" id="cpp" data-title="C++" data-tags="C++" data-category="frontend"></article>
+      <article class="link-card" id="js" data-title="JS" data-tags="JavaScript" data-category="frontend"></article>
+    `;
+    const { state, TagManager } = await setup(BROWSE, html);
+    TagManager.setActiveTag('C++', true);
+    expect(state.$activeTag.get()).toBe('c');
+    expect(window.location.hash).toBe('#tag-c');
+    expect(state.$visibleCards.get()).toEqual(['cpp']);
+  });
+
+  it("setActiveTag('machine learning', true): slug atom 'machine-learning' matches raw data-tags 'machine learning'", async () => {
+    const html = `
+      <article class="link-card" id="ml" data-title="ML" data-tags="machine learning" data-category="ai"></article>
+      <article class="link-card" id="js" data-title="JS" data-tags="JavaScript" data-category="frontend"></article>
+    `;
+    const { state, TagManager } = await setup(BROWSE, html);
+    TagManager.setActiveTag('machine learning', true);
+    expect(state.$activeTag.get()).toBe('machine-learning');
+    expect(state.$visibleCards.get()).toEqual(['ml']);
+  });
+
+  it("setActiveTag('R&D', true): slug atom 'rd' matches raw data-tags 'R&D'", async () => {
+    const html = `
+      <article class="link-card" id="rd" data-title="R&D" data-tags="R&D" data-category="backend"></article>
+    `;
+    const { state, TagManager } = await setup(BROWSE, html);
+    TagManager.setActiveTag('R&D', true);
+    expect(state.$activeTag.get()).toBe('rd');
+    expect(state.$visibleCards.get()).toEqual(['rd']);
+  });
+
   it('setActiveTag(null,true) with no category: history.pushState clears the hash', async () => {
     const { TagManager } = await setup();
     window.location.hash = '#tag-foo';

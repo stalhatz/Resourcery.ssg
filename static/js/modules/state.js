@@ -7,6 +7,7 @@
  */
 
 import { atom, computed } from '../vendor/nanostores.js';
+import { slugify } from './slugify.js';
 
 // ---------------------------------------------------------------------------
 // Batched atom writes — one URL-hash write per logical transition
@@ -89,7 +90,11 @@ export const $visibleCards = computed(
         return title.includes(lower) || summary.includes(lower) || tags.includes(lower);
       }
       if (tag) {
-        return cardTagsArray.includes(tag);
+        // $activeTag carries the SLUGGED tag (see TagManager.setActiveTag /
+        // parseHash: 'C++' -> 'c', 'R&D' -> 'rd', 'Français' -> 'francais',
+        // 'machine learning' -> 'machine-learning'). Slugify each raw card
+        // tag with the same normalization so both sides compare slug-to-slug.
+        return cardTagsArray.some(t => slugify(t) === tag);
       }
       if (category) {
         const matching = window.CATEGORY_MAP?.[category] || [category];

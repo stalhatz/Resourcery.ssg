@@ -56,4 +56,30 @@ describe('URL hash deep-linking (integration)', () => {
       expect(document.querySelectorAll('#linksGrid .link-card').length).toBe(4);
     }
   });
+
+  // B3 regression: a deep link carrying a SLUG ('#tag-rd') must match a card
+  // whose raw data-tags hold the un-slugified form ('R&D') end to end:
+  // parseHash -> atoms -> handleHashChange -> filterCards -> DOM.
+  it("deep link '#tag-rd': handleHashChange sets slug 'rd', filterCards shows the card with raw tag 'R&D'", async () => {
+    const html = `
+      <span id="filterText1"></span><span id="filterText2"></span><span id="filterValue1"></span>
+      <span id="searchValue"></span>
+      <span id="resultsCount"></span>
+      <article class="link-card" id="rd" data-title="R&D" data-tags="R&D" data-category="backend"></article>
+      <article class="link-card" id="js" data-title="JS" data-tags="JavaScript" data-category="frontend"></article>
+    `;
+    const url = `${BROWSE}#tag-rd`;
+    const state = await loadFresh('static/js/modules/state.js', { url, html });
+    await loadFresh('static/js/modules/tag-manager.js', { url });
+    await loadFresh('static/js/modules/entry-animator.js', { url });
+    const hhc = await loadFresh('static/js/modules/handle-hash-change.js', { url });
+    await loadFresh('static/js/modules/filter-cards.js', { url });
+
+    hhc.handleHashChange();
+
+    expect(state.$activeTag.get()).toBe('rd');
+    expect(document.getElementById('rd').style.display).toBe('');
+    expect(document.getElementById('js').style.display).toBe('none');
+    expect(document.getElementById('resultsCount').textContent).toBe('1 item');
+  });
 });

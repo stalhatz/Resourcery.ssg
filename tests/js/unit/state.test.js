@@ -47,6 +47,65 @@ describe('state.js', () => {
     expect(s.$visibleCards.get()).toEqual(['c1']);
   });
 
+  // --- $visibleCards: slug-normalized tag matching (B3 regression) ---
+  // The $activeTag atom carries the SLUGGED form ('R&D' -> 'rd',
+  // 'Français' -> 'francais', 'machine learning' -> 'machine-learning',
+  // 'C++'/'C#' -> 'c'). Raw card tags must be normalized the same way before
+  // matching, or clicking such a tag filters to 0 items.
+  describe('$visibleCards: tags that slugify differently from their raw form (B3)', () => {
+    const SPECIAL_CARDS = `
+      <article class="link-card" id="cpp" data-title="C++" data-tags="C++" data-category="frontend"></article>
+      <article class="link-card" id="csharp" data-title="C#" data-tags="C#" data-category="frontend"></article>
+      <article class="link-card" id="rd" data-title="R&D" data-tags="R&D" data-category="backend"></article>
+      <article class="link-card" id="fr" data-title="Français" data-tags="Français" data-category="frontend"></article>
+      <article class="link-card" id="ml" data-title="ML" data-tags="machine learning" data-category="ai"></article>
+      <article class="link-card" id="plain" data-title="Plain" data-tags="JavaScript" data-category="frontend"></article>
+    `;
+
+    it("matches raw tag 'R&D' when $activeTag is the slug 'rd'", async () => {
+      const s = await fresh({ html: SPECIAL_CARDS });
+      s.$activeTag.set('rd');
+      expect(s.$visibleCards.get()).toEqual(['rd']);
+    });
+
+    it("matches raw tag 'Français' when $activeTag is the slug 'francais'", async () => {
+      const s = await fresh({ html: SPECIAL_CARDS });
+      s.$activeTag.set('francais');
+      expect(s.$visibleCards.get()).toEqual(['fr']);
+    });
+
+    it("matches raw tag 'machine learning' when $activeTag is the slug 'machine-learning'", async () => {
+      const s = await fresh({ html: SPECIAL_CARDS });
+      s.$activeTag.set('machine-learning');
+      expect(s.$visibleCards.get()).toEqual(['ml']);
+    });
+
+    it("'C++' and 'C#' both slug to 'c'; slug 'c' matches both (known collision)", async () => {
+      const s = await fresh({ html: SPECIAL_CARDS });
+      s.$activeTag.set('c');
+      expect(s.$visibleCards.get().sort()).toEqual(['cpp', 'csharp']);
+    });
+
+    it('plain alphanumeric tags still match their slug (regression guard)', async () => {
+      const s = await fresh({ html: SPECIAL_CARDS });
+      s.$activeTag.set('javascript');
+      expect(s.$visibleCards.get()).toEqual(['plain']);
+    });
+
+    it("deep link '#tag-rd' -> bridgeFromHash sets slug 'rd' -> matches raw tag 'R&D'", async () => {
+      const s = await fresh({ html: SPECIAL_CARDS, url: `${BROWSE}#tag-rd` });
+      s.bridgeFromHash((next) => {
+        s.$activeTag.set(next.tag);
+        s.$activeSearch.set(next.search);
+        s.$activeCategory.set(next.category);
+      });
+      expect(s.$activeTag.get()).toBe('rd');
+      expect(s.$activeSearch.get()).toBeNull();
+      expect(s.$activeCategory.get()).toBeNull();
+      expect(s.$visibleCards.get()).toEqual(['rd']);
+    });
+  });
+
   it('$visibleCards: search filter matches title/summary/tags substring, case-insensitive', async () => {
     const s = await fresh();
     s.$activeSearch.set('CAR'); // summary "Red car"

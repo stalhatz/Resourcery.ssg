@@ -7,6 +7,7 @@
  */
 
 import { $activeTag, $activeSearch, $activeCategory, batchAtomWrites } from './state.js';
+import { slugify } from './slugify.js';
 import { dom } from '../dom.js';
 import { filterCards } from './filter-cards.js';
 
@@ -23,16 +24,12 @@ export const TagManager = {
     this.isInitialized = true;
   },
 
+  /**
+   * Slugify a tag into its canonical URL/atom form. Delegates to the shared
+   * slugify module — the single source of truth used by state.js matching.
+   */
   slugify(text) {
-    return text
-      .toString()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, '-')
-      .replace(/[^\w\-]+/g, '')
-      .replace(/\-\-+/g, '-');
+    return slugify(text);
   },
 
   setActiveTag(tag, updateUrl) {
