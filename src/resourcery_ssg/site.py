@@ -280,7 +280,25 @@ def _run_ingest(config, args=None):
             "pass --note and --site-prompt on the command line",
             file=sys.stderr,
         )
-        return
+        sys.exit(1)
+
+    # Validate that all referenced input paths exist before dispatching.
+    # Without this, a missing file (e.g. a deleted note) surfaces as a raw
+    # FileNotFoundError traceback from Path(...).resolve(strict=True) inside
+    # run_ingestion/run_multi_step_ingestion, and a missing key would raise
+    # KeyError at dispatch. Mirrors data_ingestion.main()'s validation.
+    for path_value, label in [
+        (note, "note"),
+        (site_prompt, "site_prompt"),
+        (ingest_cfg.get("schemas_dir"), "schemas_dir"),
+        (ingest_cfg.get("prompt"), "prompt"),
+    ]:
+        if not path_value:
+            print(f"Error: {label} is required (and not set in config.yaml)", file=sys.stderr)
+            sys.exit(1)
+        if not Path(path_value).exists():
+            print(f"Error: {label} path does not exist: {path_value}", file=sys.stderr)
+            sys.exit(1)
 
     from resourcery_ssg.data_ingestion import run_ingestion, run_multi_step_ingestion
 
@@ -304,7 +322,7 @@ def _run_ingest(config, args=None):
                     f"Valid keys are: {', '.join(STAGE_KEYS)}",
                     file=sys.stderr,
                 )
-                return
+                sys.exit(1)
 
         # Build requested_stages in pipeline order
         requested_stages = [k for k in STAGE_KEYS if k in stages_cfg]
