@@ -190,3 +190,29 @@ describe('Hash-driven navigation refreshes the filter header (B1)', () => {
     expect(document.getElementById('filterText2').style.display).toBe('inline');
   });
 });
+
+// B2 regression: back-navigating from a category to the bare browse.html URL
+// (all-null hash) must fully reset the dropdown — hidden select AND the
+// visible custom dropdown — plus the header, atoms and grid. Only the cards
+// used to revert; the select and header stayed on the old category.
+describe('Back-navigation to a bare URL clears the category dropdown (B2)', () => {
+  it("category -> bare URL (back/forward) resets select, visible dropdown, header, atoms and grid", async () => {
+    const { state } = await setup();
+    // mirror the manual repro: pick Frontend in the custom dropdown
+    option('frontend').click();
+    await waitFor(() => expect(state.$activeCategory.get()).toBe('frontend'));
+    expect(document.getElementById('categoryFilter').value).toBe('frontend');
+    expect(option('frontend').classList.contains('selected')).toBe(true);
+    expect(document.getElementById('filterValue1').textContent).toBe('Frontend');
+    expect(document.getElementById('resultsCount').textContent).toBe('2 items');
+
+    // browser Back -> bare browse.html URL (hashchange fires)
+    window.location.hash = '';
+    await waitFor(() => expect(state.$activeCategory.get()).toBeNull());
+    expect(document.getElementById('categoryFilter').value).toBe('');
+    expect(document.getElementById('filterValue1').textContent).toBe('All Categories');
+    expect(option('frontend').classList.contains('selected')).toBe(false);
+    expect(option('').classList.contains('selected')).toBe(true);
+    expect(document.getElementById('resultsCount').textContent).toBe('4 items');
+  });
+});

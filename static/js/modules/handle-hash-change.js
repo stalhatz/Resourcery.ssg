@@ -10,6 +10,7 @@ import { $activeTag, $activeSearch, $activeCategory, bridgeFromHash, batchAtomWr
 import { dom } from '../dom.js';
 import { filterCards } from './filter-cards.js';
 import { TagManager } from './tag-manager.js';
+import { FilterManager } from './filter-manager.js';
 
 export function handleHashChange() {
   if (!window.location.pathname.includes('browse.html')) return;
@@ -24,12 +25,18 @@ export function handleHashChange() {
       $activeSearch.set(next.search);
       $activeCategory.set(next.category);
 
-      // Update dropdown
+      // Update dropdown: the hidden select mirrors the parsed category, and
+      // the visible custom dropdown (FilterManager.syncSelection) mirrors the
+      // select. Every non-category parsed state (tag, search, or all-null /
+      // bare URL back-navigation) clears both — otherwise back to a bare URL
+      // leaves a stale category in the select, the visible dropdown and the
+      // filter header (B2).
       if (next.category && dom.categoryFilter) {
         dom.categoryFilter.value = next.category;
-      } else if ((next.tag || next.search) && dom.categoryFilter) {
+      } else if (dom.categoryFilter) {
         dom.categoryFilter.value = '';
       }
+      FilterManager.syncSelection('category', next.category || '');
 
       // Update sidebar active states
       document.querySelectorAll('.category-trigger, .subcategory-link').forEach(el => {

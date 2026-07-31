@@ -153,4 +153,23 @@ describe('handle-hash-change.js', () => {
       expect(h.filterText2.style.display).toBe('inline');
     });
   });
+
+  // B2 regression: an all-null hash (bare URL after back/forward) must clear
+  // the category dropdown, not leave the previous category in the hidden
+  // select — updateFilterHeader's else-branch resolves the header label from
+  // categoryFilter.value, so a stale select also stales the header.
+  describe('handleHashChange clears the category dropdown on an all-null hash (B2)', () => {
+    it("bare URL after '#category-frontend' (back/forward): categoryFilter.value reset to '' and header shows 'All Categories'", async () => {
+      const { handleHashChange } = await setup(`${BROWSE}#category-frontend`);
+      handleHashChange();
+      // sanity: the category state was applied first
+      expect(document.getElementById('categoryFilter').value).toBe('frontend');
+      expect(document.getElementById('filterValue1').textContent).toBe('Frontend');
+
+      window.history.pushState({}, '', BROWSE); // clear hash (no hashchange fired)
+      handleHashChange();
+      expect(document.getElementById('categoryFilter').value).toBe('');
+      expect(document.getElementById('filterValue1').textContent).toBe('All Categories');
+    });
+  });
 });
