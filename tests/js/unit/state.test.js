@@ -254,6 +254,61 @@ describe('state.js', () => {
     expect(calls).toBe(1);
   });
 
+  // --- batchAtomWrites ---
+  describe('batchAtomWrites: suppresses the bridge across multi-atom transitions', () => {
+    const install = (s) =>
+      s.bridgeToHash({
+        $activeTag: s.$activeTag,
+        $activeSearch: s.$activeSearch,
+        $activeCategory: s.$activeCategory,
+      });
+
+    it('no hash write happens for atom sets inside the batch', async () => {
+      const s = await fresh();
+      install(s);
+      s.$activeTag.set('foo');
+      expect(window.location.hash).toBe('#tag-foo');
+
+      s.batchAtomWrites(() => {
+        s.$activeTag.set(null);
+        s.$activeSearch.set('bar');
+        // bridge suppressed mid-batch: the URL still shows the pre-batch state
+        expect(window.location.hash).toBe('#tag-foo');
+      });
+      // the batch itself writes nothing — transition sites own the URL write
+      expect(window.location.hash).toBe('#tag-foo');
+    });
+
+    it('nested batches suppress until the outermost batch exits', async () => {
+      const s = await fresh();
+      install(s);
+      s.batchAtomWrites(() => {
+        s.$activeTag.set('foo');
+        s.batchAtomWrites(() => {
+          s.$activeSearch.set('bar');
+        });
+        // still suppressed after the inner batch exits (depth 1)
+        expect(window.location.hash).toBe('');
+      });
+      // bridge resumes once every batch has exited — serialiseHash prioritises
+      // tag > search, so the write reflects the current atom state
+      s.$activeTag.set(null);
+      expect(window.location.hash).toBe('#search-bar');
+    });
+
+    it('bridge writes resume after the batch ends', async () => {
+      const s = await fresh();
+      install(s);
+      s.batchAtomWrites(() => {
+        s.$activeTag.set('foo');
+        s.$activeSearch.set('bar');
+      });
+      expect(window.location.hash).toBe(''); // no write from the batch alone
+      s.$activeTag.set(null); // a single unbatched set resumes the bridge
+      expect(window.location.hash).toBe('#search-bar');
+    });
+  });
+
   // --- indirect round-trip idempotence ---
   describe('round-trip idempotence (indirect)', () => {
     const cases = [

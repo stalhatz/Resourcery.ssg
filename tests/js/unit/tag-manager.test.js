@@ -130,6 +130,81 @@ describe('tag-manager.js', () => {
     expect(searchSpy).toHaveBeenCalledWith(null, true);
   });
 
+  it('clearActiveTag(false)/clearActiveSearch(false) pass updateUrl=false (caller owns the URL write)', async () => {
+    const { TagManager } = await setup();
+    const tagSpy = vi.spyOn(TagManager, 'setActiveTag');
+    const searchSpy = vi.spyOn(TagManager, 'setActiveSearch');
+    TagManager.clearActiveTag(false);
+    TagManager.clearActiveSearch(false);
+    expect(tagSpy).toHaveBeenCalledWith(null, false);
+    expect(searchSpy).toHaveBeenCalledWith(null, false);
+  });
+
+  // Regression: a tag<->category transition must emit exactly ONE hashchange.
+  // Without batching, the sequential atom sets fire bridgeToHash's writeHash
+  // per atom (e.g. '#category-frontend' -> '' -> '#tag-foo'), polluting the
+  // browser back-stack with intermediate entries.
+  describe('one hashchange per transition (with the atom->hash bridge installed)', () => {
+    const installBridge = (state) =>
+      state.bridgeToHash({
+        $activeTag: state.$activeTag,
+        $activeSearch: state.$activeSearch,
+        $activeCategory: state.$activeCategory,
+      });
+    const settle = () => new Promise((r) => setTimeout(r, 50));
+    const countHashchanges = async () => {
+      let count = 0;
+      const fn = () => count++;
+      window.addEventListener('hashchange', fn);
+      await settle(); // let any intermediate writeHash events fire
+      window.removeEventListener('hashchange', fn);
+      return count;
+    };
+
+    it('setActiveTag(tag,true) from an active category: exactly one hashchange, no intermediate empty entry', async () => {
+      const { state, TagManager } = await setup();
+      installBridge(state);
+      state.$activeCategory.set('frontend'); // bridge writes '#category-frontend'
+      await settle();
+
+      TagManager.setActiveTag('foo', true);
+      const count = await countHashchanges();
+
+      expect(window.location.hash).toBe('#tag-foo');
+      expect(state.$activeCategory.get()).toBeNull();
+      expect(count).toBe(1);
+    });
+
+    it('setActiveSearch(term,true) from an active tag: exactly one hashchange', async () => {
+      const { state, TagManager } = await setup();
+      installBridge(state);
+      state.$activeTag.set('foo'); // bridge writes '#tag-foo'
+      await settle();
+
+      TagManager.setActiveSearch('bar baz', true);
+      const count = await countHashchanges();
+
+      expect(window.location.hash).toBe('#search-bar%20baz');
+      expect(state.$activeTag.get()).toBeNull();
+      expect(count).toBe(1);
+    });
+
+    it('clearActiveTag with a category in the select: falls back to the category with exactly one hashchange', async () => {
+      const { state, TagManager } = await setup();
+      installBridge(state);
+      state.$activeTag.set('foo'); // bridge writes '#tag-foo'
+      document.getElementById('categoryFilter').value = 'web';
+      await settle();
+
+      TagManager.clearActiveTag();
+      const count = await countHashchanges();
+
+      expect(state.$activeCategory.get()).toBe('web');
+      expect(window.location.hash).toBe('#category-web');
+      expect(count).toBe(1);
+    });
+  });
+
   it('clearSearchInput: sets dom.searchInput.value=""', async () => {
     const { TagManager } = await setup();
     document.getElementById('searchInput').value = 'hello';

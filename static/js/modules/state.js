@@ -9,6 +9,35 @@
 import { atom, computed } from '../vendor/nanostores.js';
 
 // ---------------------------------------------------------------------------
+// Batched atom writes — one URL-hash write per logical transition
+// ---------------------------------------------------------------------------
+
+/**
+ * Nesting depth of active atom-write batches. While > 0, bridgeToHash's
+ * hash write is suppressed so multi-atom transitions (e.g. tag -> category)
+ * emit a single hashchange instead of one per atom.set().
+ */
+let batchDepth = 0;
+
+/**
+ * Run atom writes as one batch: the URL-hash bridge is suppressed while `fn`
+ * runs. Callers that change state must write the URL exactly once themselves
+ * (handleHashChange leaves the hash untouched — the parsed state always
+ * serialises back to the current hash — while TagManager/FilterManager write
+ * the final hash at the end of their own transition).
+ *
+ * @param {() => void} fn
+ */
+export function batchAtomWrites(fn) {
+  batchDepth += 1;
+  try {
+    fn();
+  } finally {
+    batchDepth -= 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Atoms — single source of truth for filter state
 // ---------------------------------------------------------------------------
 
@@ -124,6 +153,7 @@ export function bridgeFromHash(apply) {
  */
 export function bridgeToHash(atoms) {
   const writeHash = () => {
+    if (batchDepth > 0) return; // batched transition — caller writes the final hash
     const tag = atoms.$activeTag.get();
     const search = atoms.$activeSearch.get();
     const category = atoms.$activeCategory.get();

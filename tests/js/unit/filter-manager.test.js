@@ -36,6 +36,11 @@ describe('filter-manager.js', () => {
     document.querySelector('#categoryDropdown .filter-dropdown-option[data-value="web"]').click();
     expect(clearSearchSpy).toHaveBeenCalled();
     expect(clearTagSpy).toHaveBeenCalled();
+    // Silent clears: the dropdown handler owns the URL write, so the clears
+    // must not write intermediate hashes (regression: they used to re-write
+    // the previous category before the new one was set).
+    expect(clearSearchSpy).toHaveBeenCalledWith(false);
+    expect(clearTagSpy).toHaveBeenCalledWith(false);
     expect(setCatSpy).toHaveBeenCalledWith('web');
     expect(window.location.hash).toBe('#category-web');
     expect(document.getElementById('resultsCount').textContent).not.toBe('');
@@ -115,7 +120,7 @@ describe('filter-manager.js', () => {
     expect(sort.classList.contains('active')).toBe(false);
   });
 
-  it("init: window 'clearFilters' event resets search+tag, clears the select, syncs, and filters", async () => {
+  it("init: window 'clearFilters' event resets search+tag+category, clears the select, syncs, and filters", async () => {
     const s = await loadFresh('static/js/modules/state.js', { url: BROWSE, html: FIX() });
     const tagMod = await loadFresh('static/js/modules/tag-manager.js', { url: BROWSE });
     const fmMod = await loadFresh('static/js/modules/filter-manager.js', { url: BROWSE });
@@ -123,20 +128,23 @@ describe('filter-manager.js', () => {
     FilterManager.init();
     s.$activeSearch.set('foo');
     s.$activeTag.set('bar');
+    s.$activeCategory.set('frontend');
     document.getElementById('categoryFilter').value = 'frontend';
 
     window.dispatchEvent(new Event('clearFilters'));
 
     expect(s.$activeSearch.get()).toBeNull();
     expect(s.$activeTag.get()).toBeNull();
+    // Regression: the category must be cleared too — clearActive*'s null-branch
+    // used to re-activate it from the (still populated) select before the
+    // handler cleared the select, leaving the grid filtered.
+    expect(s.$activeCategory.get()).toBeNull();
     expect(document.getElementById('categoryFilter').value).toBe('');
     // syncSelection('category','') -> only the '' option is .selected
     const selected = document.querySelectorAll('#categoryDropdown .filter-dropdown-option.selected');
     expect(selected.length).toBe(1);
     expect(selected[0].dataset.value).toBe('');
-    // filterCards ran. NOTE: clearActiveSearch/clearActiveTag's null-branch sets
-    // $activeCategory from categoryFilter.value ('frontend') before the select
-    // is cleared, so the filtered set is the frontend cards (2) — actual behaviour.
-    expect(document.getElementById('resultsCount').textContent).toBe('2 items');
+    // filterCards ran with all atoms null -> every card visible
+    expect(document.getElementById('resultsCount').textContent).toBe('4 items');
   });
 });

@@ -31,9 +31,12 @@ export const FilterManager = {
     }
 
     window.addEventListener('clearFilters', () => {
+      // Clear the select BEFORE clearActive* — their null-branch falls back
+      // to the category currently in the select, so a still-populated select
+      // would re-activate the category instead of fully clearing.
+      if (dom.categoryFilter) dom.categoryFilter.value = '';
       TagManager.clearActiveSearch();
       TagManager.clearActiveTag();
-      if (dom.categoryFilter) dom.categoryFilter.value = '';
       this.syncSelection('category', '');
       filterCards();
     });
@@ -54,12 +57,17 @@ export const FilterManager = {
         self.closeAllDropdowns();
 
         if (type === 'category') {
-          TagManager.clearActiveSearch();
-          TagManager.clearActiveTag();
+          // Silent clears: this handler owns the URL write below, so the
+          // clearActive* null-branches must not write intermediate hashes
+          // (e.g. the previous category) before the new one is set.
+          TagManager.clearActiveSearch(false);
+          TagManager.clearActiveTag(false);
           TagManager.setCategoryDisplay(value);
           if (value) {
             window.location.hash = 'category-' + value;
-          } else {
+          } else if (window.location.hash) {
+            // Only push when there is a hash to clear — avoids a spurious
+            // history entry when nothing is active.
             history.pushState('', '', window.location.pathname);
           }
           filterCards();

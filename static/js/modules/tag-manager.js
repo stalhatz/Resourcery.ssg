@@ -6,7 +6,7 @@
  * hash writes happen in filter-manager and sidebar-manager.
  */
 
-import { $activeTag, $activeSearch, $activeCategory } from './state.js';
+import { $activeTag, $activeSearch, $activeCategory, batchAtomWrites } from './state.js';
 import { dom } from '../dom.js';
 import { filterCards } from './filter-cards.js';
 
@@ -38,24 +38,30 @@ export const TagManager = {
   setActiveTag(tag, updateUrl) {
     const slug = tag ? this.slugify(tag) : null;
 
-    // Invariant: only one atom is active at a time
-    $activeSearch.set(null);
-    $activeCategory.set(null);
-    $activeTag.set(slug);
+    // Invariant: only one atom is active at a time. Batched so the bridge
+    // writes the URL once per transition, not once per atom.set() (which
+    // would emit intermediate hashchange/history entries).
+    batchAtomWrites(() => {
+      $activeSearch.set(null);
+      $activeCategory.set(null);
+      $activeTag.set(slug);
 
-    if (updateUrl !== false) {
-      if (slug) {
-        window.location.hash = 'tag-' + slug;
-      } else {
-        const catVal = dom.categoryFilter ? dom.categoryFilter.value : '';
-        if (catVal) {
-          $activeCategory.set(catVal);
-          window.location.hash = 'category-' + catVal;
+      if (updateUrl !== false) {
+        if (slug) {
+          window.location.hash = 'tag-' + slug;
         } else {
-          history.pushState('', '', window.location.pathname);
+          const catVal = dom.categoryFilter ? dom.categoryFilter.value : '';
+          if (catVal) {
+            $activeCategory.set(catVal);
+            window.location.hash = 'category-' + catVal;
+          } else if (window.location.hash) {
+            // Only clear the hash when there is one — avoids pushing a
+            // spurious history entry when nothing is active.
+            history.pushState('', '', window.location.pathname);
+          }
         }
       }
-    }
+    });
 
     this.updateFilterHeader();
   },
@@ -63,24 +69,29 @@ export const TagManager = {
   setActiveSearch(searchTerm, updateUrl) {
     const term = searchTerm ? searchTerm.trim() : null;
 
-    // Invariant: only one atom is active at a time
-    $activeTag.set(null);
-    $activeCategory.set(null);
-    $activeSearch.set(term);
+    // Invariant: only one atom is active at a time. Batched so the bridge
+    // writes the URL once per transition, not once per atom.set().
+    batchAtomWrites(() => {
+      $activeTag.set(null);
+      $activeCategory.set(null);
+      $activeSearch.set(term);
 
-    if (updateUrl !== false) {
-      if (term) {
-        window.location.hash = 'search-' + encodeURIComponent(term);
-      } else {
-        const catVal = dom.categoryFilter ? dom.categoryFilter.value : '';
-        if (catVal) {
-          $activeCategory.set(catVal);
-          window.location.hash = 'category-' + catVal;
+      if (updateUrl !== false) {
+        if (term) {
+          window.location.hash = 'search-' + encodeURIComponent(term);
         } else {
-          history.pushState('', '', window.location.pathname);
+          const catVal = dom.categoryFilter ? dom.categoryFilter.value : '';
+          if (catVal) {
+            $activeCategory.set(catVal);
+            window.location.hash = 'category-' + catVal;
+          } else if (window.location.hash) {
+            // Only clear the hash when there is one — avoids pushing a
+            // spurious history entry when nothing is active.
+            history.pushState('', '', window.location.pathname);
+          }
         }
       }
-    }
+    });
 
     this.updateFilterHeader();
   },
@@ -174,12 +185,18 @@ export const TagManager = {
     return $activeSearch.get();
   },
 
-  clearActiveTag() {
-    this.setActiveTag(null, true);
+  /**
+   * @param {boolean} [updateUrl] - false when the caller writes the URL itself.
+   */
+  clearActiveTag(updateUrl = true) {
+    this.setActiveTag(null, updateUrl);
   },
 
-  clearActiveSearch() {
-    this.setActiveSearch(null, true);
+  /**
+   * @param {boolean} [updateUrl] - false when the caller writes the URL itself.
+   */
+  clearActiveSearch(updateUrl = true) {
+    this.setActiveSearch(null, updateUrl);
   },
 
   clearSearchInput() {
