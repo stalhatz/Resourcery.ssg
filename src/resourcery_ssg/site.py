@@ -15,8 +15,6 @@ to the appropriate command module. Supports:
 
 import logging
 import argparse
-import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -233,9 +231,9 @@ def main():
                 logger.debug(f"Config overrides: {pairs}")
 
             if args.command == "build":
-                from resourcery_ssg.build import build_site
+                from resourcery_ssg.build import build_site, seed_static_staging
 
-                _seed_static_staging(config)
+                seed_static_staging(config)
                 build_site(**{k: v for k, v in config["build"].items() if k != "static_source"},
                            ingest_note=config.get("ingest", {}).get("note"),
                            ingest_site_prompt=config.get("ingest", {}).get("site_prompt"))
@@ -368,51 +366,6 @@ def _run_ingest(config, args=None):
     log_user("\n✓ Ingestion complete.")
 
 
-def _seed_static_staging(config):
-    """Copy base static assets from ``static_source`` to ``static_dir``.
-
-    Files from the source always overwrite corresponding files in the staging
-    directory.  Generated content (acquired fonts, images) lives in
-    subdirectories (fonts/, images/) that typically do not exist in the base
-    static_source, so they are preserved automatically.  If they do exist
-    in the source, the source version wins — rebuild means rebuild.
-    """
-    build_cfg = config.get("build", {})
-    source_raw = build_cfg.get("static_source")
-    if not source_raw:
-        return
-    source = Path(source_raw)
-    dest = Path(build_cfg["static_dir"])
-
-    if not source.exists():
-        logger.warning(f"  ⚠️  static_source not found: {source} — skipping")
-        return
-
-    log_user(f"  📦 Seeding static staging: {source} → {dest}")
-    dest.mkdir(parents=True, exist_ok=True)
-    n_files = 0
-    for item in source.iterdir():
-        if item.name == ".gitkeep":
-            continue  # skip gitkeep files
-        dst_path = dest / item.name
-        if item.is_dir():
-            dst_path.mkdir(exist_ok=True)
-            for sub_item in item.iterdir():
-                sub_dst = dst_path / sub_item.name
-                if sub_item.is_dir():
-                    n_files += sum(
-                        len(files) for _, _, files in os.walk(sub_item)
-                    )
-                    shutil.copytree(sub_item, sub_dst, dirs_exist_ok=True)
-                else:
-                    shutil.copy2(sub_item, sub_dst)
-                    n_files += 1
-        else:
-            shutil.copy2(item, dst_path)
-            n_files += 1
-    logger.debug(f"Staging: seeded {source} → {dest} ({n_files} files)")
-
-
 def _run_all(args):
     """Run the full pipeline: ingest → validate → acquire-fonts → acquire-images → build.
 
@@ -456,11 +409,13 @@ def _run_all(args):
         pairs = ", ".join(f"{k}={v}" for k, v in sorted(overrides.items()))
         logger.debug(f"Config overrides: {pairs}")
 
+    from resourcery_ssg.build import seed_static_staging
+
     # Seed the static staging directory from static_source (if configured).
     # This copies base static assets (js/, base images/, etc.) into the
     # staging dir so that acquire-fonts and acquire-images can add generated
     # files alongside them, and build can copy everything to the final output.
-    _seed_static_staging(config)
+    seed_static_staging(config)
 
     # Determine total steps (ingest is step 0 when configured)
     has_ingest = bool(config.get("ingest", {}).get("model"))
@@ -513,8 +468,13 @@ def _run_all(args):
     log_user(f"STEP {step}/{total_steps}: Acquire JS")
     log_user("=" * 60)
     from resourcery_ssg.js_vendor import acquire_js
-    with log_timing(logger, "Step 'acquire-js'"):
-        acquire_js()
+
+    try:
+        with log_timing(logger, "Step 'acquire-js'"):
+            acquire_js(**config["acquire-js"])
+    except ResourceryError:
+        logger.error("\n❌ JS acquisition failed. Aborting pipeline.")
+        sys.exit(1)
     log_user("\n✓ JS vendor file acquired.")
 
     # 4. Acquire images

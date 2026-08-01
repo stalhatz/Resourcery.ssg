@@ -249,44 +249,49 @@ class TestRunIngestIntentionalSkips:
 class TestRunAllFailureAborts:
     """Failure handling in the ``all`` pipeline (``_run_all``/``main`` catch-all).
 
-    Only the font step has an abort line today; JS/build/ingest failures must
+    The font and JS steps carry their own abort lines; build/ingest failures
     propagate to the ``site.main()`` catch-all, which adds no text (exit 1).
     """
 
     @staticmethod
-    def _write_all_config(tmp_path: Path, testdata_dir: Path) -> Path:
+    def _write_all_config(
+        tmp_path: Path, testdata_dir: Path, *, js_section: bool = False
+    ) -> Path:
         """Write a minimal 5-step pipeline config (ingest disabled).
 
         ``ingest.model`` is nulled so the pipeline has 5 steps; no
-        ``build.static_source`` so ``_seed_static_staging`` no-ops; the
+        ``build.static_source`` so ``seed_static_staging`` no-ops; the
         links file does not exist so the real ``acquire_images_from_config``
-        warn-and-continues (row 14 unchanged).
+        warn-and-continues (row 14 unchanged). With ``js_section=True`` an
+        ``acquire-js`` section pointing at tmp paths is appended.
         """
+        lines = [
+            "build:",
+            f"  data_dir: {testdata_dir}",
+            f"  templates_dir: {testdata_dir / 'templates'}",
+            f"  static_dir: {testdata_dir / 'static'}",
+            f"  output_dir: {tmp_path / 'output'}",
+            "validate:",
+            f"  data_dir: {testdata_dir}",
+            f"  schemas_dir: {Path(__file__).resolve().parent.parent / 'schemas'}",
+            "acquire-fonts:",
+            f"  data_dir: {testdata_dir}",
+            f"  fonts_dir: {tmp_path / 'fonts'}",
+            f"  css_dir: {tmp_path / 'css'}",
+            "acquire-images:",
+            f"  links: {tmp_path / 'nonexistent-links.json'}",
+            f"  images_dir: {tmp_path / 'images'}",
+            "ingest:",
+            "  model: null",
+        ]
+        if js_section:
+            lines += [
+                "acquire-js:",
+                f"  package_json_path: {tmp_path / 'pkg.json'}",
+                f"  vendor_dir: {tmp_path / 'vendor'}",
+            ]
         cfg = tmp_path / "config.yaml"
-        cfg.write_text(
-            "\n".join(
-                [
-                    "build:",
-                    f"  data_dir: {testdata_dir}",
-                    f"  templates_dir: {testdata_dir / 'templates'}",
-                    f"  static_dir: {testdata_dir / 'static'}",
-                    f"  output_dir: {tmp_path / 'output'}",
-                    "validate:",
-                    f"  data_dir: {testdata_dir}",
-                    f"  schemas_dir: {Path(__file__).resolve().parent.parent / 'schemas'}",
-                    "acquire-fonts:",
-                    f"  data_dir: {testdata_dir}",
-                    f"  fonts_dir: {tmp_path / 'fonts'}",
-                    f"  css_dir: {tmp_path / 'css'}",
-                    "acquire-images:",
-                    f"  links: {tmp_path / 'nonexistent-links.json'}",
-                    f"  images_dir: {tmp_path / 'images'}",
-                    "ingest:",
-                    "  model: null",
-                ]
-            ),
-            encoding="utf-8",
-        )
+        cfg.write_text("\n".join(lines), encoding="utf-8")
         return cfg
 
     @pytest.mark.unit
@@ -315,7 +320,7 @@ class TestRunAllFailureAborts:
         monkeypatch.setattr(
             "resourcery_ssg.font_acquirer.acquire_fonts", lambda **kwargs: None
         )
-        monkeypatch.setattr("resourcery_ssg.js_vendor.acquire_js", lambda: None)
+        monkeypatch.setattr("resourcery_ssg.js_vendor.acquire_js", lambda **kwargs: None)
 
         def raising_build(**kwargs):
             raise ResourceryError("boom")
@@ -358,6 +363,162 @@ class TestRunAllFailureAborts:
         assert "ingest.note and ingest.site_prompt are required" in capsys.readouterr().err
 
 
+class TestRunAllJsStep:
+    """``site all`` step 3 (acquire-js): config kwargs and abort behavior."""
+
+    @pytest.mark.unit
+    def test_run_all_acquire_js_receives_config_kwargs(
+        self, tmp_path, testdata_dir, monkeypatch
+    ):
+        """``_run_all`` must pass ``config["acquire-js"]`` to ``acquire_js``.
+
+        Regression: the bare ``acquire_js()`` call silently ignored
+        overridden ``acquire-js`` keys (and the ``--package-json`` /
+        ``--vendor-dir`` flags). The spy kwargs must equal the *resolved*
+        config values (Path objects), never raw YAML strings.
+        """
+        cfg = TestRunAllFailureAborts._write_all_config(
+            tmp_path, testdata_dir, js_section=True
+        )
+
+        captured_kwargs = {}
+
+        def js_spy(**kwargs):
+            captured_kwargs.update(kwargs)
+
+        monkeypatch.setattr("resourcery_ssg.js_vendor.acquire_js", js_spy)
+        monkeypatch.setattr(
+            "resourcery_ssg.font_acquirer.acquire_fonts", lambda **kwargs: None
+        )
+        monkeypatch.setattr("resourcery_ssg.build.build_site", lambda **kwargs: None)
+        captured = TestLogLevelFlag._spy_load_config(monkeypatch)
+        args = site._build_parser().parse_args(["--config", str(cfg), "all"])
+        site._run_all(args)
+
+        assert len(captured_kwargs) == 2
+        assert captured_kwargs == dict(captured["config"]["acquire-js"])
+
+    @pytest.mark.unit
+    def test_run_all_js_failure_aborts(
+        self, tmp_path, testdata_dir, monkeypatch, capsys
+    ):
+        """JS failure keeps its abort line and exits 1 from ``_run_all``."""
+        cfg = TestRunAllFailureAborts._write_all_config(tmp_path, testdata_dir)
+        monkeypatch.setattr(
+            "resourcery_ssg.font_acquirer.acquire_fonts", lambda **kwargs: None
+        )
+
+        def raising_js(**kwargs):
+            raise ResourceryError("boom")
+
+        monkeypatch.setattr("resourcery_ssg.js_vendor.acquire_js", raising_js)
+        args = site._build_parser().parse_args(["--config", str(cfg), "all"])
+        with pytest.raises(SystemExit) as exc_info:
+            site._run_all(args)
+
+        assert exc_info.value.code == 1
+        assert "JS acquisition failed. Aborting pipeline." in capsys.readouterr().err
+
+
+class TestBuildMainDispatch:
+    """Standalone ``build`` main() dispatch semantics (kwargs + staging seed)."""
+
+    @pytest.mark.unit
+    def test_build_main_filters_static_source(
+        self, tmp_path, testdata_dir, monkeypatch
+    ):
+        """``static_source`` must never reach ``build_site`` kwargs.
+
+        Regression: ``build_kwargs = dict(config["build"])`` forwarded
+        ``static_source`` into ``build_site()`` (no such parameter → latent
+        TypeError on every real-world config).
+        """
+        from resourcery_ssg.build import main as build_main
+
+        cfg = TestLogLevelFlag._write_build_config(
+            tmp_path, testdata_dir, static_source=tmp_path / "source"
+        )
+        captured = {}
+
+        def build_spy(**kwargs):
+            captured["kwargs"] = kwargs
+
+        monkeypatch.setattr("resourcery_ssg.build.build_site", build_spy)
+        monkeypatch.setattr(sys, "argv", ["build", "--config", str(cfg)])
+
+        build_main()
+
+        assert "static_source" not in captured["kwargs"]
+        assert set(captured["kwargs"]) >= {
+            "data_dir",
+            "templates_dir",
+            "static_dir",
+            "output_dir",
+            "ingest_note",
+            "ingest_site_prompt",
+        }
+
+    @pytest.mark.unit
+    def test_build_main_seeds_staging_before_build(
+        self, tmp_path, testdata_dir, monkeypatch
+    ):
+        """Standalone ``build`` seeds static staging before dispatching.
+
+        The file-exists assertion inside the ``build_site`` spy proves both
+        that seeding ran and that it ran *before* the build dispatch (the
+        seed is the only writer of that file).
+        """
+        from resourcery_ssg.build import main as build_main
+
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "asset.txt").write_text("A", encoding="utf-8")
+        static_dir = tmp_path / "static"
+        cfg = TestLogLevelFlag._write_build_config(
+            tmp_path, testdata_dir, static_source=source, static_dir=static_dir
+        )
+        captured = {"kwargs": None}
+
+        def build_spy(**kwargs):
+            assert (static_dir / "asset.txt").exists()  # seeded before build
+            captured["kwargs"] = kwargs
+
+        monkeypatch.setattr("resourcery_ssg.build.build_site", build_spy)
+        monkeypatch.setattr(sys, "argv", ["build", "--config", str(cfg)])
+
+        build_main()
+
+        assert captured["kwargs"] is not None
+        assert "static_source" not in captured["kwargs"]
+        assert (static_dir / "asset.txt").read_text(encoding="utf-8") == "A"
+
+    @pytest.mark.unit
+    def test_build_main_missing_static_source_warns_and_builds(
+        self, tmp_path, testdata_dir, monkeypatch, capsys
+    ):
+        """A nonexistent ``static_source`` warns and skips, build still runs."""
+        from resourcery_ssg.build import main as build_main
+
+        cfg = TestLogLevelFlag._write_build_config(
+            tmp_path, testdata_dir, static_source=tmp_path / "nonexistent"
+        )
+        captured = {"kwargs": None}
+
+        def build_spy(**kwargs):
+            captured["kwargs"] = kwargs
+
+        monkeypatch.setattr("resourcery_ssg.build.build_site", build_spy)
+        monkeypatch.setattr(sys, "argv", ["build", "--config", str(cfg)])
+
+        build_main()
+        captured_streams = capsys.readouterr()
+
+        assert "static_source not found" in captured_streams.err
+        assert "— skipping" in captured_streams.err
+        assert captured["kwargs"] is not None
+        assert "static_source" not in captured["kwargs"]
+
+
 class TestLogLevelFlag:
     """--log-level is accepted on every subparser and maps to logging.level."""
 
@@ -379,20 +540,24 @@ class TestLogLevelFlag:
         assert args.log_level == "debug"
 
     @staticmethod
-    def _write_build_config(tmp_path: Path, testdata_dir: Path) -> Path:
+    def _write_build_config(
+        tmp_path: Path,
+        testdata_dir: Path,
+        *,
+        static_source: Path | None = None,
+        static_dir: Path | None = None,
+    ) -> Path:
+        lines = [
+            "build:",
+            f"  data_dir: {testdata_dir}",
+            f"  templates_dir: {testdata_dir / 'templates'}",
+            f"  static_dir: {static_dir or (testdata_dir / 'static')}",
+            f"  output_dir: {tmp_path / 'output'}",
+        ]
+        if static_source is not None:
+            lines.append(f"  static_source: {static_source}")
         cfg = tmp_path / "config.yaml"
-        cfg.write_text(
-            "\n".join(
-                [
-                    "build:",
-                    f"  data_dir: {testdata_dir}",
-                    f"  templates_dir: {testdata_dir / 'templates'}",
-                    f"  static_dir: {testdata_dir / 'static'}",
-                    f"  output_dir: {tmp_path / 'output'}",
-                ]
-            ),
-            encoding="utf-8",
-        )
+        cfg.write_text("\n".join(lines), encoding="utf-8")
         return cfg
 
     @staticmethod
@@ -468,7 +633,7 @@ class TestOperationalRecords:
         monkeypatch.setattr(
             "resourcery_ssg.font_acquirer.acquire_fonts", lambda **kwargs: None
         )
-        monkeypatch.setattr("resourcery_ssg.js_vendor.acquire_js", lambda: None)
+        monkeypatch.setattr("resourcery_ssg.js_vendor.acquire_js", lambda **kwargs: None)
         monkeypatch.setattr("resourcery_ssg.build.build_site", lambda **kwargs: None)
         monkeypatch.setattr(
             sys,

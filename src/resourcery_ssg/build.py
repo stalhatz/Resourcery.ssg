@@ -123,6 +123,51 @@ def _count_files(path: Path) -> int:
     return sum(len(files) for _, _, files in os.walk(path))
 
 
+def seed_static_staging(config):
+    """Copy base static assets from ``static_source`` to ``static_dir``.
+
+    Files from the source always overwrite corresponding files in the staging
+    directory.  Generated content (acquired fonts, images) lives in
+    subdirectories (fonts/, images/) that typically do not exist in the base
+    static_source, so they are preserved automatically.  If they do exist
+    in the source, the source version wins — rebuild means rebuild.
+    """
+    build_cfg = config.get("build", {})
+    source_raw = build_cfg.get("static_source")
+    if not source_raw:
+        return
+    source = Path(source_raw)
+    dest = Path(build_cfg["static_dir"])
+
+    if not source.exists():
+        logger.warning(f"  ⚠️  static_source not found: {source} — skipping")
+        return
+
+    log_user(f"  📦 Seeding static staging: {source} → {dest}")
+    dest.mkdir(parents=True, exist_ok=True)
+    n_files = 0
+    for item in source.iterdir():
+        if item.name == ".gitkeep":
+            continue  # skip gitkeep files
+        dst_path = dest / item.name
+        if item.is_dir():
+            dst_path.mkdir(exist_ok=True)
+            for sub_item in item.iterdir():
+                sub_dst = dst_path / sub_item.name
+                if sub_item.is_dir():
+                    n_files += sum(
+                        len(files) for _, _, files in os.walk(sub_item)
+                    )
+                    shutil.copytree(sub_item, sub_dst, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(sub_item, sub_dst)
+                    n_files += 1
+        else:
+            shutil.copy2(item, dst_path)
+            n_files += 1
+    logger.debug(f"Staging: seeded {source} → {dest} ({n_files} files)")
+
+
 def build_site(*, data_dir, templates_dir, static_dir, output_dir,
                attribution=None, ingest_note=None, ingest_site_prompt=None):
     """Render all templates and copy static assets to the output directory.
@@ -414,11 +459,12 @@ def main():
         overrides=overrides,
     )
     setup_logging(config)
-    build_kwargs = dict(config["build"])
+    build_kwargs = {k: v for k, v in config["build"].items() if k != "static_source"}
     build_kwargs["ingest_note"] = config.get("ingest", {}).get("note")
     build_kwargs["ingest_site_prompt"] = config.get("ingest", {}).get("site_prompt")
     with log_timing(logger, "Command", level=logging.INFO):
         try:
+            seed_static_staging(config)
             build_site(**build_kwargs)
         except ResourceryError:
             sys.exit(1)

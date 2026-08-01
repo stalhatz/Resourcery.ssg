@@ -11,6 +11,7 @@ from resourcery_ssg.build import (
     build_category_map,
     build_all_tags,
     build_site,
+    seed_static_staging,
 )
 from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.io_utils import load_json, JsonLoadError
@@ -98,6 +99,68 @@ class TestBuildAllTags:
     @pytest.mark.unit
     def test_empty_when_no_links(self):
         assert build_all_tags({"links": []}) == []
+
+
+class TestSeedStaticStaging:
+    """Unit tests for ``seed_static_staging`` (build.py)."""
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("with_dest", [False, True])
+    def test_noop_when_static_source_unset(self, with_dest: bool, tmp_path: Path):
+        """Without ``static_source`` the function raises nothing and creates nothing."""
+        dest = tmp_path / "dest"
+        config = {"build": {"static_dir": str(dest)}} if with_dest else {}
+
+        seed_static_staging(config)  # must not raise
+
+        assert not dest.exists()
+
+    @pytest.mark.unit
+    def test_copies_files_and_skips_gitkeep(self, tmp_path: Path):
+        """Files are copied (incl. subdirs); ``.gitkeep`` is skipped."""
+        source = tmp_path / "source"
+        (source / "sub").mkdir(parents=True)
+        (source / "a.txt").write_text("A", encoding="utf-8")
+        (source / "sub" / "b.txt").write_text("B", encoding="utf-8")
+        (source / ".gitkeep").write_text("", encoding="utf-8")
+        dest = tmp_path / "dest"
+
+        seed_static_staging(
+            {"build": {"static_source": str(source), "static_dir": str(dest)}}
+        )
+
+        assert (dest / "a.txt").read_text(encoding="utf-8") == "A"
+        assert (dest / "sub" / "b.txt").exists()
+        assert not (dest / ".gitkeep").exists()
+
+    @pytest.mark.unit
+    def test_source_wins_overwrite(self, tmp_path: Path):
+        """An existing staging file is overwritten by the source version."""
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "a.txt").write_text("NEW", encoding="utf-8")
+        dest = tmp_path / "dest"
+        dest.mkdir()
+        (dest / "a.txt").write_text("OLD", encoding="utf-8")
+
+        seed_static_staging(
+            {"build": {"static_source": str(source), "static_dir": str(dest)}}
+        )
+
+        assert (dest / "a.txt").read_text(encoding="utf-8") == "NEW"
+
+    @pytest.mark.unit
+    def test_missing_source_warns_and_continues(self, tmp_path: Path, capsys):
+        """A nonexistent ``static_source`` warns and returns before ``mkdir``."""
+        source = tmp_path / "nonexistent"
+        dest = tmp_path / "dest"
+
+        seed_static_staging(
+            {"build": {"static_source": str(source), "static_dir": str(dest)}}
+        )  # must not raise
+
+        assert "static_source not found" in capsys.readouterr().err
+        assert not dest.exists()
 
 
 class TestIntegrationBuild:
