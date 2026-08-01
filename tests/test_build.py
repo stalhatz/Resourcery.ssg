@@ -10,6 +10,7 @@ from resourcery_ssg.build import (
     build_all_tags,
     build_site,
 )
+from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.io_utils import load_json, JsonLoadError
 
 
@@ -250,27 +251,32 @@ class TestBuildAttribution:
 
     @pytest.mark.unit
     def test_missing_ingest_note_raises(self, build_paths: dict):
-        """With attribution=True but ingest_note=None, verify sys.exit(1)."""
+        """With attribution=True but ingest_note=None, verify ResourceryError."""
         paths = dict(build_paths)
         paths["attribution"] = True
         paths["ingest_note"] = None
         paths["ingest_site_prompt"] = None
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             build_site(**paths)
-        assert exc_info.value.code == 1
+        assert "build.attribution is enabled but ingest.note is not set" in str(
+            exc_info.value
+        )
 
     @pytest.mark.unit
     def test_missing_ingest_site_prompt_raises(self, build_paths: dict, tmp_path: Path):
-        """With attribution=True but ingest_site_prompt=None, verify sys.exit(1)."""
+        """With attribution=True but ingest_site_prompt=None, verify ResourceryError."""
         note_file = tmp_path / "test-note.md"
         note_file.write_text("# Test Note")
         paths = dict(build_paths)
         paths["attribution"] = True
         paths["ingest_note"] = str(note_file)
         paths["ingest_site_prompt"] = None
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             build_site(**paths)
-        assert exc_info.value.code == 1
+        assert (
+            "build.attribution is enabled but ingest.site_prompt is not set"
+            in str(exc_info.value)
+        )
 
     @pytest.mark.unit
     def test_missing_note_file_raises(self, build_paths: dict, tmp_path: Path):
@@ -281,9 +287,9 @@ class TestBuildAttribution:
         paths["attribution"] = True
         paths["ingest_note"] = str(tmp_path / "nonexistent.md")
         paths["ingest_site_prompt"] = str(prompt_file)
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             build_site(**paths)
-        assert exc_info.value.code == 1
+        assert "Cannot read note file" in str(exc_info.value)
 
     @pytest.mark.unit
     def test_missing_prompt_file_raises(self, build_paths: dict, tmp_path: Path):
@@ -294,13 +300,13 @@ class TestBuildAttribution:
         paths["attribution"] = True
         paths["ingest_note"] = str(note_file)
         paths["ingest_site_prompt"] = str(tmp_path / "nonexistent.md")
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             build_site(**paths)
-        assert exc_info.value.code == 1
+        assert "Cannot read site prompt file" in str(exc_info.value)
 
     @pytest.mark.unit
     def test_utf8_decode_error(self, build_paths: dict, tmp_path: Path):
-        """Create a non-UTF-8 file and verify sys.exit(1) with decode error."""
+        """Create a non-UTF-8 file and verify ResourceryError with decode error."""
         note_file = tmp_path / "test-note.md"
         note_file.write_text("# Test Note")
         prompt_file = tmp_path / "test-prompt.md"
@@ -310,9 +316,35 @@ class TestBuildAttribution:
         paths["attribution"] = True
         paths["ingest_note"] = str(note_file)
         paths["ingest_site_prompt"] = str(prompt_file)
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             build_site(**paths)
-        assert exc_info.value.code == 1
+        assert "Cannot decode test-prompt.md as UTF-8" in str(exc_info.value)
+
+    @pytest.mark.unit
+    def test_missing_fonts_css_raises(self, build_paths: dict, tmp_path: Path, capsys):
+        """Without static/css/fonts.css, verify ResourceryError on stdout."""
+        paths = dict(build_paths)
+        paths["static_dir"] = tmp_path / "static-empty"
+        with pytest.raises(ResourceryError) as exc_info:
+            build_site(**paths)
+        assert "static/css/fonts.css not found" in str(exc_info.value)
+        assert "static/css/fonts.css not found" in capsys.readouterr().out
+
+    @pytest.mark.unit
+    def test_utf8_decode_error_note_file(self, build_paths: dict, tmp_path: Path):
+        """A non-UTF-8 note file verifies the note-twin of the decode error."""
+        note_file = tmp_path / "test-note.md"
+        # Write non-UTF-8 bytes
+        note_file.write_bytes(b"\xff\xfe\x00invalid")
+        prompt_file = tmp_path / "test-prompt.md"
+        prompt_file.write_text("# Test Prompt")
+        paths = dict(build_paths)
+        paths["attribution"] = True
+        paths["ingest_note"] = str(note_file)
+        paths["ingest_site_prompt"] = str(prompt_file)
+        with pytest.raises(ResourceryError) as exc_info:
+            build_site(**paths)
+        assert "Cannot decode test-note.md as UTF-8" in str(exc_info.value)
 
     def test_footer_contains_attribution(self, attribution_paths: dict):
         """Verify index.html contains the .attribution-note element with correct links."""

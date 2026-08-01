@@ -1,9 +1,11 @@
 """E2E and unit tests for data ingestion pipeline."""
 
+import sys
 from types import MappingProxyType
 
 import pytest
 from pathlib import Path
+from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.validate import DataValidator
 from resourcery_ssg.io_utils import load_json
 from resourcery_ssg.data_ingestion import (
@@ -11,6 +13,7 @@ from resourcery_ssg.data_ingestion import (
     run_multi_step_ingestion,
     _resolve_stage_setting,
     build_stage_config,
+    main as ingestion_main,
 )
 
 
@@ -172,9 +175,9 @@ class TestBuildStageConfig:
 
     def test_unknown_stage_key_exits_1(self, capsys):
         stages = {"bogus-stage": {}}
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             build_stage_config(stages)
-        assert exc_info.value.code == 1
+        assert "Unknown stage key" in str(exc_info.value)
         assert "Unknown stage key" in capsys.readouterr().err
 
     def test_multi_step_false_warns_and_returns_none(self, capsys):
@@ -356,3 +359,108 @@ def test_data_ingestion_multi_step_e2e(tmp_path, pytestconfig):
     cross_valid = validator.cross_validate()
     assert cross_valid
     assert len(validator.errors) == 0
+
+
+class TestIngestionMainExits:
+    """Entry-point exits of ``data_ingestion.main()`` (no LLM orchestration)."""
+
+    @staticmethod
+    def _prepare_inputs(tmp_path: Path) -> dict:
+        """Create valid note/site-prompt/schemas/prompt files under tmp_path."""
+        notes_dir = tmp_path / "notes"
+        notes_dir.mkdir()
+        (notes_dir / "note.md").write_text("# Note", encoding="utf-8")
+        (notes_dir / "site-prompt.md").write_text("# Prompt", encoding="utf-8")
+        schemas_dir = tmp_path / "schemas"
+        schemas_dir.mkdir()
+        prompts_dir = tmp_path / "prompts"
+        prompts_dir.mkdir()
+        (prompts_dir / "data-ingestion.md").write_text("# Ingest", encoding="utf-8")
+        return {
+            "notes_dir": notes_dir,
+            "schemas_dir": schemas_dir,
+            "prompts_dir": prompts_dir,
+        }
+
+    @staticmethod
+    def _base_argv(tmp_path: Path) -> list:
+        inputs = TestIngestionMainExits._prepare_inputs(tmp_path)
+        return [
+            "ingest",
+            "--note", str(inputs["notes_dir"] / "note.md"),
+            "--site-prompt", str(inputs["notes_dir"] / "site-prompt.md"),
+            "--schemas", str(inputs["schemas_dir"]),
+            "--prompt", str(inputs["prompts_dir"] / "data-ingestion.md"),
+            "--model", "gpt-4o",
+            "--output", str(tmp_path / "output"),
+        ]
+
+    @pytest.mark.unit
+    def test_main_missing_required_value_exits_1(self, tmp_path, monkeypatch, capsys):
+        """A required ingest value absent from CLI and config → SystemExit(1).
+
+        The committed config.yaml provides ingest defaults, so the user
+        config nulls them out to force the required-value check to fire.
+        """
+        inputs = self._prepare_inputs(tmp_path)
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "\n".join(
+                [
+                    "ingest:",
+                    "  schemas_dir: null",
+                    "  prompt: null",
+                    "  model: null",
+                    "  output_dir: null",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        argv = [
+            "ingest",
+            "--note", str(inputs["notes_dir"] / "note.md"),
+            "--site-prompt", str(inputs["notes_dir"] / "site-prompt.md"),
+            "--config", str(cfg),
+            # --schemas/--prompt/--model/--output omitted on purpose
+        ]
+        monkeypatch.setattr(sys, "argv", argv)
+
+        with pytest.raises(SystemExit) as exc_info:
+            ingestion_main()
+
+        assert exc_info.value.code == 1
+        assert "Error: --schemas is required" in capsys.readouterr().err
+
+    @pytest.mark.unit
+    def test_main_runtime_error_exits_1(self, tmp_path, monkeypatch, capsys):
+        """run_ingestion raising RuntimeError → caught → SystemExit(1)."""
+        def raising_run(**kwargs):
+            raise RuntimeError("opencode failed")
+
+        monkeypatch.setattr(
+            "resourcery_ssg.data_ingestion.run_ingestion", raising_run
+        )
+        monkeypatch.setattr(sys, "argv", self._base_argv(tmp_path))
+
+        with pytest.raises(SystemExit) as exc_info:
+            ingestion_main()
+
+        assert exc_info.value.code == 1
+        assert "opencode failed" in capsys.readouterr().err
+
+    @pytest.mark.unit
+    def test_main_unknown_stage_key_exits_1(self, tmp_path, monkeypatch, capsys):
+        """build_stage_config raising ResourceryError → wrapped → SystemExit(1)."""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "ingest:\n  stages:\n    bogus: {}\n", encoding="utf-8"
+        )
+        argv = self._base_argv(tmp_path)
+        argv += ["--multi-step", "--config", str(cfg)]
+        monkeypatch.setattr(sys, "argv", argv)
+
+        with pytest.raises(SystemExit) as exc_info:
+            ingestion_main()
+
+        assert exc_info.value.code == 1
+        assert "Unknown stage key" in capsys.readouterr().err

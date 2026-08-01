@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional, Tuple
 
+from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.io_utils import loads_json, JsonLoadError
 from resourcery_ssg.validate import DataValidator
 
@@ -421,7 +422,7 @@ def build_stage_config(
     Returns: (stage_config, requested_stages) tuple; both None when the
         configuration is absent or ignored (multi_step false).
 
-    SystemExit: exit 1 if stages_cfg contains an unknown stage key.
+    ResourceryError: exit 1 if stages_cfg contains an unknown stage key.
     """
     if stage_keys is None:
         stage_keys = ["site.config", "links", "design"]
@@ -432,12 +433,12 @@ def build_stage_config(
     # Always validate stage keys (canonical data_ingestion.py order)
     for key in stages_cfg:
         if key not in stage_keys:
-            print(
+            msg = (
                 f"Error: Unknown stage key '{key}' in config.yaml ingest.stages. "
-                f"Valid keys are: {', '.join(stage_keys)}",
-                file=sys.stderr,
+                f"Valid keys are: {', '.join(stage_keys)}"
             )
-            sys.exit(1)
+            print(msg, file=sys.stderr)
+            raise ResourceryError(msg)
 
     if not multi_step:
         print(
@@ -1082,9 +1083,12 @@ def main():
             sys.exit(1)
 
     # Process stages configuration (per-stage overrides and selective execution)
-    stage_config, requested_stages = build_stage_config(
-        stages_cfg, multi_step=multi_step
-    )
+    try:
+        stage_config, requested_stages = build_stage_config(
+            stages_cfg, multi_step=multi_step
+        )
+    except ResourceryError:
+        sys.exit(1)
 
     try:
         if multi_step:

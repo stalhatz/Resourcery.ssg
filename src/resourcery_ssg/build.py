@@ -11,6 +11,7 @@ import shutil
 import sys
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
+from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.io_utils import load_json
 from resourcery_ssg.theme_constants import (
     get_heading_weight,
@@ -132,7 +133,7 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
 
     Prints progress and warnings to stdout.
 
-    SystemExit: if fonts.css is missing (run font_acquirer.py first).
+    ResourceryError: if fonts.css is missing (run font_acquirer.py first).
     """
 
     print("🔨 Building static site...")
@@ -161,8 +162,9 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
     # Guard: fonts must be acquired before building
     fonts_css_path = static_dir / "css" / "fonts.css"
     if not fonts_css_path.exists():
-        print("⚠️  static/css/fonts.css not found — run font_acquirer.py first")
-        sys.exit(1)
+        msg = "⚠️  static/css/fonts.css not found — run font_acquirer.py first"
+        print(msg)
+        raise ResourceryError(msg)
 
     # ==================== ATTRIBUTION ====================
 
@@ -175,40 +177,46 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
     if attribution_enabled:
         # Validate ingest.note is set
         if not ingest_note:
-            print("Error: build.attribution is enabled but ingest.note is not set in config.")
+            msg = "Error: build.attribution is enabled but ingest.note is not set in config."
+            print(msg)
             print("Add 'note' under the 'ingest' section in your config.yaml.")
-            sys.exit(1)
+            raise ResourceryError(msg)
 
         # Validate ingest.site_prompt is set
         if not ingest_site_prompt:
-            print("Error: build.attribution is enabled but ingest.site_prompt is not set in config.")
+            msg = "Error: build.attribution is enabled but ingest.site_prompt is not set in config."
+            print(msg)
             print("Add 'site_prompt' under the 'ingest' section in your config.yaml.")
-            sys.exit(1)
+            raise ResourceryError(msg)
 
         # Validate files exist on disk
         note_path = Path(ingest_note)
         prompt_path = Path(ingest_site_prompt)
 
         if not note_path.exists():
-            print(f"Error: Cannot read note file: {note_path}")
-            sys.exit(1)
+            msg = f"Error: Cannot read note file: {note_path}"
+            print(msg)
+            raise ResourceryError(msg)
 
         if not prompt_path.exists():
-            print(f"Error: Cannot read site prompt file: {prompt_path}")
-            sys.exit(1)
+            msg = f"Error: Cannot read site prompt file: {prompt_path}"
+            print(msg)
+            raise ResourceryError(msg)
 
         # Read markdown files as UTF-8
         try:
             note_md = note_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
-            print(f"Error: Cannot decode {note_path.name} as UTF-8")
-            sys.exit(1)
+            msg = f"Error: Cannot decode {note_path.name} as UTF-8"
+            print(msg)
+            raise ResourceryError(msg)
 
         try:
             prompt_md = prompt_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
-            print(f"Error: Cannot decode {prompt_path.name} as UTF-8")
-            sys.exit(1)
+            msg = f"Error: Cannot decode {prompt_path.name} as UTF-8"
+            print(msg)
+            raise ResourceryError(msg)
 
         # Convert markdown to HTML using mistune with GFM plugin
         markdown = mistune.create_markdown(
@@ -364,7 +372,10 @@ def main():
     build_kwargs = dict(config["build"])
     build_kwargs["ingest_note"] = config.get("ingest", {}).get("note")
     build_kwargs["ingest_site_prompt"] = config.get("ingest", {}).get("site_prompt")
-    build_site(**build_kwargs)
+    try:
+        build_site(**build_kwargs)
+    except ResourceryError:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

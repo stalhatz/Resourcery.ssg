@@ -1,6 +1,8 @@
+import sys
 import pytest
 from pathlib import Path
 from resourcery_ssg.validate import DataValidator
+from resourcery_ssg.validate import main as validate_main
 
 
 @pytest.fixture
@@ -272,3 +274,50 @@ class TestIntegrationValidate:
         )
         assert validator.validate_all() is True
         assert len(validator.errors) == 0
+
+
+class TestValidateMain:
+    """Entry-point exits of ``validate.main()`` (sys.exit(0/1))."""
+
+    @staticmethod
+    def _write_config(tmp_path: Path, testdata_dir: Path) -> Path:
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "\n".join(
+                [
+                    "validate:",
+                    f"  data_dir: {testdata_dir}",
+                    f"  schemas_dir: {Path(__file__).resolve().parent.parent / 'schemas'}",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return cfg
+
+    @pytest.mark.unit
+    def test_main_exits_1_on_failure(self, tmp_path, testdata_dir, monkeypatch):
+        """Failed validation → SystemExit(1)."""
+        cfg = self._write_config(tmp_path, testdata_dir)
+        monkeypatch.setattr(
+            "resourcery_ssg.validate.DataValidator.validate_all", lambda self: False
+        )
+        monkeypatch.setattr(sys, "argv", ["validate", "--config", str(cfg)])
+
+        with pytest.raises(SystemExit) as exc_info:
+            validate_main()
+
+        assert exc_info.value.code == 1
+
+    @pytest.mark.unit
+    def test_main_exits_0_on_success(self, tmp_path, testdata_dir, monkeypatch):
+        """Successful validation → SystemExit(0)."""
+        cfg = self._write_config(tmp_path, testdata_dir)
+        monkeypatch.setattr(
+            "resourcery_ssg.validate.DataValidator.validate_all", lambda self: True
+        )
+        monkeypatch.setattr(sys, "argv", ["validate", "--config", str(cfg)])
+
+        with pytest.raises(SystemExit) as exc_info:
+            validate_main()
+
+        assert exc_info.value.code == 0

@@ -14,6 +14,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
+from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.io_utils import loads_json, JsonLoadError
 
 
@@ -128,7 +129,7 @@ def acquire_js(
             ``./static/js/vendor/``.
 
     Raises:
-        SystemExit: on any error, with exit code 1 and a clear message.
+        ResourceryError: on any error, with exit code 1 and a clear message.
     """
     if package_json_path is None:
         package_json_path = (
@@ -139,8 +140,9 @@ def acquire_js(
 
     # Check package.json exists
     if not package_json_path.exists():
-        print(f"Error: package.json not found at {package_json_path}", file=sys.stderr)
-        sys.exit(1)
+        msg = f"Error: package.json not found at {package_json_path}"
+        print(msg, file=sys.stderr)
+        raise ResourceryError(msg)
 
     # Load package.json
     try:
@@ -149,21 +151,17 @@ def acquire_js(
             path=package_json_path,
         )
     except JsonLoadError as e:
-        print(
-            f"Error: package.json is not valid JSON: {e}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        msg = f"Error: package.json is not valid JSON: {e}"
+        print(msg, file=sys.stderr)
+        raise ResourceryError(msg)
 
     # Extract nanostores version
     deps = pkg.get("dependencies", {})
     version = deps.get("nanostores")
     if not version:
-        print(
-            "Error: package.json has no dependencies.nanostores entry",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        msg = "Error: package.json has no dependencies.nanostores entry"
+        print(msg, file=sys.stderr)
+        raise ResourceryError(msg)
 
     vendor_path = vendor_dir / "nanostores.js"
 
@@ -178,30 +176,26 @@ def acquire_js(
     try:
         vendor_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        print(
-            f"Error: cannot write to {vendor_dir}: {e}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        msg = f"Error: cannot write to {vendor_dir}: {e}"
+        print(msg, file=sys.stderr)
+        raise ResourceryError(msg)
 
     # Check writability
     if vendor_dir.exists() and not os.access(str(vendor_dir), os.W_OK):
-        print(
-            f"Error: cannot write to {vendor_dir}: permission denied",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        msg = f"Error: cannot write to {vendor_dir}: permission denied"
+        print(msg, file=sys.stderr)
+        raise ResourceryError(msg)
 
     # Download
     try:
         download_nanostores(version, vendor_path)
     except Exception as e:
-        print(
+        msg = (
             f"Error: failed to download https://esm.sh/nanostores@{version}/"
-            f"es2022/nanostores.mjs: {e}",
-            file=sys.stderr,
+            f"es2022/nanostores.mjs: {e}"
         )
-        sys.exit(1)
+        print(msg, file=sys.stderr)
+        raise ResourceryError(msg)
 
     print(f"✓ nanostores@{version} acquired → {vendor_path}")
 
@@ -237,7 +231,10 @@ def main():
         config_path=args.config,
         overrides=overrides,
     )
-    acquire_js(**config["acquire-js"])
+    try:
+        acquire_js(**config["acquire-js"])
+    except ResourceryError:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

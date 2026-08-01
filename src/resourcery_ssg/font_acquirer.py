@@ -16,6 +16,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
+from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.io_utils import load_json, loads_json, JsonLoadError
 from resourcery_ssg.theme_constants import get_effective_weights, weights_to_api_param
 
@@ -318,7 +319,7 @@ def acquire_fonts(*, data_dir, fonts_dir, css_dir):
     Side-effects: creates directories, downloads files, writes fonts.css,
         prints progress to stdout.
 
-    SystemExit: 1 if any font download fails.
+    ResourceryError: 1 if any font download fails.
     """
 
     print("🔤 Acquiring fonts...\n")
@@ -399,8 +400,9 @@ def acquire_fonts(*, data_dir, fonts_dir, css_dir):
     print(f"   {fonts_css.resolve()}")
 
     if not all_ok:
-        print("\n⚠️  Some fonts failed — check names at fonts.google.com")
-        sys.exit(1)
+        msg = "\n⚠️  Some fonts failed — check names at fonts.google.com"
+        print(msg)
+        raise ResourceryError(msg)
 
 
 def main():
@@ -429,7 +431,10 @@ def main():
         config_path=args.config,
         overrides=overrides,
     )
-    acquire_fonts(**config["acquire-fonts"])
+    try:
+        acquire_fonts(**config["acquire-fonts"])
+    except ResourceryError:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

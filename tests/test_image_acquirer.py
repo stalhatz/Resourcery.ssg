@@ -1,7 +1,9 @@
 import json
+import sys
 import pytest
 from pathlib import Path
 from resourcery_ssg.image_acquirer import ImageAcquirer, acquire_images_from_config
+from resourcery_ssg.image_acquirer import main as image_acquirer_main
 
 
 @pytest.fixture
@@ -289,3 +291,29 @@ class TestAcquireImagesFromConfig:
 
         assert acquire_images_from_config(config, force=True) is True
         assert captured["force"] is True
+
+
+class TestImageAcquirerMain:
+    """Entry-point return codes of ``image_acquirer.main()`` (0/1, no exit)."""
+
+    @pytest.mark.unit
+    def test_main_returns_1_on_failure(self, monkeypatch):
+        """A False acquisition result propagates as return code 1."""
+        monkeypatch.setattr(
+            "resourcery_ssg.image_acquirer.acquire_images_from_config",
+            lambda config, force=False: False,
+        )
+        monkeypatch.setattr(sys, "argv", ["acquire-images"])
+
+        assert image_acquirer_main() == 1
+
+    @pytest.mark.unit
+    def test_main_returns_0_on_success(self, monkeypatch):
+        """A True acquisition result propagates as return code 0."""
+        monkeypatch.setattr(
+            "resourcery_ssg.image_acquirer.acquire_images_from_config",
+            lambda config, force=False: True,
+        )
+        monkeypatch.setattr(sys, "argv", ["acquire-images"])
+
+        assert image_acquirer_main() == 0

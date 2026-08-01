@@ -1,6 +1,7 @@
 import json
 import pytest
 from pathlib import Path
+from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.js_vendor import (
     read_cached_nanostores,
     is_cache_valid,
@@ -200,8 +201,9 @@ class TestAcquireJs:
         missing = tmp_path / "nonexistent.json"
         vendor_dir = tmp_path / "vendor"
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(ResourceryError) as exc_info:
             acquire_js(package_json_path=missing, vendor_dir=vendor_dir)
+        assert "Error: package.json not found" in str(exc_info.value)
 
     @pytest.mark.unit
     def test_missing_nanostores_key_raises(self, tmp_path: Path):
@@ -212,5 +214,89 @@ class TestAcquireJs:
         )
         vendor_dir = tmp_path / "vendor"
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(ResourceryError) as exc_info:
             acquire_js(package_json_path=pkg_path, vendor_dir=vendor_dir)
+        assert "no dependencies.nanostores entry" in str(exc_info.value)
+
+    @pytest.mark.unit
+    def test_invalid_package_json_raises(self, tmp_path: Path, capsys):
+        """Malformed package.json verifies the invalid-JSON branch (stderr)."""
+        pkg_path = tmp_path / "package.json"
+        pkg_path.write_text("{not valid json", encoding="utf-8")
+        vendor_dir = tmp_path / "vendor"
+
+        with pytest.raises(ResourceryError) as exc_info:
+            acquire_js(package_json_path=pkg_path, vendor_dir=vendor_dir)
+        assert "package.json is not valid JSON" in str(exc_info.value)
+        assert "package.json is not valid JSON" in capsys.readouterr().err
+
+    @pytest.mark.unit
+    def test_uncreatable_vendor_dir_raises(self, tmp_path: Path, capsys):
+        """vendor_dir pointing at an existing file verifies the mkdir branch."""
+        pkg_path = tmp_path / "package.json"
+        pkg_path.write_text(
+            json.dumps({
+                "name": "test",
+                "private": True,
+                "dependencies": {"nanostores": "0.11.4"},
+            }),
+            encoding="utf-8",
+        )
+        blocker = tmp_path / "vendor"
+        blocker.write_text("i am a file, not a directory", encoding="utf-8")
+
+        with pytest.raises(ResourceryError) as exc_info:
+            acquire_js(package_json_path=pkg_path, vendor_dir=blocker)
+        assert "cannot write to" in str(exc_info.value)
+        assert "cannot write to" in capsys.readouterr().err
+
+    @pytest.mark.unit
+    def test_vendor_dir_not_writable_raises(self, monkeypatch, tmp_path: Path, capsys):
+        """os.access patched to False verifies the permission-denied branch.
+
+        chmod-based tests are unreliable when running as root, where
+        os.access returns True — hence the monkeypatch.
+        """
+        monkeypatch.setattr(
+            "resourcery_ssg.js_vendor.os.access", lambda path, mode: False
+        )
+        pkg_path = tmp_path / "package.json"
+        pkg_path.write_text(
+            json.dumps({
+                "name": "test",
+                "private": True,
+                "dependencies": {"nanostores": "0.11.4"},
+            }),
+            encoding="utf-8",
+        )
+        vendor_dir = tmp_path / "vendor"
+
+        with pytest.raises(ResourceryError) as exc_info:
+            acquire_js(package_json_path=pkg_path, vendor_dir=vendor_dir)
+        assert "permission denied" in str(exc_info.value)
+        assert "permission denied" in capsys.readouterr().err
+
+    @pytest.mark.unit
+    def test_download_failure_raises(self, monkeypatch, tmp_path: Path, capsys):
+        """A failing download verifies the download-failure branch (stderr)."""
+        def failing_download(*args, **kwargs):
+            raise Exception("Network unreachable")
+
+        monkeypatch.setattr(
+            "resourcery_ssg.js_vendor.download_nanostores", failing_download
+        )
+        pkg_path = tmp_path / "package.json"
+        pkg_path.write_text(
+            json.dumps({
+                "name": "test",
+                "private": True,
+                "dependencies": {"nanostores": "0.11.4"},
+            }),
+            encoding="utf-8",
+        )
+        vendor_dir = tmp_path / "vendor"
+
+        with pytest.raises(ResourceryError) as exc_info:
+            acquire_js(package_json_path=pkg_path, vendor_dir=vendor_dir)
+        assert "failed to download" in str(exc_info.value)
+        assert "failed to download" in capsys.readouterr().err

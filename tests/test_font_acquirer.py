@@ -1,6 +1,7 @@
 import json
 import pytest
 from pathlib import Path
+from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.font_acquirer import (
     read_cached_fonts,
     is_cache_valid,
@@ -220,3 +221,56 @@ class TestIntegrationAcquireFonts:
         assert (css_dir / "fonts.css").exists()
         content = (css_dir / "fonts.css").read_text(encoding="utf-8")
         assert "@font-face" in content
+
+
+class TestAcquireFontsFailure:
+    """The final ``if not all_ok`` block must raise ResourceryError (stdout).
+
+    Both seams stay network-free: either no candidate resolves, or a
+    candidate resolves but its font processing fails.
+    """
+
+    @staticmethod
+    def _dirs(tmp_path: Path):
+        font_dir = tmp_path / "fonts"
+        font_dir.mkdir(parents=True)
+        css_dir = tmp_path / "css"
+        css_dir.mkdir(parents=True)
+        return font_dir, css_dir
+
+    @pytest.mark.unit
+    def test_raises_when_no_candidate_resolves(
+        self, testdata_dir: Path, monkeypatch, tmp_path: Path, capsys
+    ):
+        font_dir, css_dir = self._dirs(tmp_path)
+        monkeypatch.setattr(
+            "resourcery_ssg.font_acquirer.find_first_downloadable",
+            lambda stack, weights: (None, None),
+        )
+
+        with pytest.raises(ResourceryError) as exc_info:
+            acquire_fonts(data_dir=testdata_dir, fonts_dir=font_dir, css_dir=css_dir)
+        assert "Some fonts failed" in str(exc_info.value)
+        assert "\n⚠️  Some fonts failed — check names at fonts.google.com" in (
+            capsys.readouterr().out
+        )
+
+    @pytest.mark.unit
+    def test_raises_when_font_processing_fails(
+        self, testdata_dir: Path, monkeypatch, tmp_path: Path, capsys
+    ):
+        font_dir, css_dir = self._dirs(tmp_path)
+        monkeypatch.setattr(
+            "resourcery_ssg.font_acquirer.find_first_downloadable",
+            lambda stack, weights: ("Inter", "@font-face { font-family: 'Inter'; }"),
+        )
+        monkeypatch.setattr(
+            "resourcery_ssg.font_acquirer.process_font", lambda *args, **kwargs: False
+        )
+
+        with pytest.raises(ResourceryError) as exc_info:
+            acquire_fonts(data_dir=testdata_dir, fonts_dir=font_dir, css_dir=css_dir)
+        assert "Some fonts failed" in str(exc_info.value)
+        assert "\n⚠️  Some fonts failed — check names at fonts.google.com" in (
+            capsys.readouterr().out
+        )

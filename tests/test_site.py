@@ -2,10 +2,13 @@
 
 import sys
 import types
+from pathlib import Path
 from unittest import mock
 
 import pytest
 
+from resourcery_ssg import site
+from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.site import _run_ingest
 
 
@@ -72,10 +75,10 @@ class TestRunIngestMissingRequiredValues:
         config = _ingest_config()
         del config["ingest"]["note"]
 
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             _run_ingest(config)
 
-        assert exc_info.value.code == 1
+        assert "ingest.note and ingest.site_prompt are required" in str(exc_info.value)
         assert "ingest.note and ingest.site_prompt are required" in capsys.readouterr().err
 
     @pytest.mark.unit
@@ -83,29 +86,29 @@ class TestRunIngestMissingRequiredValues:
         config = _ingest_config()
         del config["ingest"]["site_prompt"]
 
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             _run_ingest(config)
 
-        assert exc_info.value.code == 1
+        assert "ingest.note and ingest.site_prompt are required" in str(exc_info.value)
         assert "ingest.note and ingest.site_prompt are required" in capsys.readouterr().err
 
     @pytest.mark.unit
     def test_empty_note_exits_1(self, capsys):
         config = _ingest_config(note="")
 
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             _run_ingest(config)
 
-        assert exc_info.value.code == 1
+        assert "ingest.note and ingest.site_prompt are required" in str(exc_info.value)
 
     @pytest.mark.unit
     def test_empty_site_prompt_exits_1(self, capsys):
         config = _ingest_config(site_prompt="")
 
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             _run_ingest(config)
 
-        assert exc_info.value.code == 1
+        assert "ingest.note and ingest.site_prompt are required" in str(exc_info.value)
 
 
 class TestRunIngestUnknownStageKey:
@@ -117,10 +120,10 @@ class TestRunIngestUnknownStageKey:
             tmp_path, multi_step=True, stages={"bogus-stage": {}}
         )
 
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             _run_ingest(config)
 
-        assert exc_info.value.code == 1
+        assert "Unknown stage key" in str(exc_info.value)
         assert "Unknown stage key" in capsys.readouterr().err
 
 
@@ -199,10 +202,10 @@ class TestRunIngestMissingInputFiles:
         config = _real_ingest_config(tmp_path)
         config["ingest"][key] = str(tmp_path / f"nonexistent-{key}")
 
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             _run_ingest(config)
 
-        assert exc_info.value.code == 1
+        assert f"Error: {label} path does not exist" in str(exc_info.value)
         assert f"Error: {label} path does not exist" in capsys.readouterr().err
 
     @pytest.mark.unit
@@ -214,10 +217,10 @@ class TestRunIngestMissingInputFiles:
         config = _real_ingest_config(tmp_path)
         del config["ingest"][key]
 
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(ResourceryError) as exc_info:
             _run_ingest(config)
 
-        assert exc_info.value.code == 1
+        assert f"Error: {label} is required" in str(exc_info.value)
         assert f"Error: {label} is required" in capsys.readouterr().err
 
 
@@ -230,7 +233,7 @@ class TestRunIngestIntentionalSkips:
 
     @pytest.mark.unit
     def test_no_ingest_section_skips_without_exit(self, capsys):
-        _run_ingest({})  # must not raise SystemExit
+        _run_ingest({})  # must not raise
 
         assert "No 'ingest' section" in capsys.readouterr().out
 
@@ -238,6 +241,179 @@ class TestRunIngestIntentionalSkips:
     def test_missing_model_skips_without_exit(self, capsys):
         config = _ingest_config(model=None)
 
-        _run_ingest(config)  # must not raise SystemExit
+        _run_ingest(config)  # must not raise
 
         assert "ingest.model not set" in capsys.readouterr().out
+
+
+class TestRunAllFailureAborts:
+    """Failure handling in the ``all`` pipeline (``_run_all``/``main`` catch-all).
+
+    Only the font step has an abort line today; JS/build/ingest failures must
+    propagate to the ``site.main()`` catch-all, which adds no text (exit 1).
+    """
+
+    @staticmethod
+    def _write_all_config(tmp_path: Path, testdata_dir: Path) -> Path:
+        """Write a minimal 5-step pipeline config (ingest disabled).
+
+        ``ingest.model`` is nulled so the pipeline has 5 steps; no
+        ``build.static_source`` so ``_seed_static_staging`` no-ops; the
+        links file does not exist so the real ``acquire_images_from_config``
+        warn-and-continues (row 14 unchanged).
+        """
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "\n".join(
+                [
+                    "build:",
+                    f"  data_dir: {testdata_dir}",
+                    f"  templates_dir: {testdata_dir / 'templates'}",
+                    f"  static_dir: {testdata_dir / 'static'}",
+                    f"  output_dir: {tmp_path / 'output'}",
+                    "validate:",
+                    f"  data_dir: {testdata_dir}",
+                    f"  schemas_dir: {Path(__file__).resolve().parent.parent / 'schemas'}",
+                    "acquire-fonts:",
+                    f"  data_dir: {testdata_dir}",
+                    f"  fonts_dir: {tmp_path / 'fonts'}",
+                    f"  css_dir: {tmp_path / 'css'}",
+                    "acquire-images:",
+                    f"  links: {tmp_path / 'nonexistent-links.json'}",
+                    f"  images_dir: {tmp_path / 'images'}",
+                    "ingest:",
+                    "  model: null",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return cfg
+
+    @pytest.mark.unit
+    def test_run_all_font_failure_aborts(self, tmp_path, testdata_dir, monkeypatch, capsys):
+        """Font failure keeps its abort line and exits 1 from ``_run_all``."""
+        cfg = self._write_all_config(tmp_path, testdata_dir)
+
+        def raising_fonts(**kwargs):
+            raise ResourceryError("boom")
+
+        monkeypatch.setattr("resourcery_ssg.font_acquirer.acquire_fonts", raising_fonts)
+
+        args = site._build_parser().parse_args(["--config", str(cfg), "all"])
+        with pytest.raises(SystemExit) as exc_info:
+            site._run_all(args)
+
+        assert exc_info.value.code == 1
+        assert "Font acquisition failed. Aborting pipeline." in capsys.readouterr().out
+
+    @pytest.mark.unit
+    def test_run_all_build_failure_no_abort_line(
+        self, tmp_path, testdata_dir, monkeypatch, capsys
+    ):
+        """Build failure exits 1 via the main() catch-all with no abort line."""
+        cfg = self._write_all_config(tmp_path, testdata_dir)
+        monkeypatch.setattr(
+            "resourcery_ssg.font_acquirer.acquire_fonts", lambda **kwargs: None
+        )
+        monkeypatch.setattr("resourcery_ssg.js_vendor.acquire_js", lambda: None)
+
+        def raising_build(**kwargs):
+            raise ResourceryError("boom")
+
+        monkeypatch.setattr("resourcery_ssg.build.build_site", raising_build)
+        monkeypatch.setattr(sys, "argv", ["site", "--config", str(cfg), "all"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            site.main()
+
+        assert exc_info.value.code == 1
+        assert "Aborting pipeline" not in capsys.readouterr().out
+
+    @pytest.mark.unit
+    def test_run_all_validate_failure_aborts(self, tmp_path, testdata_dir, monkeypatch, capsys):
+        """Validate step failure keeps its abort line and exits 1 from ``_run_all``."""
+        cfg = self._write_all_config(tmp_path, testdata_dir)
+        monkeypatch.setattr(
+            "resourcery_ssg.validate.DataValidator.validate_all", lambda self: False
+        )
+
+        args = site._build_parser().parse_args(["--config", str(cfg), "all"])
+        with pytest.raises(SystemExit) as exc_info:
+            site._run_all(args)
+
+        assert exc_info.value.code == 1
+        assert "Validation failed. Aborting pipeline." in capsys.readouterr().out
+
+    @pytest.mark.unit
+    def test_main_catchall_ingest_failure_exits_1(self, tmp_path, monkeypatch, capsys):
+        """``site.main()`` catch-all: ingest failure → SystemExit(1), no print."""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("ingest:\n  model: gpt-4o\n", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["site", "--config", str(cfg), "ingest"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            site.main()
+
+        assert exc_info.value.code == 1
+        assert "ingest.note and ingest.site_prompt are required" in capsys.readouterr().err
+
+
+class TestSiteDispatchExits:
+    """Entry-point dispatch exits in ``site.main()`` (non-``all`` commands)."""
+
+    @staticmethod
+    def _write_validate_config(tmp_path: Path, testdata_dir: Path) -> Path:
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "\n".join(
+                [
+                    "validate:",
+                    f"  data_dir: {testdata_dir}",
+                    f"  schemas_dir: {Path(__file__).resolve().parent.parent / 'schemas'}",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return cfg
+
+    @pytest.mark.unit
+    def test_validate_dispatch_exits_1_on_failure(
+        self, tmp_path, testdata_dir, monkeypatch, capsys
+    ):
+        """``site validate`` with failed validation → SystemExit(1)."""
+        cfg = self._write_validate_config(tmp_path, testdata_dir)
+        monkeypatch.setattr(
+            "resourcery_ssg.validate.DataValidator.validate_all", lambda self: False
+        )
+        monkeypatch.setattr(sys, "argv", ["site", "--config", str(cfg), "validate"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            site.main()
+
+        assert exc_info.value.code == 1
+
+    @pytest.mark.unit
+    def test_acquire_images_dispatch_exits_1_on_missing_links(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """``site acquire-images`` with a missing links file → SystemExit(1)."""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "\n".join(
+                [
+                    "acquire-images:",
+                    f"  links: {tmp_path / 'nonexistent-links.json'}",
+                    f"  images_dir: {tmp_path / 'images'}",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            sys, "argv", ["site", "--config", str(cfg), "acquire-images"]
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            site.main()
+
+        assert exc_info.value.code == 1
+        assert "Links file not found" in capsys.readouterr().out

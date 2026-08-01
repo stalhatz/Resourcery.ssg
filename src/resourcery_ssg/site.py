@@ -18,6 +18,8 @@ import shutil
 import sys
 from pathlib import Path
 
+from resourcery_ssg.errors import ResourceryError
+
 
 def _build_parser() -> argparse.ArgumentParser:
     """Construct the top-level argument parser with subcommands."""
@@ -155,56 +157,59 @@ def main():
 
     from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
 
-    if args.command == "all":
-        _run_all(args)
-        return
+    try:
+        if args.command == "all":
+            _run_all(args)
+            return
 
-    if args.command not in COMMAND_FLAGS:
-        parser.print_help()
+        if args.command not in COMMAND_FLAGS:
+            parser.print_help()
+            sys.exit(1)
+
+        known_flags = COMMAND_FLAGS[args.command]
+        flag_to_key = {
+            arg: key for arg, key in ARG_TO_CONFIG_KEY.items() if key in known_flags
+        }
+        overrides = build_cli_overrides(args, args.command, flag_to_key)
+
+        config = load_resourcery_config(
+            config_path=args.config,
+            overrides=overrides,
+        )
+
+        if args.command == "build":
+            from resourcery_ssg.build import build_site
+
+            _seed_static_staging(config)
+            build_site(**{k: v for k, v in config["build"].items() if k != "static_source"},
+                       ingest_note=config.get("ingest", {}).get("note"),
+                       ingest_site_prompt=config.get("ingest", {}).get("site_prompt"))
+
+        elif args.command == "validate":
+            from resourcery_ssg.validate import DataValidator
+
+            validator = DataValidator(**config["validate"])
+            success = validator.validate_all()
+            sys.exit(0 if success else 1)
+
+        elif args.command == "acquire-fonts":
+            from resourcery_ssg.font_acquirer import acquire_fonts
+
+            acquire_fonts(**config["acquire-fonts"])
+
+        elif args.command == "acquire-images":
+            from resourcery_ssg.image_acquirer import acquire_images_from_config
+
+            sys.exit(0 if acquire_images_from_config(config, force=args.force) else 1)
+
+        elif args.command == "acquire-js":
+            from resourcery_ssg.js_vendor import acquire_js
+            acquire_js(**config["acquire-js"])
+
+        elif args.command == "ingest":
+            _run_ingest(config)
+    except ResourceryError:
         sys.exit(1)
-
-    known_flags = COMMAND_FLAGS[args.command]
-    flag_to_key = {
-        arg: key for arg, key in ARG_TO_CONFIG_KEY.items() if key in known_flags
-    }
-    overrides = build_cli_overrides(args, args.command, flag_to_key)
-
-    config = load_resourcery_config(
-        config_path=args.config,
-        overrides=overrides,
-    )
-
-    if args.command == "build":
-        from resourcery_ssg.build import build_site
-
-        _seed_static_staging(config)
-        build_site(**{k: v for k, v in config["build"].items() if k != "static_source"},
-                   ingest_note=config.get("ingest", {}).get("note"),
-                   ingest_site_prompt=config.get("ingest", {}).get("site_prompt"))
-
-    elif args.command == "validate":
-        from resourcery_ssg.validate import DataValidator
-
-        validator = DataValidator(**config["validate"])
-        success = validator.validate_all()
-        sys.exit(0 if success else 1)
-
-    elif args.command == "acquire-fonts":
-        from resourcery_ssg.font_acquirer import acquire_fonts
-
-        acquire_fonts(**config["acquire-fonts"])
-
-    elif args.command == "acquire-images":
-        from resourcery_ssg.image_acquirer import acquire_images_from_config
-
-        sys.exit(0 if acquire_images_from_config(config, force=args.force) else 1)
-
-    elif args.command == "acquire-js":
-        from resourcery_ssg.js_vendor import acquire_js
-        acquire_js(**config["acquire-js"])
-
-    elif args.command == "ingest":
-        _run_ingest(config)
 
 
 def _run_ingest(config, args=None):
@@ -218,6 +223,10 @@ def _run_ingest(config, args=None):
         config: The resolved config dict (from load_resourcery_config).
         args: Optional argparse namespace (provides --debug and --opencode-path
             overrides not stored in config).
+
+    ResourceryError: when required ingest inputs (note/site_prompt, or path
+        keys) are missing or a referenced input path does not exist;
+        propagates from build_stage_config on unknown stage keys.
     """
     ingest_cfg = config.get("ingest")
     if not ingest_cfg:
@@ -232,12 +241,12 @@ def _run_ingest(config, args=None):
     note = ingest_cfg.get("note")
     site_prompt = ingest_cfg.get("site_prompt")
     if not note or not site_prompt:
-        print(
+        msg = (
             "  ⚠️  ingest.note and ingest.site_prompt are required — "
-            "pass --note and --site-prompt on the command line",
-            file=sys.stderr,
+            "pass --note and --site-prompt on the command line"
         )
-        sys.exit(1)
+        print(msg, file=sys.stderr)
+        raise ResourceryError(msg)
 
     # Validate that all referenced input paths exist before dispatching.
     # Without this, a missing file (e.g. a deleted note) surfaces as a raw
@@ -251,11 +260,13 @@ def _run_ingest(config, args=None):
         (ingest_cfg.get("prompt"), "prompt"),
     ]:
         if not path_value:
-            print(f"Error: {label} is required (and not set in config.yaml)", file=sys.stderr)
-            sys.exit(1)
+            msg = f"Error: {label} is required (and not set in config.yaml)"
+            print(msg, file=sys.stderr)
+            raise ResourceryError(msg)
         if not Path(path_value).exists():
-            print(f"Error: {label} path does not exist: {path_value}", file=sys.stderr)
-            sys.exit(1)
+            msg = f"Error: {label} path does not exist: {path_value}"
+            print(msg, file=sys.stderr)
+            raise ResourceryError(msg)
 
     from resourcery_ssg.data_ingestion import (
         run_ingestion,
@@ -417,10 +428,9 @@ def _run_all(args):
 
     try:
         acquire_fonts(**config["acquire-fonts"])
-    except SystemExit as e:
-        if e.code != 0:
-            print("\n❌ Font acquisition failed. Aborting pipeline.")
-            sys.exit(1)
+    except ResourceryError:
+        print("\n❌ Font acquisition failed. Aborting pipeline.")
+        sys.exit(1)
     print("\n✓ Fonts acquired.")
 
     # 3. Acquire JS
