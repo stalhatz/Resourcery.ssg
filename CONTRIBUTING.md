@@ -1,5 +1,10 @@
 # Contributing to Resourcery.ssg
 
+1. We have no backwards compatibility to honour at this moment. Any commit can freely change public and internal interfaces. 
+2. Before considering any functionality implementation, always consider using already established, well-maintained libraries. 
+    - Same thing when considering refactoring. Always think "could this be replaced by an established, well-maintained library"?
+
+
 ## File Structure
 
 ### File / Folder Roles
@@ -401,7 +406,7 @@ flowchart LR
 
 ### Long-term
 
-- [ ] Consider extracting category/tag/effect validation into a dedicated validation module instead of inline functions in `validate.py`
+- [x] Consider extracting category/tag/effect validation into a dedicated validation module instead of inline functions in `validate.py`
 - [ ] Add JSDoc type annotations (`// @ts-check`) to frontend modules (deferred from the modular ESM refactor)
 - [ ] Add end-to-end tests that build the full site from a fixture and verify output HTML structure
 - [ ] Evaluate CSS minification as a build step (e.g., `cssnano` via Python subprocess)

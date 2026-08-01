@@ -2,8 +2,13 @@
 import json
 import pytest
 from pathlib import Path
-from resourcery_ssg.validate import DataValidator
-from resourcery_ssg.validate import relative_luminance, contrast_ratio, parse_em
+from resourcery_ssg.design_checks import (
+    extract_valid_categories,
+    validate_cross_references,
+    validate_design_tokens,
+    validate_effects,
+)
+from resourcery_ssg.wcag import relative_luminance, contrast_ratio, parse_em
 
 
 # ============================================================================
@@ -114,32 +119,22 @@ class TestValidateDesignTokens:
         fixture = Path(__file__).parent / "fixtures" / "design" / "good.json"
         design = json.loads(fixture.read_text())
 
-        validator = DataValidator(data_dir=Path("."), schemas_dir=Path("."))
-        validator.design_data = design
-        validator.errors = []
+        errors, warnings = validate_design_tokens(design)
 
-        # Import the function
-        from resourcery_ssg.validate import validate_design_tokens
-        validate_design_tokens(validator)
-
-        assert len(validator.errors) == 0, f"Unexpected errors: {validator.errors}"
+        assert errors == [], f"Unexpected errors: {errors}"
+        assert warnings == [], f"Unexpected warnings: {warnings}"
 
     @pytest.mark.unit
     def test_bad_range_fails(self):
         fixture = Path(__file__).parent / "fixtures" / "design" / "bad_range.json"
         design = json.loads(fixture.read_text())
 
-        validator = DataValidator(data_dir=Path("."), schemas_dir=Path("."))
-        validator.design_data = design
-        validator.errors = []
+        errors, _ = validate_design_tokens(design)
 
-        from resourcery_ssg.validate import validate_design_tokens
-        validate_design_tokens(validator)
-
-        assert len(validator.errors) >= 1, "Should have at least 1 error for out-of-range values"
+        assert len(errors) >= 1, "Should have at least 1 error for out-of-range values"
 
         # At least one error should mention brand_saturation or heading_letter_spacing
-        error_text = " ".join(validator.errors).lower()
+        error_text = " ".join(errors).lower()
         assert "brand_saturation" in error_text or "heading_letter_spacing" in error_text or "range" in error_text
 
     @pytest.mark.unit
@@ -147,15 +142,10 @@ class TestValidateDesignTokens:
         fixture = Path(__file__).parent / "fixtures" / "design" / "bad_contrast.json"
         design = json.loads(fixture.read_text())
 
-        validator = DataValidator(data_dir=Path("."), schemas_dir=Path("."))
-        validator.design_data = design
-        validator.errors = []
+        errors, _ = validate_design_tokens(design)
 
-        from resourcery_ssg.validate import validate_design_tokens
-        validate_design_tokens(validator)
-
-        assert len(validator.errors) >= 1, f"Errors: {validator.errors}"
-        error_text = " ".join(validator.errors).lower()
+        assert len(errors) >= 1, f"Errors: {errors}"
+        error_text = " ".join(errors).lower()
         assert "contrast" in error_text or "ratio" in error_text
 
     @pytest.mark.unit
@@ -231,36 +221,35 @@ class TestEntryAnimationEnum:
 class TestValidateEffectsNew:
     @pytest.mark.unit
     def test_outlined_with_zero_border_warns(self):
-        validator = DataValidator(data_dir=Path("."), schemas_dir=Path("."))
-        validator.design_data = {
+        design = {
             "theme": {
                 "effects": {"card_style": "outlined"},
                 "border": {"border_width": 0},
                 "colors": {},
             }
         }
-        validator.validate_effects()
+        errors, warnings = validate_effects(design)
         # outlined + border_width 0 is contradictory
-        assert any("border_width" in w or "outlined" in w for w in validator.warnings), \
-            f"Expected warning about outlined + border_width 0, got: {validator.warnings}"
+        assert errors == []
+        assert any("border_width" in w or "outlined" in w for w in warnings), \
+            f"Expected warning about outlined + border_width 0, got: {warnings}"
 
     @pytest.mark.unit
     def test_elevated_with_zero_shadow_warns(self):
-        validator = DataValidator(data_dir=Path("."), schemas_dir=Path("."))
-        validator.design_data = {
+        design = {
             "theme": {
                 "effects": {"card_style": "elevated"},
                 "elevation": {"shadow_strength": 0},
                 "colors": {},
             }
         }
-        validator.validate_effects()
-        assert any("shadow_strength" in w or "elevated" in w for w in validator.warnings)
+        errors, warnings = validate_effects(design)
+        assert errors == []
+        assert any("shadow_strength" in w or "elevated" in w for w in warnings)
 
     @pytest.mark.unit
     def test_image_overlay_with_outline_warns(self):
-        validator = DataValidator(data_dir=Path("."), schemas_dir=Path("."))
-        validator.design_data = {
+        design = {
             "theme": {
                 "effects": {
                     "card_style": "image-overlay",
@@ -269,5 +258,111 @@ class TestValidateEffectsNew:
                 "colors": {},
             }
         }
-        validator.validate_effects()
-        assert any("outline" in w for w in validator.warnings)
+        errors, warnings = validate_effects(design)
+        assert errors == []
+        assert any("outline" in w for w in warnings)
+
+
+# ============================================================================
+# validate_cross_references
+# ============================================================================
+
+
+class TestValidateCrossReferences:
+    """Pure cross-reference checks with plain dicts (no DataValidator)."""
+
+    @staticmethod
+    def _config(categories=None, menu_links=None):
+        return {
+            "navigation": {
+                "categories": categories if categories is not None else [],
+                "menu_links": menu_links if menu_links is not None else [],
+            }
+        }
+
+    @staticmethod
+    def _link(link_id, category="", status="active", url="https://example.com",
+              image=None, tags=None):
+        link = {"id": link_id, "category": category, "status": status, "url": url}
+        if image is not None:
+            link["image"] = image
+        if tags is not None:
+            link["tags"] = tags
+        return link
+
+    @pytest.mark.unit
+    def test_duplicate_link_ids_are_errors(self):
+        config = self._config()
+        links = {
+            "links": [
+                self._link("dup"),
+                self._link("dup"),
+            ]
+        }
+        errors, warnings = validate_cross_references(config, links, {})
+        assert any("Duplicate" in e for e in errors)
+
+    @pytest.mark.unit
+    def test_unknown_category_warns(self):
+        config = self._config(categories=[{"id": "tech", "label": "Tech", "children": []}])
+        links = {"links": [self._link("l1", category="nonexistent")]}
+        errors, warnings = validate_cross_references(config, links, {})
+        assert errors == []
+        assert any("nonexistent" in w for w in warnings)
+
+    @pytest.mark.unit
+    def test_suspicious_image_path_warns(self):
+        config = self._config()
+        links = {"links": [self._link("l1", image="images/logo.png")]}
+        errors, warnings = validate_cross_references(config, links, {})
+        assert errors == []
+        assert any("suspicious image path" in w for w in warnings)
+
+    @pytest.mark.unit
+    def test_suspicious_menu_link_url_warns(self):
+        config = self._config(menu_links=[{"label": "External", "url": "ftp://x.com"}])
+        errors, warnings = validate_cross_references(config, {"links": []}, {})
+        assert errors == []
+        assert any("suspicious URL" in w for w in warnings)
+
+    @pytest.mark.unit
+    def test_invalid_hex_color_warns(self):
+        config = self._config()
+        design = {"theme": {"colors": {"primary": "#FFF"}}}
+        errors, warnings = validate_cross_references(config, {"links": []}, design)
+        assert errors == []
+        assert any("Invalid hex color for 'primary'" in w for w in warnings)
+
+    @pytest.mark.unit
+    def test_invalid_dark_hex_color_warns(self):
+        config = self._config()
+        design = {"theme": {"colors": {"dark": {"primary": "#FFF"}}}}
+        errors, warnings = validate_cross_references(config, {"links": []}, design)
+        assert errors == []
+        assert any("Invalid hex color for 'dark.primary'" in w for w in warnings)
+
+    @pytest.mark.unit
+    def test_valid_data_returns_no_errors_or_warnings(self):
+        config = self._config(
+            categories=[{"id": "tech", "label": "Tech", "children": []}],
+            menu_links=[{"label": "Home", "url": "/"}],
+        )
+        links = {"links": [self._link("l1", category="tech")]}
+        design = {"theme": {"colors": {"primary": "#2563eb", "background": "#f8fafc"}}}
+        errors, warnings = validate_cross_references(config, links, design)
+        assert errors == []
+        assert warnings == []
+
+    @pytest.mark.unit
+    def test_extract_valid_categories_includes_parents_and_children(self):
+        config = {
+            "navigation": {
+                "categories": [
+                    {"id": "tech", "label": "Tech",
+                     "children": [{"id": "programming", "label": "Programming"}]},
+                    {"id": "design", "label": "Design", "children": []},
+                ],
+                "menu_links": [],
+            }
+        }
+        assert extract_valid_categories(config) == {"tech", "programming", "design"}

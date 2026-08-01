@@ -3,6 +3,7 @@ import re
 import sys
 import pytest
 from pathlib import Path
+from resourcery_ssg.design_checks import is_valid_hex_color, validate_effects
 from resourcery_ssg.validate import DataValidator
 from resourcery_ssg.validate import main as validate_main
 
@@ -89,14 +90,14 @@ class TestValidateSchema:
 
 class TestValidateEffects:
     @pytest.mark.unit
-    def test_no_effects_no_warnings(self, validator):
-        validator.design_data = {"theme": {"colors": {}}}
-        validator.validate_effects()
-        assert len(validator.warnings) == 0
+    def test_no_effects_no_warnings(self):
+        errors, warnings = validate_effects({"theme": {"colors": {}}})
+        assert errors == []
+        assert warnings == []
 
     @pytest.mark.unit
-    def test_elevated_with_no_shadow_warns(self, validator):
-        validator.design_data = {
+    def test_elevated_with_no_shadow_warns(self):
+        design = {
             "theme": {
                 "effects": {
                     "card_style": "elevated",
@@ -107,12 +108,13 @@ class TestValidateEffects:
                 "colors": {},
             }
         }
-        validator.validate_effects()
-        assert any("shadow_strength" in w or "elevated" in w for w in validator.warnings)
+        errors, warnings = validate_effects(design)
+        assert errors == []
+        assert any("shadow_strength" in w or "elevated" in w for w in warnings)
 
     @pytest.mark.unit
-    def test_image_overlay_with_outline_warns(self, validator):
-        validator.design_data = {
+    def test_image_overlay_with_outline_warns(self):
+        design = {
             "theme": {
                 "effects": {
                     "card_style": "image-overlay",
@@ -120,8 +122,9 @@ class TestValidateEffects:
                 }
             }
         }
-        validator.validate_effects()
-        assert any("hover_effect" in w for w in validator.warnings)
+        errors, warnings = validate_effects(design)
+        assert errors == []
+        assert any("hover_effect" in w for w in warnings)
 
 
 class TestValidateFonts:
@@ -236,18 +239,18 @@ class TestCrossValidate:
 
 class TestIsValidHexColor:
     @pytest.mark.unit
-    def test_valid_codes(self, validator):
-        assert validator._is_valid_hex_color("#1e40af") is True
-        assert validator._is_valid_hex_color("#FFFFFF") is True
-        assert validator._is_valid_hex_color("#000000") is True
+    def test_valid_codes(self):
+        assert is_valid_hex_color("#1e40af") is True
+        assert is_valid_hex_color("#FFFFFF") is True
+        assert is_valid_hex_color("#000000") is True
 
     @pytest.mark.unit
-    def test_invalid_codes(self, validator):
-        assert validator._is_valid_hex_color("#FFF") is False
-        assert validator._is_valid_hex_color("1e40af") is False
-        assert validator._is_valid_hex_color("#GGGGGG") is False
-        assert validator._is_valid_hex_color("") is False
-        assert validator._is_valid_hex_color(123) is False
+    def test_invalid_codes(self):
+        assert is_valid_hex_color("#FFF") is False
+        assert is_valid_hex_color("1e40af") is False
+        assert is_valid_hex_color("#GGGGGG") is False
+        assert is_valid_hex_color("") is False
+        assert is_valid_hex_color(123) is False
 
 
 class TestValidateAll:
