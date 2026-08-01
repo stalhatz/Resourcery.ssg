@@ -245,7 +245,7 @@ class TestOperationalRecords:
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
         monkeypatch.setattr(
-            "resourcery_ssg.data_ingestion.subprocess.run", fake_run
+            "resourcery_ssg.opencode_runner.subprocess.run", fake_run
         )
         monkeypatch.setattr("shutil.which", lambda name: "/fake/opencode")
 

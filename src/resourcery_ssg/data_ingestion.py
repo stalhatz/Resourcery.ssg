@@ -9,17 +9,25 @@ validate against the project's JSON Schemas.
 
 import logging
 import argparse
-import os
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Optional, Tuple
 
 from resourcery_ssg.errors import ResourceryError
+from resourcery_ssg.ingest_prompts import (
+    compose_step_instruction,
+    generate_agent_def,
+    read_file,
+)
 from resourcery_ssg.io_utils import loads_json, JsonLoadError
 from resourcery_ssg.logutil import get_logger, log_timing, log_user
+from resourcery_ssg.opencode_runner import (
+    check_outputs,
+    resolve_opencode_bin,
+    run_opencode,
+)
 from resourcery_ssg.validate import DataValidator
 
 logger = get_logger(__name__)
@@ -34,149 +42,6 @@ SCHEMA_FILES = [
     "site.config.schema.json",
     "design.schema.json",
 ]
-
-# Default timeout for the opencode subprocess (seconds)
-OPENCODE_TIMEOUT = 300
-
-
-def _generate_agent_def(work_dir: str, schemas_dir: str) -> str:
-    """Generate a scoped agent definition for the ingestion run.
-
-    work_dir: absolute path to the temp working directory (write scope).
-    schemas_dir: absolute path to the schemas directory (read scope).
-
-    Returns: agent definition as a YAML-frontmatter markdown string.
-    """
-    return f"""---
-name: data-ingestion
-description: Data ingestion agent
-mode: primary
-permission:
-  read:
-    "{schemas_dir}/**": allow
-  write:
-    "{work_dir}/**": allow
-  edit:
-    "{work_dir}/**": allow
-  bash:
-    "{work_dir}/**": allow
-  webfetch: allow
-  websearch: allow
----
-
-You are a data ingestion agent. Read the instruction carefully, use the inlined schemas to understand the required output format, and generate the three output files (links.json, site.config.json, design.json) at the exact absolute paths specified in the instruction. Use the write tool. Do not ask questions — produce the output files.
-"""
-
-
-def _read_file(path: Path) -> str:
-    """Read a text file and return its contents.
-
-    path: filesystem path to the file.
-
-    Returns: file contents as a string.
-
-    FileNotFoundError: raised if the file does not exist.
-    """
-    return path.read_text(encoding="utf-8")
-
-
-def _generate_step_agent_def(
-    work_dir: str, schemas_dir: str, step_name: str, output_file: str
-) -> str:
-    """Generate a scoped agent definition for a single ingestion step.
-
-    work_dir: absolute path to the temp working directory (write scope).
-    schemas_dir: absolute path to the schemas directory (read scope).
-    step_name: short label for the step (e.g. 'site-config', 'links', 'design').
-    output_file: the single output file this step generates (e.g. 'site.config.json').
-
-    Returns: agent definition as a YAML-frontmatter markdown string.
-    """
-    return f"""---
-name: data-ingestion-{step_name}
-description: generate the output file {output_file}
-mode: primary
-permission:
-  read:
-    "{schemas_dir}/**": allow
-  write:
-    "{work_dir}/**": allow
-  edit:
-    "{work_dir}/**": allow
-  bash:
-    "{work_dir}/**": allow
-  webfetch: allow
-  websearch: allow
----
-
-You are a data ingestion agent. Read the instruction carefully, use the inlined schemas to understand the required output format, and generate the output file {output_file} at the exact absolute path specified in the instruction. Use the write tool. Do not ask questions — produce the output file.
-"""
-
-
-def _compose_step_instruction(
-    step_prompt: str,
-    note_content: str,
-    site_prompt_content: str,
-    schema_contents: dict,
-    schema_keys: list[str],
-    output_path: Path,
-    context_files: Optional[dict[str, str]] = None,
-) -> str:
-    """Compose a step-specific instruction with only the relevant schemas inlined.
-
-    step_prompt: the step-specific prompt markdown content.
-    note_content: the raw markdown note content.
-    site_prompt_content: the site prompt markdown content.
-    schema_contents: dict mapping schema filename -> schema JSON string.
-    schema_keys: list of schema filenames to inline in this step.
-    output_path: the absolute path where the output file should be written.
-    context_files: optional dict of {filename: content} for additional context
-        (e.g. site.config.json for Step 2).
-
-    Returns: the composed instruction string.
-    """
-    instruction_parts = [
-        step_prompt,
-        "",
-        "## Input Files",
-        "",
-        "### Note",
-        "```markdown",
-        note_content,
-        "```",
-        "",
-        "### Site Prompt",
-        "```markdown",
-        site_prompt_content,
-        "```",
-    ]
-
-    for schema_key in schema_keys:
-        if schema_key in schema_contents:
-            instruction_parts.extend([
-                "",
-                f"### Schema: {schema_key}",
-                "```json",
-                schema_contents[schema_key],
-                "```",
-            ])
-
-    if context_files:
-        for filename, content in context_files.items():
-            instruction_parts.extend([
-                "",
-                f"### Context: {filename}",
-                "```json",
-                content,
-                "```",
-            ])
-
-    instruction_parts.extend([
-        "",
-        f"Write the output file to: {output_path}",
-    ])
-
-    return "\n".join(instruction_parts)
 
 
 def run_ingestion(
@@ -221,17 +86,12 @@ def run_ingestion(
     output_dir = Path(output_dir).resolve()
 
     # Check opencode binary exists
-    opencode_bin_resolved = shutil.which(opencode_bin)
-    if opencode_bin_resolved is None:
-        raise FileNotFoundError(
-            f"opencode binary '{opencode_bin}' not found on PATH. "
-            f"Use --opencode-path or set PATH accordingly."
-        )
+    opencode_bin_resolved = resolve_opencode_bin(opencode_bin)
 
     # Read input files
-    note_content = _read_file(note_path)
-    site_prompt_content = _read_file(site_prompt_path)
-    prompt_content = _read_file(prompt_path)
+    note_content = read_file(note_path)
+    site_prompt_content = read_file(site_prompt_path)
+    prompt_content = read_file(prompt_path)
 
     # Read schemas
     schema_contents = {}
@@ -241,7 +101,7 @@ def run_ingestion(
             raise FileNotFoundError(
                 f"Schema file not found: {schema_path}"
             )
-        schema_contents[schema_file] = _read_file(schema_path)
+        schema_contents[schema_file] = read_file(schema_path)
 
     # Create temporary working directory
     tmp_dir_obj = tempfile.mkdtemp(prefix="data_ingestion_")
@@ -254,9 +114,12 @@ def run_ingestion(
         if agent_path:
             agent_def_file = Path(agent_path).resolve(strict=True)
         else:
-            agent_def_content = _generate_agent_def(
+            agent_def_content = generate_agent_def(
                 work_dir=str(tmp_dir),
                 schemas_dir=str(schemas_dir),
+                agent_name="data-ingestion",
+                description="Data ingestion agent",
+                output_phrase="the three output files (links.json, site.config.json, design.json) at the exact absolute paths specified in the instruction. Use the write tool. Do not ask questions — produce the output files.",
             )
             agent_def_file = tmp_dir / "agent.md"
             agent_def_file.write_text(agent_def_content, encoding="utf-8")
@@ -302,48 +165,16 @@ def run_ingestion(
         instruction_file = tmp_dir / "instruction.md"
         instruction_file.write_text(composed_instruction, encoding="utf-8")
 
-        # Prepare environment
-        env = os.environ.copy()
-        env["OPENCODE_DISABLE_PROJECT_CONFIG"] = "1"
-
-        cmd = [
-            opencode_bin_resolved,
-            "run",
-            "Execute the instructions in the attached file.",
-            "--file", str(instruction_file),
-            "--model", model,
-            "--agent", str(agent_def_file),
-            "--auto",
-            "--dir", str(tmp_dir),
-        ]
-
-        logger.debug(f"  Command: {' '.join(cmd)}")
-        logger.debug(f"  Working directory: {tmp_dir}")
-        logger.debug(f"  Instruction file: {instruction_file}")
-
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=OPENCODE_TIMEOUT,
+        result = run_opencode(
+            instruction_file,
+            model,
+            agent_def_file,
+            tmp_dir,
+            opencode_bin=opencode_bin_resolved,
         )
 
-        if result.returncode != 0:
-            error_msg = (
-                f"opencode process failed with exit code {result.returncode}.\n"
-            )
-            if result.stdout:
-                error_msg += f"stdout:\n{result.stdout}\n"
-            if result.stderr:
-                error_msg += f"stderr:\n{result.stderr}\n"
-            raise RuntimeError(error_msg)
-
         # Check for expected output files
-        missing = []
-        for filename in REQUIRED_OUTPUTS:
-            if not (tmp_dir / filename).exists():
-                missing.append(filename)
+        missing = check_outputs(tmp_dir, REQUIRED_OUTPUTS)
 
         if missing:
             error_msg = (
@@ -374,11 +205,6 @@ def run_ingestion(
 
         logger.debug(f"  Output files written to: {output_dir}")
 
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(
-            f"opencode process timed out after {OPENCODE_TIMEOUT} seconds. "
-            f"Check the model and prompt, or increase the timeout."
-        )
     finally:
         if not debug:
             shutil.rmtree(tmp_dir_obj, ignore_errors=True)
@@ -520,16 +346,11 @@ def run_multi_step_ingestion(
     output_dir = Path(output_dir).resolve()
 
     # Check opencode binary exists
-    opencode_bin_resolved = shutil.which(opencode_bin)
-    if opencode_bin_resolved is None:
-        raise FileNotFoundError(
-            f"opencode binary '{opencode_bin}' not found on PATH. "
-            f"Use --opencode-path or set PATH accordingly."
-        )
+    opencode_bin_resolved = resolve_opencode_bin(opencode_bin)
 
     # Read input files
-    note_content = _read_file(note_path)
-    site_prompt_content = _read_file(site_prompt_path)
+    note_content = read_file(note_path)
+    site_prompt_content = read_file(site_prompt_path)
 
     # Read schemas
     schema_contents = {}
@@ -539,7 +360,7 @@ def run_multi_step_ingestion(
             raise FileNotFoundError(
                 f"Schema file not found: {schema_path}"
             )
-        schema_contents[schema_file] = _read_file(schema_path)
+        schema_contents[schema_file] = read_file(schema_path)
 
     # Read step prompts
     step_prompts = {}
@@ -582,7 +403,7 @@ def run_multi_step_ingestion(
             raise FileNotFoundError(
                 f"Step prompt file not found: {prompt_path}"
             )
-        step_prompts[step["prompt_file"]] = _read_file(prompt_path)
+        step_prompts[step["prompt_file"]] = read_file(prompt_path)
 
     # Create temporary working directory
     tmp_dir_obj = tempfile.mkdtemp(prefix="multi_step_ingestion_")
@@ -679,7 +500,7 @@ def run_multi_step_ingestion(
                 for ctx_filename, _ in context_files.items():
                     ctx_path = tmp_dir / ctx_filename
                     if ctx_path.exists():
-                        resolved_context[ctx_filename] = _read_file(ctx_path)
+                        resolved_context[ctx_filename] = read_file(ctx_path)
                     else:
                         # If the dependency file doesn't exist yet, it's a
                         # step that hasn't been processed; skip context
@@ -692,7 +513,7 @@ def run_multi_step_ingestion(
             output_path = tmp_dir / output_file
             step_prompt_content = step_prompts[prompt_file]
 
-            composed_instruction = _compose_step_instruction(
+            composed_instruction = compose_step_instruction(
                 step_prompt=step_prompt_content,
                 note_content=note_content,
                 site_prompt_content=site_prompt_content,
@@ -706,11 +527,12 @@ def run_multi_step_ingestion(
             if agent_path:
                 agent_def_file = Path(agent_path).resolve(strict=True)
             else:
-                agent_def_content = _generate_step_agent_def(
+                agent_def_content = generate_agent_def(
                     work_dir=str(tmp_dir),
                     schemas_dir=str(schemas_dir),
-                    step_name=step_name,
-                    output_file=output_file,
+                    agent_name=f"data-ingestion-{step_name}",
+                    description=f"generate the output file {output_file}",
+                    output_phrase=f"the output file {output_file} at the exact absolute path specified in the instruction. Use the write tool. Do not ask questions — produce the output file.",
                 )
                 agent_def_file = tmp_dir / f"agent_{step_name}.md"
                 agent_def_file.write_text(agent_def_content, encoding="utf-8")
@@ -757,48 +579,21 @@ def run_multi_step_ingestion(
                     current_instruction = "\n".join(retry_parts)
                     instruction_file.write_text(current_instruction, encoding="utf-8")
 
-                # Prepare environment
-                env = os.environ.copy()
-                env["OPENCODE_DISABLE_PROJECT_CONFIG"] = "1"
+                result = run_opencode(
+                    instruction_file,
+                    effective_model,
+                    agent_def_file,
+                    tmp_dir,
+                    opencode_bin=opencode_bin_resolved,
+                )
 
-                cmd = [
-                    opencode_bin_resolved,
-                    "run",
-                    "Execute the instructions in the attached file.",
-                    "--file", str(instruction_file),
-                    "--model", effective_model,
-                    "--agent", str(agent_def_file),
-                    "--auto",
-                    "--dir", str(tmp_dir),
-                ]
-
-                logger.debug(f"  Command: {' '.join(cmd)}")
-                logger.debug(f"  Working directory: {tmp_dir}")
-                logger.debug(f"  Instruction file: {instruction_file}")
                 logger.debug(
                     f"  Step: {step_name}, attempt: {attempt}/{effective_max_retries}"
                 )
 
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    env=env,
-                    timeout=OPENCODE_TIMEOUT,
-                )
-
-                if result.returncode != 0:
-                    error_msg = (
-                        f"opencode process failed with exit code {result.returncode}.\n"
-                    )
-                    if result.stdout:
-                        error_msg += f"stdout:\n{result.stdout}\n"
-                    if result.stderr:
-                        error_msg += f"stderr:\n{result.stderr}\n"
-                    raise RuntimeError(error_msg)
-
                 # Check that the output file exists
-                if not output_path.exists():
+                missing = check_outputs(tmp_dir, [output_file])
+                if missing:
                     raise RuntimeError(
                         f"Step '{step_name}' did not produce output file: {output_path}\n"
                         f"opencode stdout:\n{result.stdout}\n"
@@ -932,11 +727,6 @@ def run_multi_step_ingestion(
 
         logger.debug(f"  Output files written to: {output_dir}")
 
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(
-            f"opencode process timed out after {OPENCODE_TIMEOUT} seconds. "
-            f"Check the model and prompt, or increase the timeout."
-        )
     finally:
         if not debug:
             shutil.rmtree(tmp_dir_obj, ignore_errors=True)
