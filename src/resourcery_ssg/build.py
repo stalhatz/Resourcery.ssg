@@ -4,6 +4,7 @@ Build script for static link aggregation site.
 Renders Jinja2 templates with JSON data.
 """
 
+import logging
 import mistune
 import random
 import os
@@ -13,12 +14,15 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.io_utils import load_json
+from resourcery_ssg.logutil import get_logger, log_timing, log_user
 from resourcery_ssg.theme_constants import (
     get_heading_weight,
     get_heading_letter_spacing,
     resolve_heading,
 )
 from resourcery_ssg.token_gen import generate_theme_tokens
+
+logger = get_logger(__name__)
 
 
 def validate_data(config, links):
@@ -114,6 +118,11 @@ def build_all_tags(links_data):
 # ==================== BUILD ====================
 
 
+def _count_files(path: Path) -> int:
+    """Count the files under a directory tree (os.walk)."""
+    return sum(len(files) for _, _, files in os.walk(path))
+
+
 def build_site(*, data_dir, templates_dir, static_dir, output_dir,
                attribution=None, ingest_note=None, ingest_site_prompt=None):
     """Render all templates and copy static assets to the output directory.
@@ -131,15 +140,17 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
 
     Returns: None.
 
-    Prints progress and warnings to stdout.
+    Logs progress at INFO_USER and errors at ERROR (the ERROR text is shared
+    with the raised ResourceryError).
 
     ResourceryError: if fonts.css is missing (run font_acquirer.py first).
     """
 
-    print("🔨 Building static site...")
+    log_user("🔨 Building static site...")
 
     # Clean output directory
     if output_dir.exists():
+        logger.debug(f"Removed {_count_files(output_dir)} files from {output_dir}")
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True)
 
@@ -151,6 +162,7 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
 
     # Generate design tokens at build time
     theme_tokens = generate_theme_tokens(config["theme"])
+    logger.info(f"Generated {len(theme_tokens)} CSS custom properties")
 
     # Resolve heading style values with typography overrides
     heading_style = (
@@ -163,8 +175,9 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
     fonts_css_path = static_dir / "css" / "fonts.css"
     if not fonts_css_path.exists():
         msg = "⚠️  static/css/fonts.css not found — run font_acquirer.py first"
-        print(msg)
+        logger.error(msg)
         raise ResourceryError(msg)
+    logger.debug(f"fonts.css: using generated file {fonts_css_path}")
 
     # ==================== ATTRIBUTION ====================
 
@@ -178,15 +191,15 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
         # Validate ingest.note is set
         if not ingest_note:
             msg = "Error: build.attribution is enabled but ingest.note is not set in config."
-            print(msg)
-            print("Add 'note' under the 'ingest' section in your config.yaml.")
+            logger.error(msg)
+            logger.error("Add 'note' under the 'ingest' section in your config.yaml.")
             raise ResourceryError(msg)
 
         # Validate ingest.site_prompt is set
         if not ingest_site_prompt:
             msg = "Error: build.attribution is enabled but ingest.site_prompt is not set in config."
-            print(msg)
-            print("Add 'site_prompt' under the 'ingest' section in your config.yaml.")
+            logger.error(msg)
+            logger.error("Add 'site_prompt' under the 'ingest' section in your config.yaml.")
             raise ResourceryError(msg)
 
         # Validate files exist on disk
@@ -195,12 +208,12 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
 
         if not note_path.exists():
             msg = f"Error: Cannot read note file: {note_path}"
-            print(msg)
+            logger.error(msg)
             raise ResourceryError(msg)
 
         if not prompt_path.exists():
             msg = f"Error: Cannot read site prompt file: {prompt_path}"
-            print(msg)
+            logger.error(msg)
             raise ResourceryError(msg)
 
         # Read markdown files as UTF-8
@@ -208,14 +221,14 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
             note_md = note_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             msg = f"Error: Cannot decode {note_path.name} as UTF-8"
-            print(msg)
+            logger.error(msg)
             raise ResourceryError(msg)
 
         try:
             prompt_md = prompt_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             msg = f"Error: Cannot decode {prompt_path.name} as UTF-8"
-            print(msg)
+            logger.error(msg)
             raise ResourceryError(msg)
 
         # Convert markdown to HTML using mistune with GFM plugin
@@ -250,21 +263,28 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
 
     # ==================== RENDER TEMPLATES ====================
 
+    rendered_count = 0
+
     # Render index.html (landing page)
+    logger.debug(f"Rendering index.html from {templates_dir / 'index.html'}")
     template = env.get_template("index.html")
     output = template.render(**base_context)
     with open(output_dir / "index.html", "w", encoding="utf-8") as f:
         f.write(output)
-    print("✓ index.html rendered (landing page)")
+    rendered_count += 1
+    log_user("✓ index.html rendered (landing page)")
 
     # Render browse.html (full browse)
+    logger.debug(f"Rendering browse.html from {templates_dir / 'browse.html'}")
     template = env.get_template("browse.html")
     output = template.render(**base_context)
     with open(output_dir / "browse.html", "w", encoding="utf-8") as f:
         f.write(output)
-    print("✓ browse.html rendered (full browse)")
+    rendered_count += 1
+    log_user("✓ browse.html rendered (full browse)")
 
     # Render style.css (THEMED CSS - CRITICAL!)
+    logger.debug(f"Rendering style.css from {templates_dir / 'style.css'}")
     template = env.get_template("style.css")
     output = template.render(**base_context)
 
@@ -274,7 +294,8 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
 
     with open(css_dir_out / "style.css", "w", encoding="utf-8") as f:
         f.write(output)
-    print("✓ style.css rendered (themed)")
+    rendered_count += 1
+    log_user("✓ style.css rendered (themed)")
 
     # ==================== COPY STATIC FILES ====================
 
@@ -282,31 +303,43 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
 
     # Copy images
     images_src = static_dir / "images"
+    images_count = _count_files(images_src) if images_src.exists() else 0
     if images_src.exists():
         shutil.copytree(images_src, static_output / "images")
-        print("✓ Images copied")
+        logger.debug(f"Copied {images_count} files: {images_src} → {static_output / 'images'}")
+        log_user("✓ Images copied")
 
     # Copy JS
     js_src = static_dir / "js"
+    js_count = _count_files(js_src) if js_src.exists() else 0
     if js_src.exists():
         shutil.copytree(js_src, static_output / "js")
-        print("✓ JavaScript copied")
+        logger.debug(f"Copied {js_count} files: {js_src} → {static_output / 'js'}")
+        log_user("✓ JavaScript copied")
 
     # Copy fonts
     fonts_src = static_dir / "fonts"
+    fonts_count = _count_files(fonts_src) if fonts_src.exists() else 0
     if fonts_src.exists():
         shutil.copytree(fonts_src, static_output / "fonts")
-        print("✓ Fonts copied")
+        logger.debug(f"Copied {fonts_count} files: {fonts_src} → {static_output / 'fonts'}")
+        log_user("✓ Fonts copied")
 
     # Copy fonts.css
     css_out = static_output / "css"
     css_out.mkdir(parents=True, exist_ok=True)
     shutil.copy2(fonts_css_path, css_out / "fonts.css")
-    print("✓ fonts.css copied")
+    logger.debug(f"Copied 1 files: {fonts_css_path} → {css_out / 'fonts.css'}")
+    log_user("✓ fonts.css copied")
+    logger.info(
+        f"Copied {images_count + js_count + fonts_count + 1} files: "
+        f"images {images_count}, js {js_count}, fonts {fonts_count}"
+    )
 
     # ==================== SOURCE PAGES (attribution) ====================
 
     if attribution_enabled:
+        logger.debug(f"Rendering note.html from {templates_dir / 'source.html'}")
         template = env.get_template("source.html")
 
         # Render note.html
@@ -317,9 +350,11 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
         )
         with open(output_dir / "note.html", "w", encoding="utf-8") as f:
             f.write(output)
-        print("✓ note.html rendered (source note)")
+        rendered_count += 1
+        log_user("✓ note.html rendered (source note)")
 
         # Render prompt.html
+        logger.debug(f"Rendering prompt.html from {templates_dir / 'source.html'}")
         output = template.render(
             **base_context,
             source_title="Site Prompt",
@@ -327,14 +362,16 @@ def build_site(*, data_dir, templates_dir, static_dir, output_dir,
         )
         with open(output_dir / "prompt.html", "w", encoding="utf-8") as f:
             f.write(output)
-        print("✓ prompt.html rendered (site prompt)")
+        rendered_count += 1
+        log_user("✓ prompt.html rendered (site prompt)")
 
-    print("\n✅ Build complete!")
-    print(f"\n📁 Output directory: {output_dir.absolute()}")
-    print("\n🌐 To view the site:")
-    print(f"   cd {output_dir} && python -m http.server 8000")
-    print("   Landing page:  http://localhost:8000/")
-    print("   Browse page:   http://localhost:8000/browse.html")
+    logger.info(f"Rendered {rendered_count} templates")
+    log_user("\n✅ Build complete!")
+    log_user(f"\n📁 Output directory: {output_dir.absolute()}")
+    log_user("\n🌐 To view the site:")
+    log_user(f"   cd {output_dir} && python -m http.server 8000")
+    log_user("   Landing page:  http://localhost:8000/")
+    log_user("   Browse page:   http://localhost:8000/browse.html")
 
 
 def main():
@@ -350,9 +387,14 @@ def main():
     parser.add_argument("--static", type=str, default=None, help="Static assets directory")
     parser.add_argument("--output", type=str, default=None, help="Output directory")
     parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
+    parser.add_argument(
+        "--log-level", type=str, default=None,
+        help="Console log level: DEBUG|INFO|WARN|ERROR (case-insensitive)",
+    )
     args = parser.parse_args()
 
     from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
+    from resourcery_ssg.logutil import setup_logging
 
     overrides = build_cli_overrides(
         args,
@@ -364,18 +406,22 @@ def main():
             "output": "output_dir",
         },
     )
+    if args.log_level:
+        overrides["logging.level"] = args.log_level
 
     config = load_resourcery_config(
         config_path=args.config,
         overrides=overrides,
     )
+    setup_logging(config)
     build_kwargs = dict(config["build"])
     build_kwargs["ingest_note"] = config.get("ingest", {}).get("note")
     build_kwargs["ingest_site_prompt"] = config.get("ingest", {}).get("site_prompt")
-    try:
-        build_site(**build_kwargs)
-    except ResourceryError:
-        sys.exit(1)
+    with log_timing(logger, "Command", level=logging.INFO):
+        try:
+            build_site(**build_kwargs)
+        except ResourceryError:
+            sys.exit(1)
 
 
 if __name__ == "__main__":

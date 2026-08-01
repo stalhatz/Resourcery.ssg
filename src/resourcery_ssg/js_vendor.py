@@ -8,6 +8,7 @@ Run before build.py:
     poetry run python js_vendor.py
 """
 
+import logging
 import os
 import re
 import sys
@@ -16,6 +17,9 @@ from pathlib import Path
 
 from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.io_utils import loads_json, JsonLoadError
+from resourcery_ssg.logutil import get_logger, log_timing, log_user
+
+logger = get_logger(__name__)
 
 
 def read_cached_nanostores(vendor_path: Path) -> tuple[str, str] | None:
@@ -98,7 +102,7 @@ def download_nanostores(
         with urllib.request.urlopen(req, timeout=15) as r:
             body = r.read().decode("utf-8")
     except Exception as e:
-        print(f"  ✗ Failed to download {source_url}: {e}")
+        logger.warning(f"  ✗ Failed to download {source_url}: {e}")
         raise
 
     # Write atomically: write to a temp file, then rename
@@ -109,7 +113,7 @@ def download_nanostores(
     except Exception as e:
         if tmp_path.exists():
             tmp_path.unlink()
-        print(f"  ✗ Failed to write {vendor_path}: {e}")
+        logger.warning(f"  ✗ Failed to write {vendor_path}: {e}")
         raise
 
 
@@ -141,7 +145,7 @@ def acquire_js(
     # Check package.json exists
     if not package_json_path.exists():
         msg = f"Error: package.json not found at {package_json_path}"
-        print(msg, file=sys.stderr)
+        logger.error(msg)
         raise ResourceryError(msg)
 
     # Load package.json
@@ -152,7 +156,7 @@ def acquire_js(
         )
     except JsonLoadError as e:
         msg = f"Error: package.json is not valid JSON: {e}"
-        print(msg, file=sys.stderr)
+        logger.error(msg)
         raise ResourceryError(msg)
 
     # Extract nanostores version
@@ -160,14 +164,18 @@ def acquire_js(
     version = deps.get("nanostores")
     if not version:
         msg = "Error: package.json has no dependencies.nanostores entry"
-        print(msg, file=sys.stderr)
+        logger.error(msg)
         raise ResourceryError(msg)
+
+    source_url = f"https://esm.sh/nanostores@{version}/es2022/nanostores.mjs"
+    logger.debug(f"Vendor: resolved nanostores@{version} from {source_url}")
 
     vendor_path = vendor_dir / "nanostores.js"
 
     # Check cache
     if is_cache_valid(vendor_path, version):
-        print(
+        logger.info(f"Vendor file up to date: nanostores@{version}")
+        log_user(
             f"ℹ  nanostores@{version} is up to date — skipping download"
         )
         return
@@ -177,13 +185,13 @@ def acquire_js(
         vendor_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         msg = f"Error: cannot write to {vendor_dir}: {e}"
-        print(msg, file=sys.stderr)
+        logger.error(msg)
         raise ResourceryError(msg)
 
     # Check writability
     if vendor_dir.exists() and not os.access(str(vendor_dir), os.W_OK):
         msg = f"Error: cannot write to {vendor_dir}: permission denied"
-        print(msg, file=sys.stderr)
+        logger.error(msg)
         raise ResourceryError(msg)
 
     # Download
@@ -194,10 +202,11 @@ def acquire_js(
             f"Error: failed to download https://esm.sh/nanostores@{version}/"
             f"es2022/nanostores.mjs: {e}"
         )
-        print(msg, file=sys.stderr)
+        logger.error(msg)
         raise ResourceryError(msg)
 
-    print(f"✓ nanostores@{version} acquired → {vendor_path}")
+    log_user(f"✓ nanostores@{version} acquired → {vendor_path}")
+    logger.info(f"Downloaded nanostores@{version}")
 
 
 def main():
@@ -217,24 +226,33 @@ def main():
     parser.add_argument(
         "--config", type=str, default=None, help="Path to config YAML"
     )
+    parser.add_argument(
+        "--log-level", type=str, default=None,
+        help="Console log level: DEBUG|INFO|WARN|ERROR (case-insensitive)",
+    )
     args = parser.parse_args()
 
     from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
+    from resourcery_ssg.logutil import setup_logging
 
     overrides = build_cli_overrides(
         args,
         "acquire-js",
         {"package_json": "package_json_path", "vendor_dir": "vendor_dir"},
     )
+    if args.log_level:
+        overrides["logging.level"] = args.log_level
 
     config = load_resourcery_config(
         config_path=args.config,
         overrides=overrides,
     )
-    try:
-        acquire_js(**config["acquire-js"])
-    except ResourceryError:
-        sys.exit(1)
+    setup_logging(config)
+    with log_timing(logger, "Command", level=logging.INFO):
+        try:
+            acquire_js(**config["acquire-js"])
+        except ResourceryError:
+            sys.exit(1)
 
 
 if __name__ == "__main__":

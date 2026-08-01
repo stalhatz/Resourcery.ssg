@@ -8,6 +8,9 @@
 import { dom } from '../dom.js';
 import { TagManager } from './tag-manager.js';
 import { filterCards } from './filter-cards.js';
+import { createLogger } from './logger.js';
+
+export const logger = createLogger(import.meta.url);
 
 const isLandingPage = !window.location.pathname.includes('browse.html');
 
@@ -16,7 +19,7 @@ export const ModalManager = {
     const overlay = dom.modalOverlay;
     const modal = dom.modal;
     if (!overlay || !modal) {
-      console.warn('⚠️ Modal elements not found');
+      logger.warn('⚠️ Modal elements not found');
       return;
     }
 

@@ -1,4 +1,6 @@
 import json
+import logging
+import re
 import sys
 import pytest
 from pathlib import Path
@@ -110,6 +112,35 @@ class TestIntegrationBuild:
         assert not (build_paths["output_dir"] / "prompt.html").exists()
         index_html = (build_paths["output_dir"] / "index.html").read_text("utf-8")
         assert "attribution-note" not in index_html
+
+    @pytest.mark.integration
+    def test_build_emits_operational_records(self, build_paths: dict, caplog):
+        """INFO/DEBUG records document what a build actually did."""
+        caplog.set_level(logging.DEBUG)
+        build_site(**build_paths)
+
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(r"^Rendered \d+ templates$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(r"^Generated \d+ CSS custom properties$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(
+                r"^Copied \d+ files: images \d+, js \d+, fonts \d+$", r.message
+            )
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.DEBUG
+            and re.search(r"^Rendering \w+\.\w+ from .+$", r.message)
+            for r in caplog.records
+        )
 
 
 class TestSearchBarFeatureFlag:
@@ -321,14 +352,24 @@ class TestBuildAttribution:
         assert "Cannot decode test-prompt.md as UTF-8" in str(exc_info.value)
 
     @pytest.mark.unit
-    def test_missing_fonts_css_raises(self, build_paths: dict, tmp_path: Path, capsys):
-        """Without static/css/fonts.css, verify ResourceryError on stdout."""
+    def test_missing_fonts_css_raises(
+        self, build_paths: dict, tmp_path: Path, capsys, caplog
+    ):
+        """Without static/css/fonts.css, verify ResourceryError on stderr."""
         paths = dict(build_paths)
         paths["static_dir"] = tmp_path / "static-empty"
         with pytest.raises(ResourceryError) as exc_info:
             build_site(**paths)
         assert "static/css/fonts.css not found" in str(exc_info.value)
-        assert "static/css/fonts.css not found" in capsys.readouterr().out
+        captured = capsys.readouterr()
+        assert "static/css/fonts.css not found" in captured.err
+        assert "static/css/fonts.css not found" not in captured.out
+        error_records = [
+            r for r in caplog.records if r.levelno >= logging.ERROR
+        ]
+        assert any(
+            "static/css/fonts.css not found" in r.message for r in error_records
+        )
 
     @pytest.mark.unit
     def test_utf8_decode_error_note_file(self, build_paths: dict, tmp_path: Path):

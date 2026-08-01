@@ -1,3 +1,5 @@
+import logging
+import re
 import sys
 import pytest
 from pathlib import Path
@@ -255,6 +257,37 @@ class TestValidateAll:
             "resourcery_ssg.font_acquirer.extract_google_font_candidates", lambda s: []
         )
         assert validator.validate_all() is True
+
+    @pytest.mark.unit
+    def test_emits_operational_records(self, validator, monkeypatch, caplog):
+        """INFO/DEBUG records document what a validation run actually did."""
+        monkeypatch.setattr(
+            "resourcery_ssg.font_acquirer.extract_google_font_candidates", lambda s: []
+        )
+        caplog.set_level(logging.DEBUG)
+
+        assert validator.validate_all() is True
+
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(r"^Loaded 3 schemas$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(r"^Validated 3 data files \(\d+ links\)$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(r"^\d+ warnings, \d+ errors collected$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.DEBUG
+            and re.search(r"^Loaded .*\.json \(\d+ records\)$", r.message)
+            for r in caplog.records
+        )
 
     @pytest.mark.unit
     def test_fails_on_missing_schema(self, testdata_dir):

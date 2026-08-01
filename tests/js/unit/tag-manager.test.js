@@ -9,7 +9,7 @@ const LANDING_FIX = () => readFixture('landing.html');
 async function setup(url = BROWSE, html = FIX(), globals) {
   const state = await loadFresh('static/js/modules/state.js', { url, html, globals });
   const tagMod = await loadFresh('static/js/modules/tag-manager.js', { url });
-  return { state, TagManager: tagMod.TagManager };
+  return { state, TagManager: tagMod.TagManager, logger: tagMod.logger };
 }
 
 describe('tag-manager.js', () => {
@@ -197,11 +197,11 @@ describe('tag-manager.js', () => {
     expect(document.getElementById('filterValue1').textContent).toBe('All Categories');
   });
 
-  it('updateFilterHeader: early-returns (console.warn) when filterText1 or filterValue1 absent', async () => {
-    const { TagManager } = await setup(BROWSE, '<div></div>');
-    const warnSpy = vi.spyOn(console, 'warn');
+  it('updateFilterHeader: early-returns (logger.warn) when filterText1 or filterValue1 absent', async () => {
+    const { TagManager, logger } = await setup(BROWSE, '<div></div>');
+    const warnSpy = vi.spyOn(logger, 'warn');
     expect(() => TagManager.updateFilterHeader()).not.toThrow();
-    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith('⚠️ Filter header elements not found');
   });
 
   it('getActiveTag/getActiveSearch getters return atom values', async () => {

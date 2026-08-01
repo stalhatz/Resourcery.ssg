@@ -13,12 +13,17 @@ to the appropriate command module. Supports:
     site all <args>
 """
 
+import logging
 import argparse
+import os
 import shutil
 import sys
 from pathlib import Path
 
 from resourcery_ssg.errors import ResourceryError
+from resourcery_ssg.logutil import get_logger, log_timing, log_user
+
+logger = get_logger(__name__)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -38,11 +43,19 @@ def _build_parser() -> argparse.ArgumentParser:
     build_p.add_argument("--templates", type=str, default=None)
     build_p.add_argument("--static", type=str, default=None)
     build_p.add_argument("--output", type=str, default=None)
+    build_p.add_argument(
+        "--log-level", type=str, default=None,
+        help="Console log level: DEBUG|INFO|WARN|ERROR (case-insensitive)",
+    )
 
     # validate
     val_p = subparsers.add_parser("validate", help="Validate site data against schemas")
     val_p.add_argument("--data", type=str, default=None)
     val_p.add_argument("--schemas", type=str, default=None)
+    val_p.add_argument(
+        "--log-level", type=str, default=None,
+        help="Console log level: DEBUG|INFO|WARN|ERROR (case-insensitive)",
+    )
 
     # acquire-fonts
     fonts_p = subparsers.add_parser(
@@ -51,6 +64,10 @@ def _build_parser() -> argparse.ArgumentParser:
     fonts_p.add_argument("--data", type=str, default=None)
     fonts_p.add_argument("--fonts-dir", type=str, default=None)
     fonts_p.add_argument("--css-dir", type=str, default=None)
+    fonts_p.add_argument(
+        "--log-level", type=str, default=None,
+        help="Console log level: DEBUG|INFO|WARN|ERROR (case-insensitive)",
+    )
 
     # acquire-js
     acquire_js_p = subparsers.add_parser(
@@ -58,6 +75,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     acquire_js_p.add_argument("--package-json", type=str, default=None)
     acquire_js_p.add_argument("--vendor-dir", type=str, default=None)
+    acquire_js_p.add_argument(
+        "--log-level", type=str, default=None,
+        help="Console log level: DEBUG|INFO|WARN|ERROR (case-insensitive)",
+    )
 
     # acquire-images
     imgs_p = subparsers.add_parser(
@@ -66,6 +87,10 @@ def _build_parser() -> argparse.ArgumentParser:
     imgs_p.add_argument("--links", type=str, default=None)
     imgs_p.add_argument("--images-dir", type=str, default=None)
     imgs_p.add_argument("--force", action="store_true")
+    imgs_p.add_argument(
+        "--log-level", type=str, default=None,
+        help="Console log level: DEBUG|INFO|WARN|ERROR (case-insensitive)",
+    )
 
     # ingest
     ingest_p = subparsers.add_parser(
@@ -82,6 +107,10 @@ def _build_parser() -> argparse.ArgumentParser:
     ingest_p.add_argument("--debug", action="store_true")
     ingest_p.add_argument("--multi-step", action="store_true", default=None)
     ingest_p.add_argument("--max-retries", type=int, default=None)
+    ingest_p.add_argument(
+        "--log-level", type=str, default=None,
+        help="Console log level: DEBUG|INFO|WARN|ERROR (case-insensitive)",
+    )
 
     # all
     all_p = subparsers.add_parser(
@@ -111,6 +140,10 @@ def _build_parser() -> argparse.ArgumentParser:
     all_p.add_argument("--debug", action="store_true")
     all_p.add_argument("--multi-step", action="store_true", default=None)
     all_p.add_argument("--max-retries", type=int, default=None)
+    all_p.add_argument(
+        "--log-level", type=str, default=None,
+        help="Console log level: DEBUG|INFO|WARN|ERROR (case-insensitive)",
+    )
 
     return parser
 
@@ -150,66 +183,88 @@ COMMAND_FLAGS = {
 }
 
 
+def _logging_override(args) -> dict:
+    """Dotted-key override for the --log-level flag.
+
+    The ``logging`` section sits outside the command-scoped
+    ``ARG_TO_CONFIG_KEY``/``COMMAND_FLAGS`` mapping, so it needs its own
+    section prefix.
+    """
+    value = getattr(args, "log_level", None)
+    return {"logging.level": value} if value else {}
+
+
 def main():
     """Parse arguments, load config, and dispatch to the requested subcommand."""
     parser = _build_parser()
     args = parser.parse_args()
 
     from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
+    from resourcery_ssg.logutil import setup_logging
 
-    try:
-        if args.command == "all":
-            _run_all(args)
-            return
+    with log_timing(logger, "Command", level=logging.INFO):
+        try:
+            if args.command == "all":
+                _run_all(args)
+                return
 
-        if args.command not in COMMAND_FLAGS:
-            parser.print_help()
+            if args.command not in COMMAND_FLAGS:
+                parser.print_help()
+                sys.exit(1)
+
+            known_flags = COMMAND_FLAGS[args.command]
+            flag_to_key = {
+                arg: key for arg, key in ARG_TO_CONFIG_KEY.items() if key in known_flags
+            }
+            overrides = build_cli_overrides(args, args.command, flag_to_key)
+            overrides.update(_logging_override(args))
+
+            config = load_resourcery_config(
+                config_path=args.config,
+                overrides=overrides,
+            )
+            setup_logging(config)
+            config_path_label = (
+                f"config {args.config}" if args.config else "committed defaults"
+            )
+            logger.info(f"Dispatch: {args.command} ({config_path_label})")
+            if overrides:
+                pairs = ", ".join(f"{k}={v}" for k, v in sorted(overrides.items()))
+                logger.debug(f"Config overrides: {pairs}")
+
+            if args.command == "build":
+                from resourcery_ssg.build import build_site
+
+                _seed_static_staging(config)
+                build_site(**{k: v for k, v in config["build"].items() if k != "static_source"},
+                           ingest_note=config.get("ingest", {}).get("note"),
+                           ingest_site_prompt=config.get("ingest", {}).get("site_prompt"))
+
+            elif args.command == "validate":
+                from resourcery_ssg.validate import DataValidator
+
+                validator = DataValidator(**config["validate"])
+                success = validator.validate_all()
+                sys.exit(0 if success else 1)
+
+            elif args.command == "acquire-fonts":
+                from resourcery_ssg.font_acquirer import acquire_fonts
+
+                acquire_fonts(**config["acquire-fonts"])
+
+            elif args.command == "acquire-images":
+                from resourcery_ssg.image_acquirer import acquire_images_from_config
+
+                sys.exit(0 if acquire_images_from_config(config, force=args.force) else 1)
+
+            elif args.command == "acquire-js":
+                from resourcery_ssg.js_vendor import acquire_js
+                acquire_js(**config["acquire-js"])
+
+            elif args.command == "ingest":
+                _run_ingest(config)
+        except ResourceryError:
             sys.exit(1)
-
-        known_flags = COMMAND_FLAGS[args.command]
-        flag_to_key = {
-            arg: key for arg, key in ARG_TO_CONFIG_KEY.items() if key in known_flags
-        }
-        overrides = build_cli_overrides(args, args.command, flag_to_key)
-
-        config = load_resourcery_config(
-            config_path=args.config,
-            overrides=overrides,
-        )
-
-        if args.command == "build":
-            from resourcery_ssg.build import build_site
-
-            _seed_static_staging(config)
-            build_site(**{k: v for k, v in config["build"].items() if k != "static_source"},
-                       ingest_note=config.get("ingest", {}).get("note"),
-                       ingest_site_prompt=config.get("ingest", {}).get("site_prompt"))
-
-        elif args.command == "validate":
-            from resourcery_ssg.validate import DataValidator
-
-            validator = DataValidator(**config["validate"])
-            success = validator.validate_all()
-            sys.exit(0 if success else 1)
-
-        elif args.command == "acquire-fonts":
-            from resourcery_ssg.font_acquirer import acquire_fonts
-
-            acquire_fonts(**config["acquire-fonts"])
-
-        elif args.command == "acquire-images":
-            from resourcery_ssg.image_acquirer import acquire_images_from_config
-
-            sys.exit(0 if acquire_images_from_config(config, force=args.force) else 1)
-
-        elif args.command == "acquire-js":
-            from resourcery_ssg.js_vendor import acquire_js
-            acquire_js(**config["acquire-js"])
-
-        elif args.command == "ingest":
-            _run_ingest(config)
-    except ResourceryError:
-        sys.exit(1)
 
 
 def _run_ingest(config, args=None):
@@ -230,12 +285,12 @@ def _run_ingest(config, args=None):
     """
     ingest_cfg = config.get("ingest")
     if not ingest_cfg:
-        print("  ⚠️  No 'ingest' section in config — skipping ingestion")
+        logger.warning("  ⚠️  No 'ingest' section in config — skipping ingestion")
         return
 
     model = ingest_cfg.get("model")
     if not model:
-        print("  ⚠️  ingest.model not set — skipping ingestion")
+        logger.warning("  ⚠️  ingest.model not set — skipping ingestion")
         return
 
     note = ingest_cfg.get("note")
@@ -245,7 +300,7 @@ def _run_ingest(config, args=None):
             "  ⚠️  ingest.note and ingest.site_prompt are required — "
             "pass --note and --site-prompt on the command line"
         )
-        print(msg, file=sys.stderr)
+        logger.error(msg)
         raise ResourceryError(msg)
 
     # Validate that all referenced input paths exist before dispatching.
@@ -261,11 +316,11 @@ def _run_ingest(config, args=None):
     ]:
         if not path_value:
             msg = f"Error: {label} is required (and not set in config.yaml)"
-            print(msg, file=sys.stderr)
+            logger.error(msg)
             raise ResourceryError(msg)
         if not Path(path_value).exists():
             msg = f"Error: {label} path does not exist: {path_value}"
-            print(msg, file=sys.stderr)
+            logger.error(msg)
             raise ResourceryError(msg)
 
     from resourcery_ssg.data_ingestion import (
@@ -310,7 +365,7 @@ def _run_ingest(config, args=None):
             opencode_bin=opencode_bin,
             debug=getattr(args, "debug", False) or ingest_cfg.get("debug", False),
         )
-    print("\n✓ Ingestion complete.")
+    log_user("\n✓ Ingestion complete.")
 
 
 def _seed_static_staging(config):
@@ -330,11 +385,12 @@ def _seed_static_staging(config):
     dest = Path(build_cfg["static_dir"])
 
     if not source.exists():
-        print(f"  ⚠️  static_source not found: {source} — skipping")
+        logger.warning(f"  ⚠️  static_source not found: {source} — skipping")
         return
 
-    print(f"  📦 Seeding static staging: {source} → {dest}")
+    log_user(f"  📦 Seeding static staging: {source} → {dest}")
     dest.mkdir(parents=True, exist_ok=True)
+    n_files = 0
     for item in source.iterdir():
         if item.name == ".gitkeep":
             continue  # skip gitkeep files
@@ -344,11 +400,17 @@ def _seed_static_staging(config):
             for sub_item in item.iterdir():
                 sub_dst = dst_path / sub_item.name
                 if sub_item.is_dir():
+                    n_files += sum(
+                        len(files) for _, _, files in os.walk(sub_item)
+                    )
                     shutil.copytree(sub_item, sub_dst, dirs_exist_ok=True)
                 else:
                     shutil.copy2(sub_item, sub_dst)
+                    n_files += 1
         else:
             shutil.copy2(item, dst_path)
+            n_files += 1
+    logger.debug(f"Staging: seeded {source} → {dest} ({n_files} files)")
 
 
 def _run_all(args):
@@ -358,6 +420,7 @@ def _run_all(args):
     Stops on first failure.
     """
     from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
+    from resourcery_ssg.logutil import setup_logging
 
     def _flag_to_key(command):
         known_keys = COMMAND_FLAGS[command]
@@ -380,11 +443,18 @@ def _run_all(args):
     overrides.update(
         build_cli_overrides(args, "acquire-js", _flag_to_key("acquire-js"))
     )
+    overrides.update(_logging_override(args))
 
     config = load_resourcery_config(
         config_path=args.config,
         overrides=overrides,
     )
+    setup_logging(config)
+    config_path_label = f"config {args.config}" if args.config else "committed defaults"
+    logger.info(f"Dispatch: {args.command} ({config_path_label})")
+    if overrides:
+        pairs = ", ".join(f"{k}={v}" for k, v in sorted(overrides.items()))
+        logger.debug(f"Config overrides: {pairs}")
 
     # Seed the static staging directory from static_source (if configured).
     # This copies base static assets (js/, base images/, etc.) into the
@@ -401,68 +471,75 @@ def _run_all(args):
     # Step 0: Ingest (optional)
     if has_ingest:
         step += 1
-        print("\n" + "=" * 60)
-        print(f"STEP {step}/{total_steps}: Ingest")
-        print("=" * 60)
-        _run_ingest(config, args)
+        log_user("\n" + "=" * 60)
+        log_user(f"STEP {step}/{total_steps}: Ingest")
+        log_user("=" * 60)
+        with log_timing(logger, "Step 'ingest'"):
+            _run_ingest(config, args)
 
     # 1. Validate
     step += 1
-    print("\n" + "=" * 60)
-    print(f"STEP {step}/{total_steps}: Validate")
-    print("=" * 60)
+    log_user("\n" + "=" * 60)
+    log_user(f"STEP {step}/{total_steps}: Validate")
+    log_user("=" * 60)
     from resourcery_ssg.validate import DataValidator
 
     validator = DataValidator(**config["validate"])
-    if not validator.validate_all():
-        print("\n❌ Validation failed. Aborting pipeline.")
+    with log_timing(logger, "Step 'validate'"):
+        validation_ok = validator.validate_all()
+    if not validation_ok:
+        logger.error("\n❌ Validation failed. Aborting pipeline.")
         sys.exit(1)
-    print("\n✓ Validation passed.")
+    log_user("\n✓ Validation passed.")
 
     # 2. Acquire fonts
     step += 1
-    print("\n" + "=" * 60)
-    print(f"STEP {step}/{total_steps}: Acquire fonts")
-    print("=" * 60)
+    log_user("\n" + "=" * 60)
+    log_user(f"STEP {step}/{total_steps}: Acquire fonts")
+    log_user("=" * 60)
     from resourcery_ssg.font_acquirer import acquire_fonts
 
     try:
-        acquire_fonts(**config["acquire-fonts"])
+        with log_timing(logger, "Step 'acquire-fonts'"):
+            acquire_fonts(**config["acquire-fonts"])
     except ResourceryError:
-        print("\n❌ Font acquisition failed. Aborting pipeline.")
+        logger.error("\n❌ Font acquisition failed. Aborting pipeline.")
         sys.exit(1)
-    print("\n✓ Fonts acquired.")
+    log_user("\n✓ Fonts acquired.")
 
     # 3. Acquire JS
     step += 1
-    print("\n" + "=" * 60)
-    print(f"STEP {step}/{total_steps}: Acquire JS")
-    print("=" * 60)
+    log_user("\n" + "=" * 60)
+    log_user(f"STEP {step}/{total_steps}: Acquire JS")
+    log_user("=" * 60)
     from resourcery_ssg.js_vendor import acquire_js
-    acquire_js()
-    print("\n✓ JS vendor file acquired.")
+    with log_timing(logger, "Step 'acquire-js'"):
+        acquire_js()
+    log_user("\n✓ JS vendor file acquired.")
 
     # 4. Acquire images
     step += 1
-    print("\n" + "=" * 60)
-    print(f"STEP {step}/{total_steps}: Acquire images")
-    print("=" * 60)
+    log_user("\n" + "=" * 60)
+    log_user(f"STEP {step}/{total_steps}: Acquire images")
+    log_user("=" * 60)
     from resourcery_ssg.image_acquirer import acquire_images_from_config
 
-    acquire_images_from_config(config, force=getattr(args, "force", False))
+    with log_timing(logger, "Step 'acquire-images'"):
+        acquire_images_from_config(config, force=getattr(args, "force", False))
 
     # 5. Build
     step += 1
-    print("\n" + "=" * 60)
-    print(f"STEP {step}/{total_steps}: Build")
-    print("=" * 60)
+    log_user("\n" + "=" * 60)
+    log_user(f"STEP {step}/{total_steps}: Build")
+    log_user("=" * 60)
     from resourcery_ssg.build import build_site
 
     build_kwargs = {k: v for k, v in config["build"].items() if k != "static_source"}
     build_kwargs["ingest_note"] = config.get("ingest", {}).get("note")
     build_kwargs["ingest_site_prompt"] = config.get("ingest", {}).get("site_prompt")
-    build_site(**build_kwargs)
-    print("\n✅ Pipeline complete!")
+    with log_timing(logger, "Step 'build'"):
+        build_site(**build_kwargs)
+    log_user("\n✅ Pipeline complete!")
 
 
 if __name__ == "__main__":

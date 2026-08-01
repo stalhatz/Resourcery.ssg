@@ -1,4 +1,6 @@
 import json
+import logging
+import re
 import pytest
 from pathlib import Path
 from resourcery_ssg.errors import ResourceryError
@@ -222,9 +224,47 @@ class TestIntegrationAcquireFonts:
         content = (css_dir / "fonts.css").read_text(encoding="utf-8")
         assert "@font-face" in content
 
+    @pytest.mark.integration
+    def test_acquire_fonts_emits_operational_records(
+        self, testdata_dir: Path, monkeypatch, tmp_path: Path, caplog
+    ):
+        """INFO download summary + per-variant DEBUG records."""
+        font_dir = tmp_path / "fonts"
+        font_dir.mkdir(parents=True)
+        css_dir = tmp_path / "css"
+        css_dir.mkdir(parents=True)
+
+        def mock_urlopen(req, **kw):
+            class MockResp:
+                def read(self):
+                    return b"/* latin */ @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; src: url(https://example.com/inter.woff2); }"
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *a):
+                    pass
+
+            return MockResp()
+
+        monkeypatch.setattr("urllib.request.urlopen", mock_urlopen)
+        caplog.set_level(logging.DEBUG)
+        acquire_fonts(data_dir=testdata_dir, fonts_dir=font_dir, css_dir=css_dir)
+
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(r"^Downloaded \d+ fonts, \d+ from cache, \d+ failed$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.DEBUG
+            and re.search(r"^Font '.+': (cache hit .+|downloading .+)$", r.message)
+            for r in caplog.records
+        )
+
 
 class TestAcquireFontsFailure:
-    """The final ``if not all_ok`` block must raise ResourceryError (stdout).
+    """The final ``if not all_ok`` block must raise ResourceryError (stderr).
 
     Both seams stay network-free: either no candidate resolves, or a
     candidate resolves but its font processing fails.
@@ -240,7 +280,7 @@ class TestAcquireFontsFailure:
 
     @pytest.mark.unit
     def test_raises_when_no_candidate_resolves(
-        self, testdata_dir: Path, monkeypatch, tmp_path: Path, capsys
+        self, testdata_dir: Path, monkeypatch, tmp_path: Path, capsys, caplog
     ):
         font_dir, css_dir = self._dirs(tmp_path)
         monkeypatch.setattr(
@@ -251,13 +291,17 @@ class TestAcquireFontsFailure:
         with pytest.raises(ResourceryError) as exc_info:
             acquire_fonts(data_dir=testdata_dir, fonts_dir=font_dir, css_dir=css_dir)
         assert "Some fonts failed" in str(exc_info.value)
-        assert "\n⚠️  Some fonts failed — check names at fonts.google.com" in (
-            capsys.readouterr().out
+        captured = capsys.readouterr()
+        assert "\n⚠️  Some fonts failed — check names at fonts.google.com" in captured.err
+        assert "\n⚠️  Some fonts failed — check names at fonts.google.com" not in captured.out
+        assert any(
+            r.levelno == logging.ERROR and "Some fonts failed" in r.message
+            for r in caplog.records
         )
 
     @pytest.mark.unit
     def test_raises_when_font_processing_fails(
-        self, testdata_dir: Path, monkeypatch, tmp_path: Path, capsys
+        self, testdata_dir: Path, monkeypatch, tmp_path: Path, capsys, caplog
     ):
         font_dir, css_dir = self._dirs(tmp_path)
         monkeypatch.setattr(
@@ -271,6 +315,10 @@ class TestAcquireFontsFailure:
         with pytest.raises(ResourceryError) as exc_info:
             acquire_fonts(data_dir=testdata_dir, fonts_dir=font_dir, css_dir=css_dir)
         assert "Some fonts failed" in str(exc_info.value)
-        assert "\n⚠️  Some fonts failed — check names at fonts.google.com" in (
-            capsys.readouterr().out
+        captured = capsys.readouterr()
+        assert "\n⚠️  Some fonts failed — check names at fonts.google.com" in captured.err
+        assert "\n⚠️  Some fonts failed — check names at fonts.google.com" not in captured.out
+        assert any(
+            r.levelno == logging.ERROR and "Some fonts failed" in r.message
+            for r in caplog.records
         )

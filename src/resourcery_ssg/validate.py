@@ -4,6 +4,7 @@ Validation script for Static Link Aggregation Website.
 Validates data files against JSON schemas and performs cross-validation.
 """
 
+import logging
 import re
 import sys
 from pathlib import Path
@@ -11,6 +12,9 @@ from jsonschema import validate, ValidationError, SchemaError
 from typing import Dict, List, Set, Tuple, Any, Optional
 
 from resourcery_ssg.io_utils import load_json, JsonLoadError
+from resourcery_ssg.logutil import get_logger, log_user, log_timing
+
+logger = get_logger(__name__)
 
 
 # ============================================================================
@@ -317,6 +321,9 @@ class DataValidator:
         if not self.config_schema or not self.links_schema or not self.design_schema:
             return False
 
+        logger.info(
+            f"Loaded {len([s for s in (self.config_schema, self.links_schema, self.design_schema) if s])} schemas"
+        )
         return True
 
     def load_data(self) -> bool:
@@ -331,16 +338,21 @@ class DataValidator:
 
         try:
             self.config_data = load_json(config_path)
+            logger.debug(f"Loaded {config_path} ({len(self.config_data)} records)")
         except JsonLoadError as e:
             self.errors.append(f"❌ {e}")
             self.config_data = {}
         try:
             self.links_data = load_json(links_path)
+            logger.debug(
+                f"Loaded {links_path} ({len(self.links_data.get('links', []))} records)"
+            )
         except JsonLoadError as e:
             self.errors.append(f"❌ {e}")
             self.links_data = {}
         try:
             self.design_data = load_json(design_path)
+            logger.debug(f"Loaded {design_path} ({len(self.design_data)} records)")
         except JsonLoadError as e:
             self.errors.append(f"❌ {e}")
             self.design_data = {}
@@ -412,7 +424,7 @@ class DataValidator:
 
         try:
             validate(instance=data, schema=schema)
-            print(f"✅ {name} schema validation passed")
+            log_user(f"✅ {name} schema validation passed")
             return True
         except SchemaError as e:
             self.errors.append(f"❌ {name} schema is invalid: {e.message}")
@@ -431,7 +443,7 @@ class DataValidator:
 
         Returns: None.
 
-        Side-effects: prints status for each checked font.
+        Side-effects: logs status at INFO_USER for each checked font.
         """
 
         from resourcery_ssg.font_acquirer import (
@@ -458,16 +470,19 @@ class DataValidator:
             if not stack or not extract_google_font_candidates(stack):
                 continue
 
-            print(f"  Checking {field}...")
+            log_user(f"  Checking {field}...")
+            candidates = extract_google_font_candidates(stack)
             font_name, _ = find_first_downloadable(stack, weights_param)
 
             if font_name is None:
+                logger.debug(f"Font '{candidates[0]}' availability: missing")
                 self.errors.append(
                     f"❌ typography.{field}: no valid Google Font found in stack '{stack}'. "
                     f"Verify font names at fonts.google.com"
                 )
             else:
-                print(f"  ✓ '{font_name}' found on Google Fonts")
+                logger.debug(f"Font '{candidates[0]}' availability: found")
+                log_user(f"  ✓ '{font_name}' found on Google Fonts")
 
     def extract_valid_categories(self) -> Set[str]:
         """Collect all valid category IDs from the navigation config.
@@ -509,6 +524,7 @@ class DataValidator:
         duplicate_ids = []
 
         # Validate links against config categories
+        logger.debug("Cross-check: links start")
         for link in self.links_data.get("links", []):
             link_id = link.get("id", "unknown")
             category = link.get("category", "")
@@ -547,6 +563,7 @@ class DataValidator:
             )
 
         # Validate config menu links
+        logger.debug("Cross-check: menu links start")
         for menu_link in self.config_data.get("navigation", {}).get("menu_links", []):
             url = menu_link.get("url", "")
             if not url.startswith(("http://", "https://", "mailto:", "/")):
@@ -558,6 +575,7 @@ class DataValidator:
         color_keys = {"primary", "secondary", "background", "surface", "text",
                        "text_muted", "accent", "error", "success"}
         colors = self.design_data.get("theme", {}).get("colors", {})
+        logger.debug("Cross-check: colors start")
         for color_name, color_value in colors.items():
             if color_name in color_keys and not self._is_valid_hex_color(color_value):
                 self.warnings.append(
@@ -573,10 +591,10 @@ class DataValidator:
 
         # Report results
         if not self.warnings:
-            print("✅ Cross-validation passed")
+            log_user("✅ Cross-validation passed")
             return True
         else:
-            print(
+            log_user(
                 f"⚠️  Cross-validation completed with {len(self.warnings)} warning(s)"
             )
             return True
@@ -603,27 +621,31 @@ class DataValidator:
 
         Returns: True if no errors were recorded, False otherwise.
 
-        Side-effects: prints progress and summary to stdout.
+        Side-effects: logs progress at INFO_USER and findings at WARN.
         """
 
-        print("🔍 Starting validation...\n")
+        log_user("🔍 Starting validation...\n")
 
         # Load schemas
-        print("📄 Loading schemas...")
+        log_user("📄 Loading schemas...")
         if not self.load_schemas():
-            print("\n❌ Failed to load schemas. Aborting.")
+            logger.error("\n❌ Failed to load schemas. Aborting.")
             return False
 
         # Load data
-        print("📊 Loading data files...")
+        log_user("📊 Loading data files...")
         if not self.load_data():
-            print("\n❌ Failed to load data files. Aborting.")
+            logger.error("\n❌ Failed to load data files. Aborting.")
             return False
+        logger.info(
+            f"Validated {len([d for d in (self.config_data, self.links_data, self.design_data) if d])} data files "
+            f"({len(self.links_data.get('links', []))} links)"
+        )
 
-        print()
+        log_user("")
 
         # Validate schemas
-        print("🔒 Validating against JSON schemas...")
+        log_user("🔒 Validating against JSON schemas...")
         config_valid = self.validate_schema(
             self.config_data, self.config_schema, "site.config.json"
         )
@@ -634,17 +656,21 @@ class DataValidator:
             self.design_data, self.design_schema, "design.json"
         )
 
-        print()
+        log_user("")
 
         # Cross-validation
         if config_valid and links_valid and design_valid:
-            print("🔗 Running cross-validation checks...")
+            log_user("🔗 Running cross-validation checks...")
             cross_valid = self.cross_validate()
-            print("🎨 Running design token validation...")
+            log_user("🎨 Running design token validation...")
             validate_design_tokens(self)
             self.validate_effects()
+            logger.debug("Cross-check: fonts start")
             self.validate_fonts()
-            print()
+            logger.info(
+                "Cross-checks passed: categories, tags, ids, colors, urls, fonts"
+            )
+            log_user("")
         else:
             cross_valid = False
 
@@ -658,31 +684,33 @@ class DataValidator:
 
         Returns: None.
 
-        Side-effects: prints to stdout.
+        Side-effects: logs the summary at INFO_USER (findings at WARN).
         """
 
-        print("=" * 60)
-        print("VALIDATION SUMMARY")
-        print("=" * 60)
+        logger.info(f"{len(self.warnings)} warnings, {len(self.errors)} errors collected")
+
+        log_user("=" * 60)
+        log_user("VALIDATION SUMMARY")
+        log_user("=" * 60)
 
         if self.errors:
-            print(f"\n❌ ERRORS ({len(self.errors)}):")
+            logger.warning(f"\n❌ ERRORS ({len(self.errors)}):")
             for error in self.errors:
-                print(f"   {error}")
+                logger.warning(f"   {error}")
 
         if self.warnings:
-            print(f"\n⚠️  WARNINGS ({len(self.warnings)}):")
+            logger.warning(f"\n⚠️  WARNINGS ({len(self.warnings)}):")
             for warning in self.warnings:
-                print(f"   {warning}")
+                logger.warning(f"   {warning}")
 
         if not self.errors and not self.warnings:
-            print("\n✅ All validations passed! Ready for build.")
+            log_user("\n✅ All validations passed! Ready for build.")
         elif not self.errors:
-            print("\n✅ Validation passed with warnings. Build can proceed.")
+            log_user("\n✅ Validation passed with warnings. Build can proceed.")
         else:
-            print("\n❌ Validation failed. Please fix errors before building.")
+            logger.warning("\n❌ Validation failed. Please fix errors before building.")
 
-        print("=" * 60)
+        log_user("=" * 60)
 
 
 def main():
@@ -701,24 +729,33 @@ def main():
     parser.add_argument("--data", type=str, default=None, help="Data directory")
     parser.add_argument("--schemas", type=str, default=None, help="Schemas directory")
     parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
+    parser.add_argument(
+        "--log-level", type=str, default=None,
+        help="Console log level: DEBUG|INFO|WARN|ERROR (case-insensitive)",
+    )
     args = parser.parse_args()
 
     from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
+    from resourcery_ssg.logutil import setup_logging
 
     overrides = build_cli_overrides(
         args, "validate", {"data": "data_dir", "schemas": "schemas_dir"}
     )
+    if args.log_level:
+        overrides["logging.level"] = args.log_level
 
     config = load_resourcery_config(
         config_path=args.config,
         overrides=overrides,
     )
+    setup_logging(config)
 
-    validator = DataValidator(**config["validate"])
-    success = validator.validate_all()
+    with log_timing(logger, "Command", level=logging.INFO):
+        validator = DataValidator(**config["validate"])
+        success = validator.validate_all()
 
-    # Exit with appropriate code
-    sys.exit(0 if success else 1)
+        # Exit with appropriate code
+        sys.exit(0 if success else 1)
 
 
 if __name__ == "__main__":

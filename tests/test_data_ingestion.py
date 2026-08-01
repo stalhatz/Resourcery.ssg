@@ -1,5 +1,7 @@
 """E2E and unit tests for data ingestion pipeline."""
 
+import logging
+import re
 import sys
 from types import MappingProxyType
 
@@ -173,20 +175,29 @@ class TestBuildStageConfig:
         }
         assert requested_stages == ["site.config", "links", "design"]
 
-    def test_unknown_stage_key_exits_1(self, capsys):
+    def test_unknown_stage_key_exits_1(self, capsys, caplog):
         stages = {"bogus-stage": {}}
         with pytest.raises(ResourceryError) as exc_info:
             build_stage_config(stages)
         assert "Unknown stage key" in str(exc_info.value)
         assert "Unknown stage key" in capsys.readouterr().err
+        assert any(
+            r.levelno == logging.ERROR and "Unknown stage key" in r.message
+            for r in caplog.records
+        )
 
-    def test_multi_step_false_warns_and_returns_none(self, capsys):
+    def test_multi_step_false_warns_and_returns_none(self, capsys, caplog):
         stages = {"design": {"model": "claude-sonnet"}}
         stage_config, requested_stages = build_stage_config(stages, multi_step=False)
         assert stage_config is None
         assert requested_stages is None
         err = capsys.readouterr().err
         assert "'stages:' is configured but 'multi_step' is false" in err
+        assert any(
+            r.levelno == logging.WARNING
+            and "'stages:' is configured but 'multi_step' is false" in r.message
+            for r in caplog.records
+        )
 
     def test_falsy_stages_cfg_returns_none(self):
         for stages in (None, {}):
@@ -199,6 +210,75 @@ class TestBuildStageConfig:
         assert stage_config is None
         assert requested_stages is None
         assert capsys.readouterr().err == ""
+
+
+class TestOperationalRecords:
+    """Step 7 operational INFO/DEBUG records from the multi-step pipeline."""
+
+    @pytest.mark.unit
+    def test_multi_step_emits_stage_records(self, tmp_path, monkeypatch, caplog):
+        """Stage attempt/resolved-config/retry records fire network-free.
+
+        The fake subprocess.run writes an invalid links.json into the
+        step's working dir, driving the invalid-JSON retry path.
+        """
+        from types import SimpleNamespace
+
+        from resourcery_ssg.data_ingestion import (
+            REQUIRED_OUTPUTS,
+            run_multi_step_ingestion,
+        )
+
+        notes_dir = tmp_path / "notes"
+        notes_dir.mkdir()
+        (notes_dir / "note.md").write_text("# Note", encoding="utf-8")
+        (notes_dir / "site-prompt.md").write_text("# Prompt", encoding="utf-8")
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        for fname in REQUIRED_OUTPUTS:
+            (output_dir / fname).write_text("{}", encoding="utf-8")
+
+        def fake_run(cmd, **kwargs):
+            work_dir = Path(cmd[cmd.index("--dir") + 1])
+            (work_dir / "links.json").write_text("{not json", encoding="utf-8")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(
+            "resourcery_ssg.data_ingestion.subprocess.run", fake_run
+        )
+        monkeypatch.setattr("shutil.which", lambda name: "/fake/opencode")
+
+        caplog.set_level(logging.DEBUG)
+        with pytest.raises(RuntimeError):
+            run_multi_step_ingestion(
+                note_path=notes_dir / "note.md",
+                site_prompt_path=notes_dir / "site-prompt.md",
+                schemas_dir=_PROJECT_DIR / "schemas",
+                prompts_dir=_PROJECT_DIR / "prompts",
+                global_model="gpt-4o",
+                output_dir=output_dir,
+                global_max_retries=2,
+                stage_config={"links": {"max_retries": 2}},
+                requested_stages=["links"],
+                opencode_bin="opencode",
+            )
+
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(r"^Stage 'links' \(model gpt-4o\) attempt 1/2$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.DEBUG
+            and re.search(r"^Stage 'links' resolved config: max_retries$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.DEBUG
+            and re.search(r"^Retry 1/2 for stage 'links': invalid JSON$", r.message)
+            for r in caplog.records
+        )
 
 
 # Root of the test directory — used to locate fixtures and project dirs
@@ -396,7 +476,7 @@ class TestIngestionMainExits:
         ]
 
     @pytest.mark.unit
-    def test_main_missing_required_value_exits_1(self, tmp_path, monkeypatch, capsys):
+    def test_main_missing_required_value_exits_1(self, tmp_path, monkeypatch, capsys, caplog):
         """A required ingest value absent from CLI and config → SystemExit(1).
 
         The committed config.yaml provides ingest defaults, so the user
@@ -430,9 +510,13 @@ class TestIngestionMainExits:
 
         assert exc_info.value.code == 1
         assert "Error: --schemas is required" in capsys.readouterr().err
+        assert any(
+            r.levelno == logging.ERROR and "Error: --schemas is required" in r.message
+            for r in caplog.records
+        )
 
     @pytest.mark.unit
-    def test_main_runtime_error_exits_1(self, tmp_path, monkeypatch, capsys):
+    def test_main_runtime_error_exits_1(self, tmp_path, monkeypatch, capsys, caplog):
         """run_ingestion raising RuntimeError → caught → SystemExit(1)."""
         def raising_run(**kwargs):
             raise RuntimeError("opencode failed")
@@ -447,9 +531,13 @@ class TestIngestionMainExits:
 
         assert exc_info.value.code == 1
         assert "opencode failed" in capsys.readouterr().err
+        assert any(
+            r.levelno == logging.ERROR and "opencode failed" in r.message
+            for r in caplog.records
+        )
 
     @pytest.mark.unit
-    def test_main_unknown_stage_key_exits_1(self, tmp_path, monkeypatch, capsys):
+    def test_main_unknown_stage_key_exits_1(self, tmp_path, monkeypatch, capsys, caplog):
         """build_stage_config raising ResourceryError → wrapped → SystemExit(1)."""
         cfg = tmp_path / "config.yaml"
         cfg.write_text(
@@ -464,3 +552,7 @@ class TestIngestionMainExits:
 
         assert exc_info.value.code == 1
         assert "Unknown stage key" in capsys.readouterr().err
+        assert any(
+            r.levelno == logging.ERROR and "Unknown stage key" in r.message
+            for r in caplog.records
+        )

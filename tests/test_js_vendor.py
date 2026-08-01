@@ -1,4 +1,6 @@
 import json
+import logging
+import re
 import pytest
 from pathlib import Path
 from resourcery_ssg.errors import ResourceryError
@@ -108,7 +110,7 @@ class TestDownloadNanostores:
 
 class TestAcquireJs:
     @pytest.mark.unit
-    def test_creates_vendor_file(self, monkeypatch, tmp_path: Path):
+    def test_creates_vendor_file(self, monkeypatch, tmp_path: Path, caplog):
         # Create package.json in tmp_path
         pkg_path = tmp_path / "package.json"
         pkg_path.write_text(
@@ -140,6 +142,7 @@ class TestAcquireJs:
 
         monkeypatch.setattr("urllib.request.urlopen", mock_urlopen)
 
+        caplog.set_level(logging.DEBUG)
         acquire_js(package_json_path=pkg_path, vendor_dir=vendor_dir)
 
         vendor_file = vendor_dir / "nanostores.js"
@@ -148,8 +151,19 @@ class TestAcquireJs:
         assert "/* nanostores 0.11.4" in content
         assert "export const atom = () => {};" in content
 
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(r"^Downloaded nanostores@0\.11\.4$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.DEBUG
+            and re.search(r"^Vendor: resolved nanostores@0\.11\.4 from .+$", r.message)
+            for r in caplog.records
+        )
+
     @pytest.mark.unit
-    def test_second_call_is_noop(self, monkeypatch, tmp_path: Path):
+    def test_second_call_is_noop(self, monkeypatch, tmp_path: Path, caplog):
         pkg_path = tmp_path / "package.json"
         pkg_path.write_text(
             json.dumps({
@@ -191,10 +205,17 @@ class TestAcquireJs:
 
         monkeypatch.setattr("urllib.request.urlopen", mock_urlopen)
 
+        caplog.set_level(logging.DEBUG)
         acquire_js(package_json_path=pkg_path, vendor_dir=vendor_dir)
 
         # urlopen should NOT have been called
         assert call_count == 0
+
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(r"^Vendor file up to date: nanostores@0\.11\.4$", r.message)
+            for r in caplog.records
+        )
 
     @pytest.mark.unit
     def test_missing_package_json_raises(self, tmp_path: Path):
@@ -219,8 +240,8 @@ class TestAcquireJs:
         assert "no dependencies.nanostores entry" in str(exc_info.value)
 
     @pytest.mark.unit
-    def test_invalid_package_json_raises(self, tmp_path: Path, capsys):
-        """Malformed package.json verifies the invalid-JSON branch (stderr)."""
+    def test_invalid_package_json_raises(self, tmp_path: Path, capsys, caplog):
+        """Malformed package.json verifies the invalid-JSON branch (stderr, ERROR)."""
         pkg_path = tmp_path / "package.json"
         pkg_path.write_text("{not valid json", encoding="utf-8")
         vendor_dir = tmp_path / "vendor"
@@ -229,9 +250,14 @@ class TestAcquireJs:
             acquire_js(package_json_path=pkg_path, vendor_dir=vendor_dir)
         assert "package.json is not valid JSON" in str(exc_info.value)
         assert "package.json is not valid JSON" in capsys.readouterr().err
+        assert any(
+            r.levelno == logging.ERROR
+            and "package.json is not valid JSON" in r.message
+            for r in caplog.records
+        )
 
     @pytest.mark.unit
-    def test_uncreatable_vendor_dir_raises(self, tmp_path: Path, capsys):
+    def test_uncreatable_vendor_dir_raises(self, tmp_path: Path, capsys, caplog):
         """vendor_dir pointing at an existing file verifies the mkdir branch."""
         pkg_path = tmp_path / "package.json"
         pkg_path.write_text(
@@ -249,9 +275,13 @@ class TestAcquireJs:
             acquire_js(package_json_path=pkg_path, vendor_dir=blocker)
         assert "cannot write to" in str(exc_info.value)
         assert "cannot write to" in capsys.readouterr().err
+        assert any(
+            r.levelno == logging.ERROR and "cannot write to" in r.message
+            for r in caplog.records
+        )
 
     @pytest.mark.unit
-    def test_vendor_dir_not_writable_raises(self, monkeypatch, tmp_path: Path, capsys):
+    def test_vendor_dir_not_writable_raises(self, monkeypatch, tmp_path: Path, capsys, caplog):
         """os.access patched to False verifies the permission-denied branch.
 
         chmod-based tests are unreliable when running as root, where
@@ -275,9 +305,13 @@ class TestAcquireJs:
             acquire_js(package_json_path=pkg_path, vendor_dir=vendor_dir)
         assert "permission denied" in str(exc_info.value)
         assert "permission denied" in capsys.readouterr().err
+        assert any(
+            r.levelno == logging.ERROR and "permission denied" in r.message
+            for r in caplog.records
+        )
 
     @pytest.mark.unit
-    def test_download_failure_raises(self, monkeypatch, tmp_path: Path, capsys):
+    def test_download_failure_raises(self, monkeypatch, tmp_path: Path, capsys, caplog):
         """A failing download verifies the download-failure branch (stderr)."""
         def failing_download(*args, **kwargs):
             raise Exception("Network unreachable")
@@ -300,3 +334,7 @@ class TestAcquireJs:
             acquire_js(package_json_path=pkg_path, vendor_dir=vendor_dir)
         assert "failed to download" in str(exc_info.value)
         assert "failed to download" in capsys.readouterr().err
+        assert any(
+            r.levelno == logging.ERROR and "failed to download" in r.message
+            for r in caplog.records
+        )

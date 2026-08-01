@@ -10,6 +10,9 @@ import { $activeTag, $activeSearch, $activeCategory, batchAtomWrites } from './s
 import { slugify, foldDiacritics } from './slugify.js';
 import { dom } from '../dom.js';
 import { filterCards } from './filter-cards.js';
+import { createLogger } from './logger.js';
+
+export const logger = createLogger(import.meta.url);
 
 const isLandingPage = !window.location.pathname.includes('browse.html');
 
@@ -108,7 +111,7 @@ export const TagManager = {
     const searchValue = dom.searchValue;
 
     if (!filterText1 || !filterValue1) {
-      console.warn('⚠️ Filter header elements not found');
+      logger.warn('⚠️ Filter header elements not found');
       return;
     }
 

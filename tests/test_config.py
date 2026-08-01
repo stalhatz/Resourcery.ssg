@@ -209,3 +209,33 @@ class TestLoadResourceryConfig:
         images_cfg = config["acquire-images"]
         assert isinstance(images_cfg["links"], Path)
         assert isinstance(images_cfg["images_dir"], Path)
+
+
+class TestLoggingSection:
+    """The new top-level ``logging`` section rides the config machinery unchanged."""
+
+    @pytest.mark.unit
+    def test_logging_section_resolves(self):
+        config = load_resourcery_config()
+        logging_cfg = config["logging"]
+        assert logging_cfg["level"] == "INFO"  # level strings stay strings
+        assert logging_cfg["file_level"] == "DEBUG"
+        assert isinstance(logging_cfg["logs_dir"], Path)
+        assert str(logging_cfg["logs_dir"]).endswith("logs")
+
+    @pytest.mark.unit
+    def test_logging_level_dotted_override(self):
+        config = load_resourcery_config(overrides={"logging.level": "ERROR"})
+        assert config["logging"]["level"] == "ERROR"
+
+    @pytest.mark.unit
+    def test_log_level_env_override(self, monkeypatch):
+        monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+        config = load_resourcery_config()
+        assert config["logging"]["level"] == "DEBUG"
+
+    @pytest.mark.unit
+    def test_logs_dir_env_override(self, monkeypatch):
+        monkeypatch.setenv("LOGS_DIR", "/tmp/custom-logs")
+        config = load_resourcery_config()
+        assert str(config["logging"]["logs_dir"]) == str(Path("/tmp/custom-logs").resolve())

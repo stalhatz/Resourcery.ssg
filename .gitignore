@@ -26,6 +26,7 @@ static/fonts/
 static/js/vendor/
 data/
 output/
+logs/
 *.jpg
 *.png
 *.sh

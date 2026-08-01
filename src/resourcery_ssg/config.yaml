@@ -7,6 +7,8 @@ vars:
   FONTS_DIR: ${STATIC_DIR}/fonts
   CSS_DIR: ${STATIC_DIR}/css
   IMAGES_DIR: ${STATIC_DIR}/images/acquired
+  LOGS_DIR: ./logs
+  LOG_LEVEL: INFO
 
 build:
   data_dir: ${DATA_DIR}
@@ -38,6 +40,11 @@ ingest:
   opencode_bin: opencode
   # note: ./my-note.md                 # optional — path to source note file (required if build.attribution is true)
   # site_prompt: ./my-site-prompt.md   # optional — path to site prompt file (required if build.attribution is true)
+
+logging:
+  level: ${LOG_LEVEL}        # console threshold: DEBUG | INFO | WARN | ERROR
+  file_level: DEBUG          # file threshold (INFO_USER never reaches the file)
+  logs_dir: ${LOGS_DIR}
 
   # Per-stage configuration (optional). Uncomment to enable selective execution
   # and per-stage model/max_retries overrides. Listed stages run in pipeline

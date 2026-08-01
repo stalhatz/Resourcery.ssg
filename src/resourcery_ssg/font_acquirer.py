@@ -9,6 +9,7 @@ Run before build.py:
     poetry run python font_acquirer.py
 """
 
+import logging
 import json
 import os
 import re
@@ -18,7 +19,10 @@ from pathlib import Path
 
 from resourcery_ssg.errors import ResourceryError
 from resourcery_ssg.io_utils import load_json, loads_json, JsonLoadError
+from resourcery_ssg.logutil import get_logger, log_timing, log_user
 from resourcery_ssg.theme_constants import get_effective_weights, weights_to_api_param
+
+logger = get_logger(__name__)
 
 GOOGLE_FONTS_API = "https://fonts.googleapis.com/css2"
 # Modern browser UA — required to receive woff2 format from Google Fonts API
@@ -186,8 +190,8 @@ def find_first_downloadable(stack: str, weights_param: str) -> tuple:
     Returns: (font_name, css) tuple on success, or (None, None) if no
         candidate resolved.
 
-    Side-effects: prints a warning when the first-preference font fails
-        but a fallback succeeds.
+    Side-effects: logs a warning at WARN when the first-preference font
+        fails but a fallback succeeds.
     """
 
     candidates = extract_google_font_candidates(stack)
@@ -198,13 +202,13 @@ def find_first_downloadable(stack: str, weights_param: str) -> tuple:
         css = fetch_google_fonts_css(name, weights_param)
         if css:
             if i > 0:
-                print(
+                logger.warning(
                     f"  ⚠️  '{candidates[0]}' not found on Google Fonts, "
                     f"using '{name}' instead (position {i+1} in stack)"
                 )
             return name, css
 
-    print(f"  ✗ None of the candidates resolved: {candidates}")
+    logger.warning(f"  ✗ None of the candidates resolved: {candidates}")
     return None, None
 
 
@@ -225,11 +229,18 @@ def download_file(url: str, dest: Path) -> bool:
             dest.write_bytes(r.read())
         return True
     except Exception as e:
-        print(f"  ✗ Failed to download {url}: {e}")
+        logger.warning(f"  ✗ Failed to download {url}: {e}")
         return False
 
 
-def process_font(font_name: str, css: str, face_blocks_out: list, fonts_dir: Path, css_dir: Path) -> bool:
+def process_font(
+    font_name: str,
+    css: str,
+    face_blocks_out: list,
+    fonts_dir: Path,
+    css_dir: Path,
+    counters: dict = None,
+) -> bool:
     """Download all woff2 variants from previously fetched CSS.
 
     Parses the CSS for @font-face blocks, downloads each unique woff2
@@ -241,6 +252,8 @@ def process_font(font_name: str, css: str, face_blocks_out: list, fonts_dir: Pat
     face_blocks_out: list to which local @font-face rule strings are appended.
     fonts_dir: directory to write font files into.
     css_dir: directory where fonts.css will be written (used for relative paths).
+    counters: optional dict with "downloaded"/"cached"/"failed" counters to
+        increment per variant outcome (used for the end-of-run INFO record).
 
     Returns: True if at least one variant was successfully processed.
 
@@ -275,11 +288,19 @@ def process_font(font_name: str, css: str, face_blocks_out: list, fonts_dir: Pat
         local_path = fonts_dir / local_filename
 
         if local_path.exists():
-            print(f"    · {local_filename} (cached)")
+            if counters is not None:
+                counters["cached"] += 1
+            logger.debug(f"Font '{font_name}': cache hit {local_filename}")
+            log_user(f"    · {local_filename} (cached)")
         else:
+            logger.debug(f"Font '{font_name}': downloading {remote_url}")
             if not download_file(remote_url, local_path):
+                if counters is not None:
+                    counters["failed"] += 1
                 continue
-            print(f"    ✓ {local_filename}")
+            if counters is not None:
+                counters["downloaded"] += 1
+            log_user(f"    ✓ {local_filename}")
 
         # Build relative URL from css_dir to fonts_dir
         rel_url = Path(os.path.relpath(fonts_dir, css_dir)) / local_filename
@@ -298,7 +319,7 @@ def process_font(font_name: str, css: str, face_blocks_out: list, fonts_dir: Pat
         face_blocks_out.append(face)
         ok_count += 1
 
-    print(f"    → {ok_count} variant(s) written")
+    log_user(f"    → {ok_count} variant(s) written")
     return ok_count > 0
 
 
@@ -317,12 +338,12 @@ def acquire_fonts(*, data_dir, fonts_dir, css_dir):
     Returns: None.
 
     Side-effects: creates directories, downloads files, writes fonts.css,
-        prints progress to stdout.
+        logs progress at INFO_USER.
 
     ResourceryError: 1 if any font download fails.
     """
 
-    print("🔤 Acquiring fonts...\n")
+    log_user("🔤 Acquiring fonts...\n")
 
     config = _load_config(data_dir)
     typography = config.get("theme", {}).get("typography", {})
@@ -351,7 +372,8 @@ def acquire_fonts(*, data_dir, fonts_dir, css_dir):
     )
 
     if is_cache_valid(css_dir / "fonts.css", wanted_names, fonts_dir=fonts_dir):
-        print("ℹ  fonts.css is up to date and all font files present — skipping")
+        log_user("ℹ  fonts.css is up to date and all font files present — skipping")
+        logger.info(f"Downloaded 0 fonts, {len(wanted_names)} from cache, 0 failed")
         return
 
     # Check whether there are any Google Font candidates at all
@@ -359,49 +381,57 @@ def acquire_fonts(*, data_dir, fonts_dir, css_dir):
         font_family
     ) + extract_google_font_candidates(heading_font)
     if not all_candidates:
-        print("ℹ  No Google Fonts detected — using system fonts only.")
+        log_user("ℹ  No Google Fonts detected — using system fonts only.")
         (css_dir / "fonts.css").write_text(
             "/* No Google Fonts configured */\n", encoding="utf-8"
         )
-        print("\n✅ fonts.css written (empty)")
+        log_user("\n✅ fonts.css written (empty)")
+        logger.info("Downloaded 0 fonts, 0 from cache, 0 failed")
         return
 
     face_blocks = []
     all_ok = True
     seen = set()
+    counters = {"downloaded": 0, "cached": 0, "failed": 0}
 
     for label, stack in [("font_family", font_family), ("heading_font", heading_font)]:
         if not stack:
             continue
 
-        print(f"  Processing {label}: '{stack}'")
+        log_user(f"  Processing {label}: '{stack}'")
         font_name, css = find_first_downloadable(stack, weights_param)
 
         if font_name is None:
-            print(
+            logger.warning(
                 f"  ✗ No valid Google Font found in {label} stack — will rely on system fallbacks"
             )
             all_ok = False
             continue
 
         if font_name in seen:
-            print(f"  · '{font_name}' already downloaded, skipping")
+            log_user(f"  · '{font_name}' already downloaded, skipping")
             continue
 
         seen.add(font_name)
-        print(f"  → Downloading '{font_name}'...")
-        if not process_font(font_name, css, face_blocks, fonts_dir, css_dir):
+        log_user(f"  → Downloading '{font_name}'...")
+        if not process_font(
+            font_name, css, face_blocks, fonts_dir, css_dir, counters=counters
+        ):
             all_ok = False
 
     fonts_css = css_dir / "fonts.css"
     header = f"/* {json.dumps(list(seen))} */\n"
     fonts_css.write_text(header + "\n\n".join(face_blocks) + "\n", encoding="utf-8")
-    print(f"\n✅ fonts.css written — {len(face_blocks)} @font-face rule(s)")
-    print(f"   {fonts_css.resolve()}")
+    log_user(f"\n✅ fonts.css written — {len(face_blocks)} @font-face rule(s)")
+    log_user(f"   {fonts_css.resolve()}")
+    logger.info(
+        f"Downloaded {counters['downloaded']} fonts, {counters['cached']} from cache, "
+        f"{counters['failed']} failed"
+    )
 
     if not all_ok:
         msg = "\n⚠️  Some fonts failed — check names at fonts.google.com"
-        print(msg)
+        logger.error(msg)
         raise ResourceryError(msg)
 
 
@@ -417,24 +447,33 @@ def main():
     parser.add_argument("--fonts-dir", type=str, default=None, help="Fonts output directory")
     parser.add_argument("--css-dir", type=str, default=None, help="CSS output directory")
     parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
+    parser.add_argument(
+        "--log-level", type=str, default=None,
+        help="Console log level: DEBUG|INFO|WARN|ERROR (case-insensitive)",
+    )
     args = parser.parse_args()
 
     from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
+    from resourcery_ssg.logutil import setup_logging
 
     overrides = build_cli_overrides(
         args,
         "acquire-fonts",
         {"data": "data_dir", "fonts_dir": "fonts_dir", "css_dir": "css_dir"},
     )
+    if args.log_level:
+        overrides["logging.level"] = args.log_level
 
     config = load_resourcery_config(
         config_path=args.config,
         overrides=overrides,
     )
-    try:
-        acquire_fonts(**config["acquire-fonts"])
-    except ResourceryError:
-        sys.exit(1)
+    setup_logging(config)
+    with log_timing(logger, "Command", level=logging.INFO):
+        try:
+            acquire_fonts(**config["acquire-fonts"])
+        except ResourceryError:
+            sys.exit(1)
 
 
 if __name__ == "__main__":

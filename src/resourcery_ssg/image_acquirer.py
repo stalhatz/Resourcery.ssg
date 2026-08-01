@@ -4,6 +4,7 @@ Image Acquisition Module for Static Link Aggregation Site.
 Extracts images from linked websites via meta tags or screenshots.
 """
 
+import logging
 import os
 import re
 import json
@@ -19,6 +20,9 @@ from PIL import Image
 import io
 
 from resourcery_ssg.io_utils import load_json, JsonLoadError
+from resourcery_ssg.logutil import get_logger, log_timing, log_user
+
+logger = get_logger(__name__)
 
 try:
     from pyppeteer import launch
@@ -26,7 +30,7 @@ try:
     PUPPETEER_AVAILABLE = True
 except ImportError:
     PUPPETEER_AVAILABLE = False
-    print("⚠️  pyppeteer not installed. Screenshot fallback disabled.")
+    logger.warning("⚠️  pyppeteer not installed. Screenshot fallback disabled.")
 
 
 class ImageAcquirer:
@@ -155,7 +159,7 @@ class ImageAcquirer:
             return True
 
         except Exception as e:
-            print(f"      ❌ Download failed: {e}")
+            logger.warning(f"      ❌ Download failed: {e}")
             return False
 
     def extract_meta_image(self, url: str) -> Optional[str]:
@@ -197,13 +201,13 @@ class ImageAcquirer:
                         # Convert relative URLs to absolute
                         img_url = urljoin(url, img_url)
                         if self._is_valid_image_url(img_url):
-                            print(f"      ✓ Found in meta tags: {img_url[:60]}...")
+                            log_user(f"      ✓ Found in meta tags: {img_url[:60]}...")
                             return img_url
 
             return None
 
         except Exception as e:
-            print(f"      ⚠️  Meta extraction failed: {e}")
+            logger.warning(f"      ⚠️  Meta extraction failed: {e}")
             return None
 
     async def capture_screenshot(self, url: str, save_path: Path) -> bool:
@@ -223,7 +227,7 @@ class ImageAcquirer:
         """
 
         if not PUPPETEER_AVAILABLE:
-            print("      ⚠️  Puppeteer not available")
+            logger.warning("      ⚠️  Puppeteer not available")
             return False
 
         try:
@@ -266,11 +270,11 @@ class ImageAcquirer:
             img.save(temp_path, "JPEG", quality=85, optimize=True)
             temp_path.replace(save_path)
 
-            print(f"      ✓ Screenshot captured")
+            log_user(f"      ✓ Screenshot captured")
             return True
 
         except Exception as e:
-            print(f"      ❌ Screenshot failed: {e}")
+            logger.warning(f"      ❌ Screenshot failed: {e}")
             try:
                 await browser.close()
             except:
@@ -289,7 +293,8 @@ class ImageAcquirer:
 
         Returns: the local path string to the acquired image, or None on failure.
 
-        Side-effects: prints status messages; downloads files to output_dir.
+        Side-effects: logs status at INFO_USER (failures at WARN); downloads
+            files to output_dir.
         """
 
         link_id = link.get("id", "unknown")
@@ -304,11 +309,11 @@ class ImageAcquirer:
             filename = Path(existing_image).name
             existing_path = self.output_dir / filename
             if existing_path.exists() and not force:
-                print(f"  ⏭️  {link_id}: Already acquired (skipping)")
+                log_user(f"  ⏭️  {link_id}: Already acquired (skipping)")
                 self.stats["skipped"] += 1
                 return existing_image
 
-        print(f"  📷 {link_id}: {url[:50]}...")
+        log_user(f"  📷 {link_id}: {url[:50]}...")
 
         # Generate filename
         filename = self._generate_filename(url, link_id)
@@ -316,7 +321,7 @@ class ImageAcquirer:
 
         # Skip if file exists and not forcing
         if save_path.exists() and not force:
-            print(f"      ⏭️  File exists (use --force to re-acquire)")
+            log_user(f"      ⏭️  File exists (use --force to re-acquire)")
             self.stats["skipped"] += 1
             return f"{self.image_url_prefix}{filename}"
 
@@ -324,20 +329,22 @@ class ImageAcquirer:
         meta_image_url = self.extract_meta_image(url)
         if meta_image_url:
             if self._download_image(meta_image_url, save_path):
-                print(f"      ✅ Acquired from meta tags")
+                logger.debug(f"Image '{link_id}': using meta source ({meta_image_url})")
+                log_user(f"      ✅ Acquired from meta tags")
                 self.stats["from_meta"] += 1
                 return f"{self.image_url_prefix}{filename}"
 
         # Method 2: Try screenshot
         if PUPPETEER_AVAILABLE:
-            print(f"      📸 Trying screenshot...")
+            log_user(f"      📸 Trying screenshot...")
             if asyncio.run(self.capture_screenshot(url, save_path)):
+                logger.debug(f"Image '{link_id}': using screenshot source ({url})")
                 self.stats["from_screenshot"] += 1
                 return f"{self.image_url_prefix}{filename}"
 
         # Failed
         self.stats["failed"] += 1
-        print(f"      ❌ Failed to acquire image")
+        logger.warning(f"      ❌ Failed to acquire image")
         return None
 
     def acquire_all(self, links_data: Dict, force: bool = False) -> Dict:
@@ -352,12 +359,12 @@ class ImageAcquirer:
 
         Returns: the updated links_data dictionary with image paths populated.
 
-        Side-effects: prints acquisition summary to stdout; mutates link
-            entries in place; downloads files to output_dir.
+        Side-effects: logs the acquisition summary at INFO_USER; mutates
+            link entries in place; downloads files to output_dir.
         """
 
-        print("\n🖼️  Image Acquisition")
-        print("=" * 60)
+        log_user("\n🖼️  Image Acquisition")
+        log_user("=" * 60)
 
         for link in links_data.get("links", []):
             if link.get("status") != "active":
@@ -367,14 +374,19 @@ class ImageAcquirer:
             if image_path:
                 link["image"] = image_path
 
-        print("\n" + "=" * 60)
-        print("📊 Acquisition Summary:")
-        print(f"   Total links:     {self.stats['total']}")
-        print(f"   From meta tags:  {self.stats['from_meta']}")
-        print(f"   From screenshots: {self.stats['from_screenshot']}")
-        print(f"   Failed:          {self.stats['failed']}")
-        print(f"   Skipped:         {self.stats['skipped']}")
-        print("=" * 60)
+        logger.info(
+            f"Acquired {self.stats['from_meta'] + self.stats['from_screenshot']}, "
+            f"skipped {self.stats['skipped']}, failed {self.stats['failed']}, "
+            f"total {self.stats['total']}"
+        )
+        log_user("\n" + "=" * 60)
+        log_user("📊 Acquisition Summary:")
+        log_user(f"   Total links:     {self.stats['total']}")
+        log_user(f"   From meta tags:  {self.stats['from_meta']}")
+        log_user(f"   From screenshots: {self.stats['from_screenshot']}")
+        log_user(f"   Failed:          {self.stats['failed']}")
+        log_user(f"   Skipped:         {self.stats['skipped']}")
+        log_user("=" * 60)
 
         return links_data
 
@@ -393,7 +405,7 @@ def acquire_images_from_config(config, *, force: bool = False) -> bool:
     Returns: True on success, False if the links file is missing or fails
         to parse (in which case the data on disk is left untouched).
 
-    Side-effects: prints status messages; renames the links file to
+    Side-effects: logs status at WARN/INFO_USER; renames the links file to
         ``.json.bak`` and writes the updated data back on success.
     """
 
@@ -402,14 +414,14 @@ def acquire_images_from_config(config, *, force: bool = False) -> bool:
     static_dir = Path(config["build"]["static_dir"])
 
     if not links_path.exists():
-        print(f"⚠️  Links file not found: {links_path}")
+        logger.warning(f"⚠️  Links file not found: {links_path}")
         return False
 
     # Load links
     try:
         links_data = load_json(links_path)
     except JsonLoadError as e:
-        print(f"⚠️  {e}")
+        logger.warning(f"⚠️  {e}")
         return False
 
     # Acquire images
@@ -427,8 +439,8 @@ def acquire_images_from_config(config, *, force: bool = False) -> bool:
     with open(links_path, "w", encoding="utf-8") as f:
         json.dump(updated_data, f, indent=2, ensure_ascii=False)
 
-    print(f"\n✅ Updated {links_path}")
-    print(f"   Backup saved to: {backup_path}")
+    log_user(f"\n✅ Updated {links_path}")
+    log_user(f"   Backup saved to: {backup_path}")
 
     return True
 
@@ -442,7 +454,7 @@ def main():
     Returns: 0 on success, 1 if the links file is missing or fails to parse.
 
     Side-effects: overwrites the links file (with a .json.bak backup);
-        prints progress to stdout.
+        logs status at WARN/INFO_USER.
     """
 
     import argparse
@@ -458,20 +470,29 @@ def main():
         "--images-dir", type=str, default=None, help="Images output directory"
     )
     parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
+    parser.add_argument(
+        "--log-level", type=str, default=None,
+        help="Console log level: DEBUG|INFO|WARN|ERROR (case-insensitive)",
+    )
     args = parser.parse_args()
 
     from resourcery_ssg.config import load_resourcery_config, build_cli_overrides
+    from resourcery_ssg.logutil import setup_logging
 
     overrides = build_cli_overrides(
         args, "acquire-images", {"links": "links", "images_dir": "images_dir"}
     )
+    if args.log_level:
+        overrides["logging.level"] = args.log_level
 
     config = load_resourcery_config(
         config_path=args.config,
         overrides=overrides,
     )
+    setup_logging(config)
 
-    return 0 if acquire_images_from_config(config, force=args.force) else 1
+    with log_timing(logger, "Command", level=logging.INFO):
+        return 0 if acquire_images_from_config(config, force=args.force) else 1
 
 
 if __name__ == "__main__":

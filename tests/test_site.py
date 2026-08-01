@@ -235,7 +235,7 @@ class TestRunIngestIntentionalSkips:
     def test_no_ingest_section_skips_without_exit(self, capsys):
         _run_ingest({})  # must not raise
 
-        assert "No 'ingest' section" in capsys.readouterr().out
+        assert "No 'ingest' section" in capsys.readouterr().err
 
     @pytest.mark.unit
     def test_missing_model_skips_without_exit(self, capsys):
@@ -243,7 +243,7 @@ class TestRunIngestIntentionalSkips:
 
         _run_ingest(config)  # must not raise
 
-        assert "ingest.model not set" in capsys.readouterr().out
+        assert "ingest.model not set" in capsys.readouterr().err
 
 
 class TestRunAllFailureAborts:
@@ -304,7 +304,7 @@ class TestRunAllFailureAborts:
             site._run_all(args)
 
         assert exc_info.value.code == 1
-        assert "Font acquisition failed. Aborting pipeline." in capsys.readouterr().out
+        assert "Font acquisition failed. Aborting pipeline." in capsys.readouterr().err
 
     @pytest.mark.unit
     def test_run_all_build_failure_no_abort_line(
@@ -342,7 +342,7 @@ class TestRunAllFailureAborts:
             site._run_all(args)
 
         assert exc_info.value.code == 1
-        assert "Validation failed. Aborting pipeline." in capsys.readouterr().out
+        assert "Validation failed. Aborting pipeline." in capsys.readouterr().err
 
     @pytest.mark.unit
     def test_main_catchall_ingest_failure_exits_1(self, tmp_path, monkeypatch, capsys):
@@ -356,6 +356,149 @@ class TestRunAllFailureAborts:
 
         assert exc_info.value.code == 1
         assert "ingest.note and ingest.site_prompt are required" in capsys.readouterr().err
+
+
+class TestLogLevelFlag:
+    """--log-level is accepted on every subparser and maps to logging.level."""
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "build",
+            "validate",
+            "acquire-fonts",
+            "acquire-js",
+            "acquire-images",
+            "ingest",
+            "all",
+        ],
+    )
+    def test_all_subparsers_accept_log_level(self, command):
+        args = site._build_parser().parse_args([command, "--log-level", "debug"])
+        assert args.log_level == "debug"
+
+    @staticmethod
+    def _write_build_config(tmp_path: Path, testdata_dir: Path) -> Path:
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "\n".join(
+                [
+                    "build:",
+                    f"  data_dir: {testdata_dir}",
+                    f"  templates_dir: {testdata_dir / 'templates'}",
+                    f"  static_dir: {testdata_dir / 'static'}",
+                    f"  output_dir: {tmp_path / 'output'}",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return cfg
+
+    @staticmethod
+    def _spy_load_config(monkeypatch):
+        """Wrap load_resourcery_config, capturing the resolved config."""
+        import resourcery_ssg.config as config_mod
+
+        captured = {}
+        original = config_mod.load_resourcery_config
+
+        def spy(config_path=None, overrides=None):
+            result = original(config_path=config_path, overrides=overrides)
+            captured["config"] = result
+            return result
+
+        monkeypatch.setattr(config_mod, "load_resourcery_config", spy)
+        return captured
+
+    @pytest.mark.unit
+    def test_main_build_log_level_reaches_config(
+        self, tmp_path, testdata_dir, monkeypatch
+    ):
+        cfg = self._write_build_config(tmp_path, testdata_dir)
+        captured = self._spy_load_config(monkeypatch)
+        monkeypatch.setattr("resourcery_ssg.build.build_site", lambda **kwargs: None)
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["site", "--config", str(cfg), "build", "--log-level", "DEBUG"],
+        )
+
+        site.main()
+
+        assert captured["config"]["logging"]["level"] == "DEBUG"
+
+    @pytest.mark.unit
+    def test_build_main_log_level_reaches_config(
+        self, tmp_path, testdata_dir, monkeypatch
+    ):
+        from resourcery_ssg.build import main as build_main
+
+        cfg = self._write_build_config(tmp_path, testdata_dir)
+        captured = self._spy_load_config(monkeypatch)
+        monkeypatch.setattr("resourcery_ssg.build.build_site", lambda **kwargs: None)
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["build", "--config", str(cfg), "--log-level", "debug"],
+        )
+
+        build_main()
+
+        assert captured["config"]["logging"]["level"] == "debug"
+
+
+class TestOperationalRecords:
+    """Step 7 operational INFO/DEBUG records emitted by the site dispatch."""
+
+    @pytest.mark.unit
+    def test_main_all_emits_dispatch_and_timing_records(
+        self, tmp_path, testdata_dir, monkeypatch, caplog
+    ):
+        """`site all --log-level DEBUG` documents dispatch, overrides, timings.
+
+        Uses the same hermetic config as TestRunAllFailureAborts; the
+        Dispatch record carries the config-path variant because --config
+        is required to point the pipeline at testdata.
+        """
+        import logging
+        import re
+
+        cfg = TestRunAllFailureAborts._write_all_config(tmp_path, testdata_dir)
+        monkeypatch.setattr(
+            "resourcery_ssg.font_acquirer.acquire_fonts", lambda **kwargs: None
+        )
+        monkeypatch.setattr("resourcery_ssg.js_vendor.acquire_js", lambda: None)
+        monkeypatch.setattr("resourcery_ssg.build.build_site", lambda **kwargs: None)
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["site", "--config", str(cfg), "all", "--log-level", "DEBUG"],
+        )
+
+        caplog.set_level(logging.DEBUG)
+        site.main()
+
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(r"^Dispatch: all \(config .+\)$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.DEBUG
+            and re.search(r"^Config overrides: logging\.level=DEBUG$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.DEBUG
+            and re.search(r"^Step 'validate' completed in \d+\.\d+s$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(r"^Command completed in \d+\.\d+s$", r.message)
+            for r in caplog.records
+        )
 
 
 class TestSiteDispatchExits:
@@ -416,4 +559,4 @@ class TestSiteDispatchExits:
             site.main()
 
         assert exc_info.value.code == 1
-        assert "Links file not found" in capsys.readouterr().out
+        assert "Links file not found" in capsys.readouterr().err

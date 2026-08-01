@@ -9,6 +9,26 @@ def testdata_dir() -> Path:
     return Path(__file__).parent.parent / "data" / "testdata"
 
 
+@pytest.fixture(autouse=True)
+def configure_test_logging(tmp_path, monkeypatch):
+    """Pin LOG_LEVEL/LOGS_DIR and configure console+file logging per test.
+
+    - LOG_LEVEL=INFO makes stream assertions hermetic (a developer's
+      exported LOG_LEVEL=DEBUG would otherwise leak DEBUG noise onto stdout).
+    - LOGS_DIR=<tmp>/logs keeps log files out of the repo (site.main() and
+      friends call setup_logging themselves with the resolved config, which
+      would otherwise write ./logs/ in CWD).
+    - setup_logging is idempotent, so entry points re-configuring inside a
+      test is safe.
+    """
+    monkeypatch.setenv("LOG_LEVEL", "INFO")
+    monkeypatch.setenv("LOGS_DIR", str(tmp_path / "logs"))
+    from resourcery_ssg.config import load_resourcery_config
+    from resourcery_ssg.logutil import setup_logging
+
+    setup_logging(load_resourcery_config())
+
+
 @pytest.fixture
 def tmp_output_dir(tmp_path: Path) -> Path:
     out = tmp_path / "output"

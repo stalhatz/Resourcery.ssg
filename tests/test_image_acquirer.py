@@ -1,4 +1,6 @@
 import json
+import logging
+import re
 import sys
 import pytest
 from pathlib import Path
@@ -185,6 +187,42 @@ class TestAcquireAll:
         acquirer.acquire_all(links_data)
         assert call_count == 2
 
+    @pytest.mark.unit
+    def test_emits_operational_records(self, acquirer, monkeypatch, caplog):
+        """INFO summary + per-image DEBUG source records."""
+        monkeypatch.setattr(
+            "resourcery_ssg.image_acquirer.ImageAcquirer.extract_meta_image",
+            lambda *a: "https://example.com/og.png",
+        )
+        monkeypatch.setattr(
+            "resourcery_ssg.image_acquirer.ImageAcquirer._download_image",
+            lambda *a: True,
+        )
+        monkeypatch.setattr("resourcery_ssg.image_acquirer.PUPPETEER_AVAILABLE", False)
+
+        links_data = {
+            "links": [
+                {"id": "acme", "url": "https://example.com/acme", "status": "active"},
+                {"id": "skip", "url": "https://example.com/skip", "status": "archived"},
+            ]
+        }
+        caplog.set_level(logging.DEBUG)
+        acquirer.acquire_all(links_data)
+
+        assert any(
+            r.levelno == logging.INFO
+            and re.search(r"^Acquired \d+, skipped \d+, failed \d+, total \d+$", r.message)
+            for r in caplog.records
+        )
+        assert any(
+            r.levelno == logging.DEBUG
+            and re.search(
+                r"^Image 'acme': using meta source \(https://example\.com/og\.png\)$",
+                r.message,
+            )
+            for r in caplog.records
+        )
+
 
 @pytest.mark.skip(reason="Needs PIL image fixture; covered by unit tests")
 class TestIntegrationAcquireImages:
@@ -227,9 +265,9 @@ class TestAcquireImagesFromConfig:
         config, links_path = self._make_config(tmp_path)
 
         assert acquire_images_from_config(config) is False
-        out = capsys.readouterr().out
-        assert "Links file not found" in out
-        assert str(links_path) in out
+        err = capsys.readouterr().err
+        assert "Links file not found" in err
+        assert str(links_path) in err
         assert not links_path.with_suffix(".json.bak").exists()
 
     @pytest.mark.unit
@@ -238,8 +276,8 @@ class TestAcquireImagesFromConfig:
         links_path.write_text("{bad json", encoding="utf-8")
 
         assert acquire_images_from_config(config) is False
-        out = capsys.readouterr().out
-        assert str(links_path) in out
+        err = capsys.readouterr().err
+        assert str(links_path) in err
         # Data on disk untouched, no backup created
         assert links_path.read_text(encoding="utf-8") == "{bad json"
         assert not links_path.with_suffix(".json.bak").exists()
