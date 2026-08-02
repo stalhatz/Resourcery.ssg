@@ -11,7 +11,12 @@ async function setup(url = BROWSE) {
   await loadFresh('static/js/modules/state.js', { url, html: FIX() });
   const tagMod = await loadFresh('static/js/modules/tag-manager.js', { url });
   const modalMod = await loadFresh('static/js/modules/modal-manager.js', { url });
-  return { TagManager: tagMod.TagManager, ModalManager: modalMod.ModalManager };
+  const fx = await loadFresh('static/js/modules/effects.js', { url });
+  return {
+    TagManager: tagMod.TagManager,
+    ModalManager: modalMod.ModalManager,
+    installEffects: fx.installEffects,
+  };
 }
 
 describe('modal-manager.js', () => {
@@ -31,8 +36,9 @@ describe('modal-manager.js', () => {
     expect(document.getElementById('modalDescription').textContent).toBe('Beta summary');
   });
 
-  it('open: builds tag spans from dataset.tags with click handlers (browse branch calls setActiveTag + close + filterCards)', async () => {
-    const { TagManager, ModalManager } = await setup();
+  it('open: builds tag spans from dataset.tags with click handlers (browse branch calls setActiveTag + close; the effects drain renders)', async () => {
+    const { TagManager, ModalManager, installEffects } = await setup();
+    installEffects();
     ModalManager.open(document.getElementById('card-1'));
     const tagSpans = document.getElementById('modalTags').querySelectorAll('.modal-tag');
     expect(tagSpans.length).toBe(3); // JavaScript, React, Frontend
@@ -43,7 +49,7 @@ describe('modal-manager.js', () => {
 
     expect(setActiveSpy).toHaveBeenCalledWith('JavaScript', true);
     expect(closeSpy).toHaveBeenCalled();
-    // filterCards() ran as a side-effect: card-2 (no JavaScript tag) is hidden
+    // the effects drain rendered the filtered set: card-2 (no JavaScript tag) hidden
     expect(document.getElementById('card-2').style.display).toBe('none');
     expect(document.getElementById('card-1').style.display).toBe('');
   });

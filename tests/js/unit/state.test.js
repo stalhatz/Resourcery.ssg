@@ -13,7 +13,7 @@ const fresh = (opts = {}) =>
   loadFresh('static/js/modules/state.js', { url: BROWSE, html: CARDS, ...opts });
 
 describe('state.js', () => {
-  // --- atoms get/set ---
+  // --- reactive variables get/set ---
   it('atoms: get/set round-trip for $activeTag/$activeSearch/$activeCategory', async () => {
     const s = await fresh();
     for (const atom of [s.$activeTag, s.$activeSearch, s.$activeCategory]) {
@@ -48,7 +48,7 @@ describe('state.js', () => {
   });
 
   // --- $visibleCards: slug-normalized tag matching (B3 regression) ---
-  // The $activeTag atom carries the SLUGGED form ('R&D' -> 'rd',
+  // The $activeTag reactive variable carries the SLUGGED form ('R&D' -> 'rd',
   // 'Français' -> 'francais', 'machine learning' -> 'machine-learning',
   // 'C++'/'C#' -> 'c'). Raw card tags must be normalized the same way before
   // matching, or clicking such a tag filters to 0 items.
@@ -195,8 +195,9 @@ describe('state.js', () => {
 
   it('$visibleCards: at-most-one-of-three is caller discipline', async () => {
     // The invariant is held by callers (TagManager/bridgeFromHash), which set
-    // exactly one atom and null the others. bridgeFromHash demonstrates this:
-    // a parsed hash populates exactly one of {tag,search,category}.
+    // exactly one reactive variable and null the others. bridgeFromHash
+    // demonstrates this: a parsed hash populates exactly one of
+    // {tag,search,category}.
     const s = await fresh({ url: `${BROWSE}#tag-foo` });
     s.bridgeFromHash((next) => {
       s.$activeTag.set(next.tag);
@@ -206,6 +207,32 @@ describe('state.js', () => {
     expect(s.$activeTag.get()).toBe('foo');
     expect(s.$activeSearch.get()).toBeNull();
     expect(s.$activeCategory.get()).toBeNull();
+  });
+
+  // --- $activeFilter: computed descriptor of which filter is active ---
+  describe('$activeFilter: computed descriptor', () => {
+    it('all-null -> {kind: null, value: null}', async () => {
+      const s = await fresh();
+      expect(s.$activeFilter.get()).toEqual({ kind: null, value: null });
+    });
+
+    it('$activeTag set -> {kind: "tag", value: <slug>}', async () => {
+      const s = await fresh();
+      s.$activeTag.set('foo');
+      expect(s.$activeFilter.get()).toEqual({ kind: 'tag', value: 'foo' });
+    });
+
+    it('$activeSearch set -> {kind: "search", value: <term>}', async () => {
+      const s = await fresh();
+      s.$activeSearch.set('bar baz');
+      expect(s.$activeFilter.get()).toEqual({ kind: 'search', value: 'bar baz' });
+    });
+
+    it('$activeCategory set -> {kind: "category", value: <id>}', async () => {
+      const s = await fresh();
+      s.$activeCategory.set('web');
+      expect(s.$activeFilter.get()).toEqual({ kind: 'category', value: 'web' });
+    });
   });
 
   // --- allCards ---
@@ -240,7 +267,7 @@ describe('state.js', () => {
 
   // B8 regression: the browser percent-encodes non-ASCII fragments (writing
   // 'tag-δυο' makes location.hash read '#tag-%CE%B4%CF%85%CE%BF'), so the tag
-  // branch must decode like the search branch does — otherwise the atom
+  // branch must decode like the search branch does — otherwise the reactive variable
   // carries the raw encoding and slug-matching ('δυο' vs '%CE%B4%CF%85%CE%BF')
   // fails, leaving 0 cards.
   it("bridgeFromHash: '#tag-%CE%B4%CF%85%CE%BF' -> {tag:'δυο', …} (percent-encoded tag is decoded)", async () => {
@@ -302,7 +329,7 @@ describe('state.js', () => {
   });
 
   // --- bridgeToHash ---
-  it("bridgeToHash: writes '#tag-<slug>' / '#search-<enc>' / '#category-<id>' for each atom set", async () => {
+  it("bridgeToHash: writes '#tag-<slug>' / '#search-<enc>' / '#category-<id>' for each reactive-variable set", async () => {
     const s = await fresh();
     s.bridgeToHash({
       $activeTag: s.$activeTag,
@@ -322,7 +349,7 @@ describe('state.js', () => {
   // B8 regression: serialiseHash must encode the tag segment exactly like the
   // search segment. Writing the raw 'tag-δυο' would make the browser report
   // '#tag-%CE%B4%CF%85%CE%BF', so writeHash's `hash !== location.hash`
-  // comparison (and the atom->hash round-trip) would never be stable.
+  // comparison (and the reactive-state -> hash round-trip) would never be stable.
   it("bridgeToHash: '$activeTag=δυο' writes the percent-encoded form '#tag-%CE%B4%CF%85%CE%BF'", async () => {
     const s = await fresh();
     s.bridgeToHash({
@@ -416,7 +443,7 @@ describe('state.js', () => {
   });
 
   // --- batchAtomWrites ---
-  describe('batchAtomWrites: suppresses the bridge across multi-atom transitions', () => {
+  describe('batchAtomWrites: suppresses the bridge across multi-reactive-variable transitions', () => {
     const install = (s) =>
       s.bridgeToHash({
         $activeTag: s.$activeTag,
@@ -424,7 +451,7 @@ describe('state.js', () => {
         $activeCategory: s.$activeCategory,
       });
 
-    it('no hash write happens for atom sets inside the batch', async () => {
+    it('no hash write happens for reactive-variable sets inside the batch', async () => {
       const s = await fresh();
       install(s);
       s.$activeTag.set('foo');
@@ -452,7 +479,7 @@ describe('state.js', () => {
         expect(window.location.hash).toBe('');
       });
       // bridge resumes once every batch has exited — serialiseHash prioritises
-      // tag > search, so the write reflects the current atom state
+      // tag > search, so the write reflects the current reactive-variable state
       s.$activeTag.set(null);
       expect(window.location.hash).toBe('#search-bar');
     });
@@ -470,6 +497,117 @@ describe('state.js', () => {
     });
   });
 
+  // --- effect(): batch-aware subscription ---
+  describe('effect(): batch-aware subscription', () => {
+    const counts = (s) => ({
+      tag: vi.fn(),
+      search: vi.fn(),
+      category: vi.fn(),
+      visible: vi.fn(),
+    });
+
+    it('fires immediately with the current value on registration (Nanostores-subscribe-like)', async () => {
+      const s = await fresh();
+      s.$activeTag.set('foo');
+      const cb = vi.fn();
+      s.effect(s.$activeTag, cb);
+      expect(cb).toHaveBeenCalledTimes(1);
+      expect(cb).toHaveBeenCalledWith('foo');
+    });
+
+    it('fires synchronously on every .set() outside a batch', async () => {
+      const s = await fresh();
+      const cb = vi.fn();
+      s.effect(s.$activeTag, cb);
+      s.$activeTag.set('a');
+      expect(cb).toHaveBeenCalledTimes(2); // immediate + one per change
+      s.$activeTag.set('b');
+      expect(cb).toHaveBeenCalledTimes(3);
+      s.$activeTag.set('b'); // Nanostores === short-circuit: no re-fire
+      expect(cb).toHaveBeenCalledTimes(3);
+    });
+
+    it('AC 6: inside a batch, each effect runs exactly once at the drain, with final values', async () => {
+      const s = await fresh();
+      const filterCb = vi.fn();
+      const visibleCb = vi.fn();
+      s.effect(s.$activeFilter, filterCb);
+      s.effect(s.$visibleCards, visibleCb);
+
+      s.batchAtomWrites(() => {
+        s.$activeTag.set('foo');
+        s.$activeCategory.set('web');
+        s.$activeSearch.set('bar');
+        // intermediate sets are queued, not dispatched
+        expect(filterCb).toHaveBeenCalledTimes(1); // immediate fire only
+        expect(visibleCb).toHaveBeenCalledTimes(1);
+      });
+      // drain: exactly one call per effect (deduped per store), reading the
+      // FINAL value — $activeFilter resolves tag-first, $visibleCards'
+      // search branch ('bar') matches nothing in CARDS
+      expect(filterCb).toHaveBeenCalledTimes(2);
+      expect(filterCb).toHaveBeenLastCalledWith({ kind: 'tag', value: 'foo' });
+      expect(visibleCb).toHaveBeenCalledTimes(2);
+      expect(visibleCb).toHaveBeenLastCalledWith([]);
+    });
+
+    it('nested batches drain only at the outermost exit', async () => {
+      const s = await fresh();
+      const cb = vi.fn();
+      s.effect(s.$activeTag, cb);
+      const callsBefore = cb.mock.calls.length;
+      s.batchAtomWrites(() => {
+        s.$activeTag.set('foo');
+        s.batchAtomWrites(() => {
+          s.$activeTag.set('bar');
+        });
+        expect(cb.mock.calls.length).toBe(callsBefore); // still queued at depth 1
+      });
+      expect(cb.mock.calls.length).toBe(callsBefore + 1); // drained once
+      expect(cb).toHaveBeenLastCalledWith('bar');
+    });
+
+    it('two stores each drain once, in registration order', async () => {
+      const s = await fresh();
+      const order = [];
+      s.effect(s.$activeTag, () => order.push('tag'));
+      s.effect(s.$activeSearch, () => order.push('search'));
+      s.batchAtomWrites(() => {
+        s.$activeSearch.set('bar');
+        s.$activeTag.set('foo');
+      });
+      // immediate fires in registration order (tag, search), then the drain
+      // runs each queued effect once, in queue (first-set) order (search, tag)
+      expect(order).toEqual(['tag', 'search', 'search', 'tag']);
+    });
+
+    it('the drain completes before batchAtomWrites returns (timing guarantee)', async () => {
+      const s = await fresh();
+      const cb = vi.fn();
+      s.effect(s.$activeTag, cb);
+      let drained = false;
+      s.effect(s.$activeSearch, () => (drained = true));
+      s.batchAtomWrites(() => s.$activeSearch.set('bar'));
+      expect(drained).toBe(true);
+    });
+
+    it('URL-hash bridge suppression is unchanged with effects registered', async () => {
+      const s = await fresh();
+      s.bridgeToHash({
+        $activeTag: s.$activeTag,
+        $activeSearch: s.$activeSearch,
+        $activeCategory: s.$activeCategory,
+      });
+      s.effect(s.$activeTag, vi.fn());
+      s.batchAtomWrites(() => {
+        s.$activeTag.set('foo');
+        s.$activeSearch.set('bar');
+        expect(window.location.hash).toBe('');
+      });
+      expect(window.location.hash).toBe(''); // the batch itself writes nothing
+    });
+  });
+
   // --- indirect round-trip idempotence ---
   describe('round-trip idempotence (indirect)', () => {
     const cases = [
@@ -483,16 +621,16 @@ describe('state.js', () => {
     ];
 
     for (const c of cases) {
-      it(`load '${c.name}' -> bridgeFromHash -> atoms -> bridgeToHash write -> hash equals load hash`, async () => {
+      it(`load '${c.name}' -> bridgeFromHash -> reactive variables -> bridgeToHash write -> hash equals load hash`, async () => {
         const s = await fresh({ url: c.url });
         const loadHash = window.location.hash;
-        // install the bridge FIRST so atom sets drive writeHash
+        // install the bridge FIRST so reactive-variable sets drive writeHash
         s.bridgeToHash({
           $activeTag: s.$activeTag,
           $activeSearch: s.$activeSearch,
           $activeCategory: s.$activeCategory,
         });
-        // apply the parsed hash to the atoms (mirrors main.js bootstrap)
+        // apply the parsed hash to the reactive variables (mirrors main.js bootstrap)
         s.bridgeFromHash((next) => {
           s.$activeTag.set(next.tag);
           s.$activeSearch.set(next.search);
@@ -502,5 +640,42 @@ describe('state.js', () => {
         expect(window.location.hash).toBe(loadHash);
       });
     }
+  });
+
+  // --- serialiseHash (direct — now exported for browseUrl) ---
+  describe('serialiseHash (direct round-trip)', () => {
+    it("serialiseHash('foo', null, null) -> '#tag-foo'", async () => {
+      const s = await fresh();
+      expect(s.serialiseHash('foo', null, null)).toBe('#tag-foo');
+    });
+
+    it("serialiseHash(null, 'bar baz', null) -> '#search-bar%20baz' (percent-encoded)", async () => {
+      const s = await fresh();
+      expect(s.serialiseHash(null, 'bar baz', null)).toBe('#search-bar%20baz');
+    });
+
+    it("serialiseHash(null, null, 'web') -> '#category-web' (category is never encoded)", async () => {
+      const s = await fresh();
+      expect(s.serialiseHash(null, null, 'web')).toBe('#category-web');
+    });
+
+    it('all-null -> ""', async () => {
+      const s = await fresh();
+      expect(s.serialiseHash(null, null, null)).toBe('');
+    });
+
+    it("serialiseHash('δυο', null, null) -> '#tag-%CE%B4%CF%85%CE%BF' (non-ASCII encoded)", async () => {
+      const s = await fresh();
+      expect(s.serialiseHash('δυο', null, null)).toBe('#tag-%CE%B4%CF%85%CE%BF');
+    });
+
+    it('round-trip: serialise -> parse (via bridgeFromHash at the serialised URL) yields the same state', async () => {
+      const s = await fresh();
+      const hash = s.serialiseHash('δυο', null, null);
+      window.history.pushState({}, '', `${BROWSE}${hash}`);
+      let applied = null;
+      s.bridgeFromHash((next) => (applied = next));
+      expect(applied).toEqual({ tag: 'δυο', search: null, category: null });
+    });
   });
 });

@@ -1,14 +1,15 @@
 /**
  * Filter manager — custom dropdown for category/sort with full ARIA.
  *
- * Manages the category and sort dropdowns. Category selection writes to
- * the URL hash (which triggers handleHashChange → filterCards). Sort
- * selection calls sortCards() directly.
+ * Manages the category and sort dropdowns. Category selection writes the
+ * reactive variables inside a batch (clears + $activeCategory) and then the
+ * URL hash; the effects layer syncs the DOM. Sort selection has no reactive
+ * state and calls sortCards() directly.
  */
 
 import { dom } from '../dom.js';
 import { TagManager } from './tag-manager.js';
-import { filterCards } from './filter-cards.js';
+import { $activeCategory, batchAtomWrites } from './state.js';
 import { sortCards } from './sort-cards.js';
 
 export const FilterManager = {
@@ -31,14 +32,8 @@ export const FilterManager = {
     }
 
     window.addEventListener('clearFilters', () => {
-      // Clear the select BEFORE clearActive* — their null-branch falls back
-      // to the category currently in the select, so a still-populated select
-      // would re-activate the category instead of fully clearing.
-      if (dom.categoryFilter) dom.categoryFilter.value = '';
       TagManager.clearActiveSearch();
       TagManager.clearActiveTag();
-      this.syncSelection('category', '');
-      filterCards();
     });
   },
 
@@ -52,17 +47,19 @@ export const FilterManager = {
         e.stopPropagation();
 
         var value = btn.dataset.value;
-        nativeSelect.value = value;
-        self.syncSelection(type, value);
         self.closeAllDropdowns();
 
         if (type === 'category') {
-          // Silent clears: this handler owns the URL write below, so the
-          // clearActive* null-branches must not write intermediate hashes
-          // (e.g. the previous category) before the new one is set.
-          TagManager.clearActiveSearch(false);
-          TagManager.clearActiveTag(false);
-          TagManager.setCategoryDisplay(value);
+          // Batched reactive writes: the clears null all three reactive
+          // variables, then $activeCategory holds the final value. The
+          // effect fires at batch exit — before the hash write — with the
+          // final state; the subsequent hashchange re-applies identical
+          // values, which Nanostores' equality check turns into a no-op.
+          batchAtomWrites(() => {
+            TagManager.clearActiveSearch(false);
+            TagManager.clearActiveTag(false);
+            $activeCategory.set(value || null);
+          });
           if (value) {
             window.location.hash = 'category-' + value;
           } else if (window.location.hash) {
@@ -70,8 +67,9 @@ export const FilterManager = {
             // history entry when nothing is active.
             history.pushState('', '', window.location.pathname);
           }
-          filterCards();
         } else if (type === 'sort') {
+          nativeSelect.value = value;
+          self.syncSelection(type, value);
           sortCards();
         }
       });

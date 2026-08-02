@@ -1,18 +1,20 @@
 /**
  * Filter cards — show/hide cards based on the current $visibleCards set.
  *
- * Reads the computed $visibleCards atom (which mirrors today's filter logic)
- * and applies visibility to the DOM. Re-animates in-viewport cards on filter
- * changes; re-arms out-of-viewport visible cards so they replay their entry
- * animation when scrolled to.
+ * Reads the computed $visibleCards reactive variable and applies visibility
+ * to the DOM. Re-animates in-viewport cards on filter changes; re-arms
+ * out-of-viewport visible cards so they replay their entry animation when
+ * scrolled to. Its body is also the $visibleCards effect callback
+ * (effects.js), so it runs once per batched state transition.
  */
 
 import { $visibleCards, allCards } from './state.js';
 import { rearmCards } from './entry-animator.js';
 import { dom } from '../dom.js';
+import { isBrowsePage } from './browse-utils.js';
 
 export function filterCards() {
-  if (!window.location.pathname.includes('browse.html')) return;
+  if (!isBrowsePage()) return;
 
   const visible = new Set($visibleCards.get());
   const mode = document.body.getAttribute('data-entry-animation') || 'fade-slide-up';

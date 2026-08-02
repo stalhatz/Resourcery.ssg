@@ -5,9 +5,9 @@ const BROWSE = 'http://localhost/browse.html';
 const LANDING = 'http://localhost/index.html';
 const FIX = () => readFixture('browse.html');
 
-// Import state first (builds allCards + atoms), then entry-animator (so init()
+// Import state first (builds allCards + reactive variables), then entry-animator (so init()
 // can create a real io for the rearmCards paths), then filter-cards. All three
-// share one module registry, so filter-cards reads the same atoms/allCards.
+// share one module registry, so filter-cards reads the same reactive variables/allCards.
 async function setup({ url = BROWSE, globals } = {}) {
   const state = await loadFresh('static/js/modules/state.js', { url, html: FIX(), globals });
   const ea = await loadFresh('static/js/modules/entry-animator.js', { url });

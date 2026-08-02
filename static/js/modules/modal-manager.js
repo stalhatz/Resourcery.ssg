@@ -7,12 +7,12 @@
 
 import { dom } from '../dom.js';
 import { TagManager } from './tag-manager.js';
-import { filterCards } from './filter-cards.js';
+import { isBrowsePage, browseUrl } from './browse-utils.js';
 import { createLogger } from './logger.js';
 
 export const logger = createLogger(import.meta.url);
 
-const isLandingPage = !window.location.pathname.includes('browse.html');
+const isLandingPage = !isBrowsePage();
 
 export const ModalManager = {
   open(card) {
@@ -54,12 +54,10 @@ export const ModalManager = {
             const tagName = tag.trim();
 
             if (isLandingPage) {
-              window.location.href =
-                'browse.html#tag-' + TagManager.slugify(tagName);
+              window.location.href = browseUrl('tag', TagManager.slugify(tagName));
             } else {
               TagManager.setActiveTag(tagName, true);
               ModalManager.close();
-              filterCards();
             }
           });
           dom.modalTags.appendChild(tagEl);

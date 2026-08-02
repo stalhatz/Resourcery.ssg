@@ -34,9 +34,9 @@
 | `templates/source.html` | Jinja2 template | Attribution source page. Rendered only when `build.attribution` is enabled — documents the ingested source note and site prompt that produced the data. |
 | `templates/style.css` | Jinja2 template | Themed CSS. Rendered through Jinja2 to inject `--color-*`, `--shadow-*`, `--border-radius`, `--heading-*` CSS custom properties from the merged config (design tokens from `design.json` via `token_gen.py`). |
 | `static/` | Directory | Source static assets. Copied verbatim into `output/static/` during build. |
-| `static/js/main.js` | JavaScript | ES module bootstrap (~30 lines). Imports all managers from `static/js/modules/`, wires atom ↔ URL hash bridge, initialises managers. |
+| `static/js/main.js` | JavaScript | ES module bootstrap (~30 lines). Imports all managers from `static/js/modules/`, wires the reactive-state ↔ URL hash bridge, initialises managers, installs the effects layer on the browse page. |
 | `static/js/dom.js` | JavaScript | DOM manifest. Exports a `dom` object with all cached `document.getElementById()` references used across modules. |
-| `static/js/modules/` | Directory | ES modules: `state.js` (Nanostores atoms), `tag-manager.js`, `modal-manager.js`, `theme-manager.js`, `sidebar-manager.js`, `card-manager.js`, `entry-animator.js`, `filter-manager.js`, `filter-cards.js`, `sort-cards.js`, `slugify.js`, `handle-hash-change.js`. |
+| `static/js/modules/` | Directory | ES modules: `state.js` (Nanostores reactive variables), `effects.js`, `browse-utils.js`, `tag-manager.js`, `modal-manager.js`, `theme-manager.js`, `sidebar-manager.js`, `card-manager.js`, `entry-animator.js`, `filter-manager.js`, `filter-cards.js`, `sort-cards.js`, `slugify.js`, `handle-hash-change.js`. |
 | `static/js/vendor/` | Directory | Vendored third-party JS (gitignored). Currently contains `nanostores.js` acquired at build time. |
 | `package.json` | Config | Declares the Nanostores npm dependency version (used at build time only — no Node.js runtime needed) and the Vitest/jsdom dev toolchain with test scripts (`test`, `test:unit`, `test:integration`). |
 | `package-lock.json` | Lock file | npm lock file for the dev-only test toolchain. Commit to ensure reproducible test installs. |
@@ -146,24 +146,26 @@ The module's own CLI is the fallback for ad-hoc use (`poetry run build`, `poetry
 
 ### Frontend
 
-The frontend uses a **modular ESM architecture** backed by [Nanostores](https://github.com/nanostores/nanostores) atoms for observable state. The `static/js/modules/` directory contains 12 ES modules imported by the slim `static/js/main.js` bootstrap.
+The frontend uses a **modular ESM architecture** backed by [Nanostores](https://github.com/nanostores/nanostores) reactive variables (or as Nanostores calls them "atoms") for observable state. The `static/js/modules/` directory contains 14 ES modules imported by the slim `static/js/main.js` bootstrap.
 
 | Module | Responsibility |
 |--------|---------------|
-| `state.js` | Nanostores atoms (`$activeTag`, `$activeSearch`, `$activeCategory`, `$animatedIds`), computed `$visibleCards`, URL-hash bridge (`bridgeFromHash`, `bridgeToHash`). |
+| `state.js` | Nanostores reactive variables (`$activeTag`, `$activeSearch`, `$activeCategory`, `$animatedIds`), computeds `$activeFilter` (descriptor of which filter is active) and `$visibleCards`, batch-aware `effect()` wrapper, URL-hash bridge (`bridgeFromHash`, `bridgeToHash`, exported `serialiseHash`). |
+| `effects.js` | Registers the two DOM effects once at boot — `$activeFilter` → header/select/accordion, `$visibleCards` → `filterCards` body. |
+| `browse-utils.js` | `isBrowsePage()` page detection + `browseUrl(kind, value)` canonical `browse.html#...` URL builder. |
 | `tag-manager.js` | Search suggestions, active tag/search state, filter header display. |
 | `modal-manager.js` | Open/close link detail modals with keyboard/overlay support. |
 | `theme-manager.js` | Dark/light mode toggle with `localStorage` persistence. |
-| `sidebar-manager.js` | Collapsible category accordion, mobile overlay. |
+| `sidebar-manager.js` | Collapsible category accordion (`syncAccordion`), mobile overlay. |
 | `card-manager.js` | Click/keyboard handlers on link cards and tag badges. |
 | `filter-manager.js` | Custom dropdown for category/sort with full ARIA. |
 | `entry-animator.js` | Scroll-triggered card entry animation with `IntersectionObserver`. |
-| `filter-cards.js` | Applies `$visibleCards` to the DOM (show/hide, re-animate). |
+| `filter-cards.js` | Applies `$visibleCards` to the DOM (show/hide, re-animate); body doubles as the `$visibleCards` effect callback. |
 | `sort-cards.js` | Reorders card elements by date or title. |
 | `slugify.js` | Pure slugify helpers. Slugifies tag labels for URL-hash compatibility (diacritics folding, non-ASCII letters preserved, hash decoding for search matching). |
-| `handle-hash-change.js` | Bridges URL hash changes to atoms and DOM side-effects. |
+| `handle-hash-change.js` | Thin bridge: parses URL hash changes into the three filter reactive variables (one batch); DOM sync is delegated to the effects layer. |
 
-The `dom.js` manifest caches all `document.getElementById()` lookups. The URL `hashchange` event is the single source of truth for cross-module state coordination; atoms provide reactive observability within modules.
+The `dom.js` manifest caches all `document.getElementById()` lookups. The three filter reactive variables are the single source of truth for cross-module state coordination; the URL hash is one input/output among several, and the effects layer derives all DOM side-effects from the reactive state.
 
 ### JSON Data Shape
 
@@ -359,21 +361,29 @@ flowchart LR
 ```mermaid
 flowchart LR
     HASH["URL hash<br/>#category-x · #tag-y · #search-z"]
-    BFH["bridgeFromHash<br/>(parses hash, writes atoms)"]
-    ATOMS["Atoms<br/>$activeTag · $activeSearch · $activeCategory"]
-    VC["$visibleCards<br/>(computed from atoms)"]
-    HHC["handleHashChange()"]
-    FX["Side effects<br/>category dropdown · sidebar active states · filterCards()"]
+    BFH["bridgeFromHash<br/>(parses hash, writes reactive variables)"]
+    RV["Reactive variables<br/>$activeTag · $activeSearch · $activeCategory"]
+    AF["$activeFilter<br/>(computed descriptor)"]
+    VC["$visibleCards<br/>(computed)"]
+    HHC["handleHashChange()<br/>(parse → batch → reactive variables)"]
+    EFF["Effects<br/>header · dropdown · accordion · filterCards body"]
     DOM["Card DOM<br/>show/hide + sortCards() reorder"]
     UI["User interaction<br/>TagManager / FilterManager"]
-    BTH["bridgeToHash<br/>(atom → hash, keeps URL in sync)"]
+    BTH["bridgeToHash<br/>(reactive state → hash, keeps URL in sync)"]
 
-    HASH --> BFH --> ATOMS --> VC --> HHC --> FX --> DOM
-    UI --> ATOMS --> BTH --> HASH
-    HASH -. "hashchange event" .-> HHC
+    HASH --> BFH --> RV --> AF & VC --> EFF --> DOM
+    UI --> RV --> BTH --> HASH
+    HASH -. "hashchange event" .-> HHC --> RV
 ```
 
-**Key point:** The DOM is the data layer. Card elements carry all their metadata as `data-*` attributes. Filtering is done by toggling `display: none` — no virtual DOM, no re-rendering. Nanostores atoms provide reactive, observable state with built-in equality checks to prevent update loops.
+**Key point:** The reactive variables are the single source of truth for
+cross-module state coordination; the URL hash is one input/output among
+several (a deep link, a back/forward step, or a hash write from a UI
+transition — never the authoritative copy). The DOM is the data layer:
+card elements carry all their metadata as `data-*` attributes. Filtering is
+done by toggling `display: none` — no virtual DOM, no re-rendering.
+Nanostores provides reactive, observable state with built-in equality
+checks to prevent update loops.
 
 ---
 
@@ -413,7 +423,7 @@ flowchart LR
 - [ ] Add HTML validation (`nu-html-checker` or similar) to the build pipeline
 - [ ] Consider a headless CMS or YAML frontmatter approach for link authoring
 - [ ] Evaluate incremental builds (skip re-rendering if data hasn't changed)
-- [ ] Add RSS/Atom feed generation from links data
+- [ ] Add RSS feed generation from links data
 - [ ] Add sitemap.xml generation for SEO
 - [ ] Consider moving from Poetry to pip/uv for simpler dependency management
 - [ ] Add support for multiple theme variants from a single config

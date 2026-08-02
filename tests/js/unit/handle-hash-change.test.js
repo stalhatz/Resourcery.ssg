@@ -15,7 +15,7 @@ async function setup(url = BROWSE, html = FIX()) {
   };
 }
 
-describe('handle-hash-change.js', () => {
+describe('handle-hash-change.js (thin handler)', () => {
   it('handleHashChange: early-returns on a non-browse page', async () => {
     const { handleHashChange } = await setup(LANDING);
     const rc = document.getElementById('resultsCount');
@@ -24,75 +24,68 @@ describe('handle-hash-change.js', () => {
     expect(rc.textContent).toBe('untouched');
   });
 
-  it("handleHashChange: '#category-<c>' sets $activeCategory (others null), sets categoryFilter.value, strips .active, then resolves subcategory-first", async () => {
+  it("handleHashChange: '#category-<c>' sets $activeCategory, others null", async () => {
     const { state, handleHashChange } = await setup(`${BROWSE}#category-frontend`);
     handleHashChange();
     expect(state.$activeCategory.get()).toBe('frontend');
     expect(state.$activeTag.get()).toBeNull();
     expect(state.$activeSearch.get()).toBeNull();
-    expect(document.getElementById('categoryFilter').value).toBe('frontend');
-    // subcategory-first: frontend link active, subcat-web expanded, trigger aria-expanded=true
-    const frontendLink = document.querySelector('.subcategory-link[data-category="frontend"]');
-    expect(frontendLink.classList.contains('active')).toBe(true);
-    expect(document.getElementById('subcat-web').classList.contains('expanded')).toBe(true);
-    expect(document.querySelector('[aria-controls="subcat-web"]').getAttribute('aria-expanded')).toBe('true');
-    // other subcategory links not active
-    expect(document.querySelector('.subcategory-link[data-category="backend"]').classList.contains('active')).toBe(false);
   });
 
-  it('handleHashChange: category fallback to trigger when no subcategory matches', async () => {
-    const { handleHashChange } = await setup(`${BROWSE}#category-web`);
-    handleHashChange();
-    // no subcategory-link[data-category="web"] -> fallback to trigger[data-category-id="web"]
-    const trigger = document.querySelector('.category-trigger[data-category-id="web"]');
-    expect(trigger.classList.contains('active')).toBe(true);
-    expect(trigger.getAttribute('aria-expanded')).toBe('true');
-    expect(document.getElementById('subcat-web').classList.contains('expanded')).toBe(true);
-  });
-
-  it("handleHashChange: '#tag-<t>' sets $activeTag, clears categoryFilter.value, strips .active, calls filterCards", async () => {
+  it("handleHashChange: '#tag-<t>' sets $activeTag, others null", async () => {
     const { state, handleHashChange } = await setup(`${BROWSE}#tag-foo`);
     handleHashChange();
     expect(state.$activeTag.get()).toBe('foo');
-    expect(document.getElementById('categoryFilter').value).toBe('');
-    // filterCards ran (no 'foo' tag -> 0 cards)
-    expect(document.getElementById('resultsCount').textContent).toBe('0 items');
+    expect(state.$activeSearch.get()).toBeNull();
+    expect(state.$activeCategory.get()).toBeNull();
   });
 
-  it("handleHashChange: '#search-<s>' sets $activeSearch, clears categoryFilter.value, calls filterCards", async () => {
+  it("handleHashChange: '#search-<s>' sets $activeSearch, others null", async () => {
     const { state, handleHashChange } = await setup(`${BROWSE}#search-bar`);
     handleHashChange();
     expect(state.$activeSearch.get()).toBe('bar');
-    expect(document.getElementById('categoryFilter').value).toBe('');
-    expect(document.getElementById('resultsCount').textContent).toBe('0 items');
+    expect(state.$activeTag.get()).toBeNull();
+    expect(state.$activeCategory.get()).toBeNull();
+  });
+
+  it('handleHashChange: bare URL sets all three reactive variables to null', async () => {
+    const { state, handleHashChange } = await setup(BROWSE);
+    handleHashChange();
+    expect(state.$activeTag.get()).toBeNull();
+    expect(state.$activeSearch.get()).toBeNull();
+    expect(state.$activeCategory.get()).toBeNull();
   });
 
   // B8 / E4 regression: a hand-typed malformed percent-sequence ('#tag-%' or
   // '#search-%') must NOT crash the hashchange handler with URIError. The
-  // atoms end up holding the raw segment (non-matching — the filter simply
-  // shows 0 items), the header shows the raw form, and filterCards still runs.
-  it("handleHashChange: malformed '#tag-%' does not throw; atom='%', filter runs, header shows '#%'", async () => {
+  // reactive variables end up holding the raw segment (non-matching — the
+  // filter simply shows 0 items via the effects layer).
+  it("handleHashChange: malformed '#tag-%' does not throw; reactive variable='%'", async () => {
     const { state, handleHashChange } = await setup(`${BROWSE}#tag-%`);
     expect(() => handleHashChange()).not.toThrow();
     expect(state.$activeTag.get()).toBe('%');
     expect(state.$activeSearch.get()).toBeNull();
     expect(state.$activeCategory.get()).toBeNull();
-    expect(document.getElementById('resultsCount').textContent).toBe('0 items');
-    expect(document.getElementById('filterValue1').textContent).toBe('#%');
   });
 
-  it("handleHashChange: malformed '#search-%' does not throw; atom='%', filter runs", async () => {
+  it("handleHashChange: malformed '#search-%' does not throw; reactive variable='%'", async () => {
     const { state, handleHashChange } = await setup(`${BROWSE}#search-%`);
     expect(() => handleHashChange()).not.toThrow();
     expect(state.$activeSearch.get()).toBe('%');
     expect(state.$activeTag.get()).toBeNull();
-    expect(document.getElementById('resultsCount').textContent).toBe('0 items');
+    expect(state.$activeCategory.get()).toBeNull();
   });
 
-  it('handleHashChange: calls filterCards() (browse page)', async () => {
-    const { handleHashChange } = await setup(BROWSE); // no hash -> all visible
+  it('thin: sets reactive variables only — no direct DOM writes (select, header, cards untouched)', async () => {
+    const { handleHashChange } = await setup(`${BROWSE}#category-frontend`);
+    const select = document.getElementById('categoryFilter');
+    const rc = document.getElementById('resultsCount');
+    select.value = 'web'; // a valid option value (invalid values clamp to '')
+    rc.textContent = 'stale';
     handleHashChange();
-    expect(document.getElementById('resultsCount').textContent).toBe('4 items');
+    expect(select.value).toBe('web');
+    expect(rc.textContent).toBe('stale');
+    expect(document.getElementById('filterValue1').textContent).toBe('');
   });
 
   it('installHashChangeListener: attaches handleHashChange to window "hashchange"', async () => {
@@ -102,96 +95,5 @@ describe('handle-hash-change.js', () => {
     // jsdom fires hashchange asynchronously
     await new Promise((r) => setTimeout(r, 0));
     expect(state.$activeTag.get()).toBe('foo');
-  });
-
-  // B1 regression: the hash-change path must refresh the filter header, not
-  // just the atoms/dropdown/sidebar/cards. (tag-manager.js updateFilterHeader
-  // — which owns the header — is only invoked on direct user interactions.)
-  describe('handleHashChange refreshes the filter header from the parsed hash (B1)', () => {
-    const header = () => ({
-      filterText1: document.getElementById('filterText1'),
-      filterValue1: document.getElementById('filterValue1'),
-      filterText2: document.getElementById('filterText2'),
-      categoryTrigger: document.getElementById('categoryTrigger'),
-      searchValue: document.getElementById('searchValue'),
-    });
-
-    it("'#tag-foo' -> filterText1='Showing', filterValue1='#foo' (inline), categoryTrigger inline-flex+pe:none+opacity 1, searchValue hidden, filterText2 inline", async () => {
-      const { handleHashChange } = await setup(`${BROWSE}#tag-foo`);
-      handleHashChange();
-      const h = header();
-      expect(h.filterText1.style.display).toBe('inline');
-      expect(h.filterText1.textContent).toBe('Showing');
-      expect(h.filterValue1.style.display).toBe('inline');
-      expect(h.filterValue1.textContent).toBe('#foo');
-      expect(h.categoryTrigger.style.display).toBe('inline-flex');
-      expect(h.categoryTrigger.style.pointerEvents).toBe('none');
-      expect(h.categoryTrigger.style.opacity).toBe('1');
-      expect(h.searchValue.style.display).toBe('none');
-      expect(h.filterText2.style.display).toBe('inline');
-    });
-
-    it("'#search-bar' -> filterText1='Searching', categoryTrigger hidden, searchValue='\"bar\"' (inline), filterText2 hidden", async () => {
-      const { handleHashChange } = await setup(`${BROWSE}#search-bar`);
-      handleHashChange();
-      const h = header();
-      expect(h.filterText1.style.display).toBe('inline');
-      expect(h.filterText1.textContent).toBe('Searching');
-      expect(h.categoryTrigger.style.display).toBe('none');
-      expect(h.searchValue.style.display).toBe('inline');
-      expect(h.searchValue.textContent).toBe('"bar"');
-      expect(h.filterText2.style.display).toBe('none');
-    });
-
-    it("'#category-frontend' -> filterText1='Showing', filterValue1='Frontend' (option label), categoryTrigger inline-flex+pe:auto, searchValue hidden, filterText2 inline", async () => {
-      const { handleHashChange } = await setup(`${BROWSE}#category-frontend`);
-      handleHashChange();
-      const h = header();
-      expect(h.filterText1.style.display).toBe('inline');
-      expect(h.filterText1.textContent).toBe('Showing');
-      expect(h.filterValue1.textContent).toBe('Frontend');
-      expect(h.categoryTrigger.style.display).toBe('inline-flex');
-      expect(h.categoryTrigger.style.pointerEvents).toBe('auto');
-      expect(h.searchValue.style.display).toBe('none');
-      expect(h.filterText2.style.display).toBe('inline');
-    });
-
-    it("bare URL after '#tag-foo' (back/forward) -> header resets: filterValue1='All Categories', categoryTrigger pe:auto, searchValue hidden, filterText2 inline", async () => {
-      const { handleHashChange } = await setup(`${BROWSE}#tag-foo`);
-      handleHashChange();
-      // sanity: the tag state was applied first
-      expect(document.getElementById('filterValue1').textContent).toBe('#foo');
-
-      window.history.pushState({}, '', BROWSE); // clear hash (no hashchange fired)
-      handleHashChange();
-      const h = header();
-      expect(h.filterText1.style.display).toBe('inline');
-      expect(h.filterText1.textContent).toBe('Showing');
-      expect(h.filterValue1.textContent).toBe('All Categories');
-      expect(h.categoryTrigger.style.display).toBe('inline-flex');
-      expect(h.categoryTrigger.style.pointerEvents).toBe('auto');
-      expect(h.categoryTrigger.style.opacity).toBe('1');
-      expect(h.searchValue.style.display).toBe('none');
-      expect(h.filterText2.style.display).toBe('inline');
-    });
-  });
-
-  // B2 regression: an all-null hash (bare URL after back/forward) must clear
-  // the category dropdown, not leave the previous category in the hidden
-  // select — updateFilterHeader's else-branch resolves the header label from
-  // categoryFilter.value, so a stale select also stales the header.
-  describe('handleHashChange clears the category dropdown on an all-null hash (B2)', () => {
-    it("bare URL after '#category-frontend' (back/forward): categoryFilter.value reset to '' and header shows 'All Categories'", async () => {
-      const { handleHashChange } = await setup(`${BROWSE}#category-frontend`);
-      handleHashChange();
-      // sanity: the category state was applied first
-      expect(document.getElementById('categoryFilter').value).toBe('frontend');
-      expect(document.getElementById('filterValue1').textContent).toBe('Frontend');
-
-      window.history.pushState({}, '', BROWSE); // clear hash (no hashchange fired)
-      handleHashChange();
-      expect(document.getElementById('categoryFilter').value).toBe('');
-      expect(document.getElementById('filterValue1').textContent).toBe('All Categories');
-    });
   });
 });

@@ -2,14 +2,14 @@
  * Card manager — click/keyboard handlers on link cards and tag badges.
  *
  * Card clicks open the modal. Tag badge clicks set the active tag
- * (or navigate to browse.html on the landing page).
+ * (or navigate to browse.html via browseUrl on the landing page).
  */
 
 import { ModalManager } from './modal-manager.js';
 import { TagManager } from './tag-manager.js';
-import { filterCards } from './filter-cards.js';
+import { isBrowsePage, browseUrl } from './browse-utils.js';
 
-const isLandingPage = !window.location.pathname.includes('browse.html');
+const isLandingPage = !isBrowsePage();
 
 export const CardManager = {
   init() {
@@ -33,13 +33,11 @@ export const CardManager = {
         const tagName = tag.dataset.tag || tag.textContent.trim();
 
         if (isLandingPage) {
-          window.location.href =
-            'browse.html#tag-' + TagManager.slugify(tagName);
+          window.location.href = browseUrl('tag', TagManager.slugify(tagName));
           return;
         }
 
         TagManager.setActiveTag(tagName, true);
-        filterCards();
       });
     });
   },

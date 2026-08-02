@@ -11,8 +11,13 @@ async function setup(url = BROWSE, html = FIX()) {
   const tagMod = await loadFresh('static/js/modules/tag-manager.js', { url });
   const modalMod = await loadFresh('static/js/modules/modal-manager.js', { url });
   const cardMod = await loadFresh('static/js/modules/card-manager.js', { url });
+  const fx = await loadFresh('static/js/modules/effects.js', { url });
   cardMod.CardManager.init();
-  return { TagManager: tagMod.TagManager, ModalManager: modalMod.ModalManager };
+  return {
+    TagManager: tagMod.TagManager,
+    ModalManager: modalMod.ModalManager,
+    installEffects: fx.installEffects,
+  };
 }
 
 describe('card-manager.js', () => {
@@ -45,8 +50,9 @@ describe('card-manager.js', () => {
     expect(pdSpace).toHaveBeenCalled();
   });
 
-  it('init: .card-tags .tag click on browse -> setActiveTag + filterCards', async () => {
-    const { TagManager, ModalManager } = await setup();
+  it('init: .card-tags .tag click on browse -> setActiveTag; the effects drain renders the filtered set', async () => {
+    const { TagManager, ModalManager, installEffects } = await setup();
+    installEffects();
     const setActiveSpy = vi.spyOn(TagManager, 'setActiveTag');
     const openSpy = vi.spyOn(ModalManager, 'open');
     const tag = document.querySelector('#card-1 .card-tags .tag'); // data-tag="JavaScript"
@@ -54,7 +60,7 @@ describe('card-manager.js', () => {
     expect(setActiveSpy).toHaveBeenCalledWith('JavaScript', true);
     // stopPropagation on the tag click prevents the card (open) handler
     expect(openSpy).not.toHaveBeenCalled();
-    // filterCards() ran: card-2 (no JavaScript tag) hidden, card-1 visible
+    // the drain rendered the filtered set: card-2 (no JavaScript tag) hidden
     expect(document.getElementById('card-2').style.display).toBe('none');
     expect(document.getElementById('card-1').style.display).toBe('');
   });

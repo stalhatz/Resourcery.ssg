@@ -1,20 +1,22 @@
 /**
  * Tag manager — search suggestions, active tag/search state, filter header.
  *
- * Uses Nanostores atoms ($activeTag, $activeSearch, $activeCategory) instead
- * of plain fields. All URL-hash writing is done here for tag/search; category
- * hash writes happen in filter-manager and sidebar-manager.
+ * Uses Nanostores reactive variables ($activeTag, $activeSearch,
+ * $activeCategory) instead of plain fields. All URL-hash writing is done
+ * here for tag/search; category hash writes happen in filter-manager and
+ * sidebar-manager. DOM side-effects (header, dropdowns, accordion, cards)
+ * are owned by the effects layer (effects.js).
  */
 
-import { $activeTag, $activeSearch, $activeCategory, batchAtomWrites } from './state.js';
+import { $activeTag, $activeSearch, $activeCategory, $activeFilter, batchAtomWrites } from './state.js';
 import { slugify, foldDiacritics } from './slugify.js';
 import { dom } from '../dom.js';
-import { filterCards } from './filter-cards.js';
+import { isBrowsePage, browseUrl } from './browse-utils.js';
 import { createLogger } from './logger.js';
 
 export const logger = createLogger(import.meta.url);
 
-const isLandingPage = !window.location.pathname.includes('browse.html');
+const isLandingPage = !isBrowsePage();
 
 export const TagManager = {
   allTags: [],
@@ -28,8 +30,9 @@ export const TagManager = {
   },
 
   /**
-   * Slugify a tag into its canonical URL/atom form. Delegates to the shared
-   * slugify module — the single source of truth used by state.js matching.
+   * Slugify a tag into its canonical URL/reactive-variable form. Delegates
+   * to the shared slugify module — the single source of truth used by
+   * state.js matching.
    */
   slugify(text) {
     return slugify(text);
@@ -38,9 +41,9 @@ export const TagManager = {
   setActiveTag(tag, updateUrl) {
     const slug = tag ? this.slugify(tag) : null;
 
-    // Invariant: only one atom is active at a time. Batched so the bridge
-    // writes the URL once per transition, not once per atom.set() (which
-    // would emit intermediate hashchange/history entries).
+    // Invariant: only one reactive variable is active at a time. Batched so
+    // the bridge writes the URL once per transition, not once per .set()
+    // (which would emit intermediate hashchange/history entries).
     batchAtomWrites(() => {
       $activeSearch.set(null);
       $activeCategory.set(null);
@@ -49,28 +52,20 @@ export const TagManager = {
       if (updateUrl !== false) {
         if (slug) {
           window.location.hash = 'tag-' + slug;
-        } else {
-          const catVal = dom.categoryFilter ? dom.categoryFilter.value : '';
-          if (catVal) {
-            $activeCategory.set(catVal);
-            window.location.hash = 'category-' + catVal;
-          } else if (window.location.hash) {
-            // Only clear the hash when there is one — avoids pushing a
-            // spurious history entry when nothing is active.
-            history.pushState('', '', window.location.pathname);
-          }
+        } else if (window.location.hash) {
+          // Only clear the hash when there is one — avoids pushing a
+          // spurious history entry when nothing is active.
+          history.pushState('', '', window.location.pathname);
         }
       }
     });
-
-    this.updateFilterHeader();
   },
 
   setActiveSearch(searchTerm, updateUrl) {
     const term = searchTerm ? searchTerm.trim() : null;
 
-    // Invariant: only one atom is active at a time. Batched so the bridge
-    // writes the URL once per transition, not once per atom.set().
+    // Invariant: only one reactive variable is active at a time. Batched so
+    // the bridge writes the URL once per transition, not once per .set().
     batchAtomWrites(() => {
       $activeTag.set(null);
       $activeCategory.set(null);
@@ -79,28 +74,13 @@ export const TagManager = {
       if (updateUrl !== false) {
         if (term) {
           window.location.hash = 'search-' + encodeURIComponent(term);
-        } else {
-          const catVal = dom.categoryFilter ? dom.categoryFilter.value : '';
-          if (catVal) {
-            $activeCategory.set(catVal);
-            window.location.hash = 'category-' + catVal;
-          } else if (window.location.hash) {
-            // Only clear the hash when there is one — avoids pushing a
-            // spurious history entry when nothing is active.
-            history.pushState('', '', window.location.pathname);
-          }
+        } else if (window.location.hash) {
+          // Only clear the hash when there is one — avoids pushing a
+          // spurious history entry when nothing is active.
+          history.pushState('', '', window.location.pathname);
         }
       }
     });
-
-    this.updateFilterHeader();
-  },
-
-  setCategoryDisplay(categoryId) {
-    if (dom.categoryFilter) {
-      dom.categoryFilter.value = categoryId || '';
-    }
-    this.updateFilterHeader();
   },
 
   updateFilterHeader() {
@@ -115,10 +95,9 @@ export const TagManager = {
       return;
     }
 
-    const activeSearch = $activeSearch.get();
-    const activeTag = $activeTag.get();
+    const { kind, value } = $activeFilter.get();
 
-    if (activeSearch) {
+    if (kind === 'search') {
       filterText1.style.display = 'inline';
       filterText1.textContent = 'Searching';
 
@@ -128,11 +107,11 @@ export const TagManager = {
 
       if (searchValue) {
         searchValue.style.display = 'inline';
-        searchValue.textContent = '"' + activeSearch + '"';
+        searchValue.textContent = '"' + value + '"';
       }
 
       if (filterText2) filterText2.style.display = 'none';
-    } else if (activeTag) {
+    } else if (kind === 'tag') {
       filterText1.style.display = 'inline';
       filterText1.textContent = 'Showing';
 
@@ -143,7 +122,7 @@ export const TagManager = {
       }
 
       filterValue1.style.display = 'inline';
-      filterValue1.textContent = '#' + activeTag;
+      filterValue1.textContent = '#' + value;
 
       if (searchValue) {
         searchValue.style.display = 'none';
@@ -378,10 +357,9 @@ export const TagManager = {
     if (isLandingPage) {
       if (value.startsWith('#')) {
         var tag = value.substring(1).trim();
-        window.location.href = 'browse.html#tag-' + this.slugify(tag);
+        window.location.href = browseUrl('tag', this.slugify(tag));
       } else {
-        window.location.href =
-          'browse.html#search-' + encodeURIComponent(value);
+        window.location.href = browseUrl('search', value);
       }
     } else {
       if (value.startsWith('#')) {
@@ -392,7 +370,6 @@ export const TagManager = {
       }
 
       searchInput.value = '';
-      filterCards();
     }
   },
 

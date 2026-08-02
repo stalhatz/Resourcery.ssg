@@ -16,11 +16,12 @@ export function foldDiacritics(text) {
 }
 
 /**
- * Slugify a tag name into its canonical URL/atom form.
+ * Slugify a tag name into its canonical URL/reactive-variable form.
  *
  * Single source of truth for tag normalization. The URL hash and the
- * $activeTag atom carry slugs; raw card tags (data-tags) must be slugified
- * with this same function before matching (see state.js $visibleCards).
+ * $activeTag reactive variable carry slugs; raw card tags (data-tags) must
+ * be slugified with this same function before matching (see state.js
+ * $visibleCards).
  *
  * Examples: 'C++' -> 'c', 'C#' -> 'c', 'R&D' -> 'rd',
  *           'Français' -> 'francais', 'machine learning' -> 'machine-learning'

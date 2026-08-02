@@ -5,7 +5,8 @@ const BROWSE = 'http://localhost/browse.html';
 const FIX = () => readFixture('browse.html');
 
 // jsdom fires hashchange for location.hash assignment and history.back()/forward()
-// asynchronously, so wait for the atom side-effect (handleHashChange ran) to settle.
+// asynchronously, so wait for the reactive-state side-effect (handleHashChange
+// ran) to settle.
 const waitFor = (fn) => vi.waitFor(fn, { timeout: 500, interval: 10 });
 const settle = () => new Promise((r) => setTimeout(r, 50));
 
@@ -16,10 +17,13 @@ describe('Browser back/forward (integration)', () => {
     await loadFresh('static/js/modules/entry-animator.js', { url: BROWSE });
     await loadFresh('static/js/modules/filter-cards.js', { url: BROWSE });
     const hhc = await loadFresh('static/js/modules/handle-hash-change.js', { url: BROWSE });
+    const fx = await loadFresh('static/js/modules/effects.js', { url: BROWSE });
     hhc.installHashChangeListener();
-    // install the bridge so atom sets drive writeHash — the loop-termination path.
-    // Category→category transitions keep all atoms non-null-or-null consistently,
-    // so writeHash is a no-op (serialise(hash)===hash) and no extra hashchange fires.
+    fx.installEffects();
+    // install the bridge so reactive-variable sets drive writeHash — the
+    // loop-termination path. Category→category transitions keep all
+    // reactive variables non-null-or-null consistently, so writeHash is a
+    // no-op (serialise(hash)===hash) and no extra hashchange fires.
     state.bridgeToHash({
       $activeTag: state.$activeTag,
       $activeSearch: state.$activeSearch,
@@ -61,7 +65,9 @@ describe('Browser back/forward (integration)', () => {
     await loadFresh('static/js/modules/entry-animator.js', { url: BROWSE });
     await loadFresh('static/js/modules/filter-cards.js', { url: BROWSE });
     const hhc = await loadFresh('static/js/modules/handle-hash-change.js', { url: BROWSE });
+    const fx = await loadFresh('static/js/modules/effects.js', { url: BROWSE });
     hhc.installHashChangeListener();
+    fx.installEffects();
     state.bridgeToHash({
       $activeTag: state.$activeTag,
       $activeSearch: state.$activeSearch,

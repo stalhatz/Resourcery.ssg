@@ -4,13 +4,14 @@ import { loadFresh, readFixture } from '../helpers/setup.js';
 const BROWSE = 'http://localhost/browse.html';
 const FIX = () => readFixture('browse.html');
 
-// jsdom fires hashchange asynchronously, so wait for the atom side-effect
-// (handleHashChange ran) to settle before counting events.
+// jsdom fires hashchange asynchronously, so wait for the reactive-state
+// side-effect (handleHashChange ran) to settle before counting events.
 const waitFor = (fn) => vi.waitFor(fn, { timeout: 500, interval: 10 });
 const settle = () => new Promise((r) => setTimeout(r, 50));
 
-// Full browse wiring: dropdown (FilterManager), sidebar, hashchange listener
-// and the atom->hash bridge — mirrors main.js on the browse page.
+// Full browse wiring: dropdown (FilterManager), sidebar, hashchange listener,
+// the reactive-state -> hash bridge and the effects layer — mirrors main.js
+// on the browse page (FilterManager.init() then installEffects()).
 async function setup() {
   const state = await loadFresh('static/js/modules/state.js', { url: BROWSE, html: FIX() });
   await loadFresh('static/js/modules/tag-manager.js', { url: BROWSE });
@@ -19,9 +20,11 @@ async function setup() {
   const sb = await loadFresh('static/js/modules/sidebar-manager.js', { url: BROWSE });
   const fm = await loadFresh('static/js/modules/filter-manager.js', { url: BROWSE });
   const hhc = await loadFresh('static/js/modules/handle-hash-change.js', { url: BROWSE });
+  const fx = await loadFresh('static/js/modules/effects.js', { url: BROWSE });
   sb.SidebarManager.init();
   fm.FilterManager.init();
   hhc.installHashChangeListener();
+  fx.installEffects();
   state.bridgeToHash({
     $activeTag: state.$activeTag,
     $activeSearch: state.$activeSearch,
@@ -44,7 +47,7 @@ const option = (value) =>
   document.querySelector(`#categoryDropdown .filter-dropdown-option[data-value="${value}"]`);
 
 describe('Hash transitions (integration): one hashchange per user action', () => {
-  it('dropdown category click from a tag state: single hashchange, atoms converge, cards filtered', async () => {
+  it('dropdown category click from a tag state: single hashchange, reactive variables converge, cards filtered', async () => {
     const { state } = await setup();
     window.location.hash = 'tag-foo';
     await waitFor(() => expect(state.$activeTag.get()).toBe('foo'));
@@ -95,7 +98,7 @@ describe('Hash transitions (integration): one hashchange per user action', () =>
     expect(document.getElementById('resultsCount').textContent).toBe('4 items');
   });
 
-  it('clearFilters with a category active: fully clears (atoms, hash, select, grid) with zero hashchange', async () => {
+  it('clearFilters with a category active: fully clears (reactive variables, hash, select, grid) with zero hashchange', async () => {
     const { state } = await setup();
     window.location.hash = 'category-frontend';
     await waitFor(() => expect(state.$activeCategory.get()).toBe('frontend'));
@@ -135,7 +138,7 @@ describe('Hash transitions (integration): one hashchange per user action', () =>
 // B1 regression: hash-driven navigation (deep links, back/forward) must
 // refresh the filter header — the dropdown and grid already updated, but the
 // header ("Showing #tag", "Searching ...", category name, "All Categories")
-// went stale because only the atoms/dropdown/sidebar/cards were synced.
+// went stale because only the reactive variables/dropdown/sidebar/cards were synced.
 describe('Hash-driven navigation refreshes the filter header (B1)', () => {
   it('deep link #tag-foo shows "Showing #foo"; tag -> search transition shows "Searching \\"bar\\""', async () => {
     const { state } = await setup();
@@ -193,10 +196,10 @@ describe('Hash-driven navigation refreshes the filter header (B1)', () => {
 
 // B2 regression: back-navigating from a category to the bare browse.html URL
 // (all-null hash) must fully reset the dropdown — hidden select AND the
-// visible custom dropdown — plus the header, atoms and grid. Only the cards
+// visible custom dropdown — plus the header, reactive variables and grid. Only the cards
 // used to revert; the select and header stayed on the old category.
 describe('Back-navigation to a bare URL clears the category dropdown (B2)', () => {
-  it("category -> bare URL (back/forward) resets select, visible dropdown, header, atoms and grid", async () => {
+  it("category -> bare URL (back/forward) resets select, visible dropdown, header, reactive variables and grid", async () => {
     const { state } = await setup();
     // mirror the manual repro: pick Frontend in the custom dropdown
     option('frontend').click();

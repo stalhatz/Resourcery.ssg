@@ -5,11 +5,29 @@ const BROWSE = 'http://localhost/browse.html';
 const LANDING = 'http://localhost/index.html';
 const FIX = () => readFixture('browse.html');
 
+// jsdom fires hashchange asynchronously, so wait for the reactive-state
+// side-effect (handleHashChange ran) to settle before asserting the
+// drain-synced DOM.
+const waitFor = (fn) => vi.waitFor(fn, { timeout: 500, interval: 10 });
+
+// Browse setups wire the full main.js chain: sidebar + hashchange listener +
+// effects (FilterManager.init is not needed — syncSelection no-ops without
+// dropdowns, and the effect's select mirror + accordion + header still run).
+// Landing setups import the same modules but install nothing (main.js only
+// installs effects on the browse page).
 async function setup(url = BROWSE) {
   await loadFresh('static/js/modules/state.js', { url, html: FIX() });
   const tagMod = await loadFresh('static/js/modules/tag-manager.js', { url });
+  await loadFresh('static/js/modules/entry-animator.js', { url });
+  await loadFresh('static/js/modules/filter-cards.js', { url });
   const sb = await loadFresh('static/js/modules/sidebar-manager.js', { url });
+  const hhc = await loadFresh('static/js/modules/handle-hash-change.js', { url });
+  const fx = await loadFresh('static/js/modules/effects.js', { url });
   sb.SidebarManager.init();
+  if (url === BROWSE) {
+    hhc.installHashChangeListener();
+    fx.installEffects();
+  }
   return { TagManager: tagMod.TagManager };
 }
 
@@ -26,23 +44,25 @@ describe('Sidebar (integration)', () => {
     expect(overlay.classList.contains('active')).toBe(false);
   });
 
-  it('browse trigger click writes hash + collapses siblings', async () => {
+  it('browse trigger click writes the hash; the hash -> reactive state -> effects chain expands the matching trigger and collapses the others', async () => {
     await setup();
     document.querySelector('.category-trigger[data-category-id="web"]').click();
-    document.querySelectorAll('.category-trigger').forEach((t) => {
-      expect(t.getAttribute('aria-expanded')).toBe('false');
-    });
     expect(window.location.hash).toBe('#category-web');
+    await waitFor(() =>
+      expect(document.querySelector('.category-trigger[data-category-id="web"]').getAttribute('aria-expanded')).toBe('true')
+    );
+    expect(document.getElementById('subcat-web').classList.contains('expanded')).toBe(true);
+    expect(document.querySelector('.category-trigger[data-category-id="devops"]').getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('browse subcategory click sets categoryFilter.value, writes hash, filters, toggles .active', async () => {
-    const { TagManager } = await setup();
-    const spy = vi.spyOn(TagManager, 'setCategoryDisplay');
+  it('browse subcategory click: hash -> reactive state -> effects sync select, header and active classes', async () => {
+    await setup();
     document.querySelector('.subcategory-link[data-category="frontend"]').click();
-    expect(document.getElementById('categoryFilter').value).toBe('frontend');
-    expect(spy).toHaveBeenCalledWith('frontend');
+    await waitFor(() => expect(document.getElementById('categoryFilter').value).toBe('frontend'));
     expect(window.location.hash).toBe('#category-frontend');
+    expect(document.getElementById('filterValue1').textContent).toBe('Frontend');
     expect(document.querySelector('.subcategory-link[data-category="frontend"]').classList.contains('active')).toBe(true);
+    expect(document.getElementById('subcat-web').classList.contains('expanded')).toBe(true);
   });
 
   it('mobile (innerWidth<=1023) closes sidebar after a subcategory click', async () => {

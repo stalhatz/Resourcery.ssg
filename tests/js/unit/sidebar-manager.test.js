@@ -6,10 +6,13 @@ const LANDING = 'http://localhost/index.html';
 const FIX = () => readFixture('browse.html');
 
 async function setup(url = BROWSE, html = FIX()) {
-  await loadFresh('static/js/modules/state.js', { url, html });
-  const tagMod = await loadFresh('static/js/modules/tag-manager.js', { url });
+  const state = await loadFresh('static/js/modules/state.js', { url, html });
   const sbMod = await loadFresh('static/js/modules/sidebar-manager.js', { url });
-  return { TagManager: tagMod.TagManager, SidebarManager: sbMod.SidebarManager };
+  return {
+    state,
+    SidebarManager: sbMod.SidebarManager,
+    syncAccordion: sbMod.syncAccordion,
+  };
 }
 
 describe('sidebar-manager.js', () => {
@@ -59,48 +62,96 @@ describe('sidebar-manager.js', () => {
     expect(window.location.href).toBe('browse.html#category-web');
   });
 
-  it('init: category-trigger click on browse collapses sibling triggers (aria-expanded=false, lists off) then writes "#category-<id>"', async () => {
-    const { SidebarManager } = await setup();
-    SidebarManager.init();
-    document.querySelector('.category-trigger[data-category-id="web"]').click();
-    // all triggers collapsed
+  // --- syncAccordion ---
+  it('syncAccordion: category kind expands the matching subcategory (subcategory-first) and collapses everything else', async () => {
+    const { syncAccordion } = await setup();
+    syncAccordion({ kind: 'category', value: 'frontend' });
+    const frontendLink = document.querySelector('.subcategory-link[data-category="frontend"]');
+    expect(frontendLink.classList.contains('active')).toBe(true);
+    expect(document.getElementById('subcat-web').classList.contains('expanded')).toBe(true);
+    expect(document.querySelector('[aria-controls="subcat-web"]').getAttribute('aria-expanded')).toBe('true');
+    // others: no active class, collapsed
+    expect(document.querySelector('.subcategory-link[data-category="backend"]').classList.contains('active')).toBe(false);
+    expect(document.querySelector('.category-trigger[data-category-id="devops"]').getAttribute('aria-expanded')).toBe('false');
+    expect(document.getElementById('subcat-devops').classList.contains('expanded')).toBe(false);
+  });
+
+  it('syncAccordion: category kind without a matching subcategory falls back to the trigger', async () => {
+    const { syncAccordion } = await setup();
+    syncAccordion({ kind: 'category', value: 'web' });
+    const trigger = document.querySelector('.category-trigger[data-category-id="web"]');
+    expect(trigger.classList.contains('active')).toBe(true);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(document.getElementById('subcat-web').classList.contains('expanded')).toBe(true);
+    // no subcategory-link[data-category="web"] -> none of them is active
+    document.querySelectorAll('.subcategory-link').forEach((l) => {
+      expect(l.classList.contains('active')).toBe(false);
+    });
+  });
+
+  it('syncAccordion: non-category kinds (tag/search/null) clear every active class and collapse all lists', async () => {
+    const { syncAccordion } = await setup();
+    syncAccordion({ kind: 'category', value: 'web' }); // expand something first
+    syncAccordion({ kind: 'tag', value: 'foo' });
     document.querySelectorAll('.category-trigger').forEach((t) => {
+      expect(t.classList.contains('active')).toBe(false);
       expect(t.getAttribute('aria-expanded')).toBe('false');
     });
-    // all subcategory lists lost expanded
     document.querySelectorAll('.subcategory-list').forEach((l) => {
       expect(l.classList.contains('expanded')).toBe(false);
     });
-    expect(window.location.hash).toBe('#category-web');
+    document.querySelectorAll('.subcategory-link').forEach((l) => {
+      expect(l.classList.contains('active')).toBe(false);
+    });
   });
 
-  it('init: subcategory-link click on browse sets categoryFilter.value, calls setCategoryDisplay when an option exists, writes "#category-<cat>", calls filterCards, toggles .active', async () => {
-    const { TagManager, SidebarManager } = await setup();
+  // --- click handlers ---
+  // AC 3 regression: clicking the already-active category trigger keeps the
+  // accordion expanded (a hash write would fire no hashchange and the old
+  // collapse-all loop would leave the whole accordion collapsed).
+  it('AC 3 regression: same-value category-trigger click keeps the accordion expanded, no hash write', async () => {
+    const { state, SidebarManager } = await setup();
     SidebarManager.init();
-    const setCatSpy = vi.spyOn(TagManager, 'setCategoryDisplay');
-    document.querySelector('.subcategory-link[data-category="frontend"]').click();
-    expect(document.getElementById('categoryFilter').value).toBe('frontend');
-    expect(setCatSpy).toHaveBeenCalledWith('frontend');
-    expect(window.location.hash).toBe('#category-frontend');
-    // filterCards() ran (no atom filter set — setCategoryDisplay only updates the
-    // select, the hash drives the atom via handleHashChange — so all 4 visible):
-    expect(document.getElementById('resultsCount').textContent).toBe('4 items');
+    state.$activeCategory.set('web');
+    const trigger = document.querySelector('.category-trigger[data-category-id="web"]');
+    trigger.setAttribute('aria-expanded', 'true');
+    document.getElementById('subcat-web').classList.add('expanded');
+
+    trigger.click();
+
+    expect(document.getElementById('subcat-web').classList.contains('expanded')).toBe(true);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(window.location.hash).toBe('');
   });
 
-  it('init: subcategory-link click toggles .active classes on subcategory-links + category-triggers', async () => {
+  it('category-trigger click on a different category writes the hash only (effects do the DOM)', async () => {
+    const { state, SidebarManager } = await setup();
+    SidebarManager.init();
+    state.$activeCategory.set('web');
+    const devops = document.querySelector('.category-trigger[data-category-id="devops"]');
+    devops.click();
+    expect(window.location.hash).toBe('#category-devops');
+    // no manual DOM sync in the handler: reactive variables and accordion untouched
+    expect(state.$activeCategory.get()).toBe('web');
+    expect(devops.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('subcategory-link click on a different category writes the hash', async () => {
     const { SidebarManager } = await setup();
     SidebarManager.init();
-    const frontendLink = document.querySelector('.subcategory-link[data-category="frontend"]');
-    frontendLink.click();
-    expect(frontendLink.classList.contains('active')).toBe(true);
-    // other subcategory links lost active
-    document.querySelectorAll('.subcategory-link').forEach((l) => {
-      if (l !== frontendLink) expect(l.classList.contains('active')).toBe(false);
-    });
-    // all category triggers lost active
-    document.querySelectorAll('.category-trigger').forEach((t) => {
-      expect(t.classList.contains('active')).toBe(false);
-    });
+    document.querySelector('.subcategory-link[data-category="backend"]').click();
+    expect(window.location.hash).toBe('#category-backend');
+  });
+
+  it('same-value subcategory-link click syncs the accordion directly, no hash write', async () => {
+    const { state, SidebarManager } = await setup();
+    SidebarManager.init();
+    state.$activeCategory.set('frontend');
+    const link = document.querySelector('.subcategory-link[data-category="frontend"]');
+    link.click();
+    expect(window.location.hash).toBe('');
+    expect(link.classList.contains('active')).toBe(true);
+    expect(document.getElementById('subcat-web').classList.contains('expanded')).toBe(true);
   });
 
   it('init: mobile (window.innerWidth<=1023) auto-closes sidebar after a subcategory click', async () => {

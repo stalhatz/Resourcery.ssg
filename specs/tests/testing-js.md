@@ -91,9 +91,11 @@ touches the network).
   gitignored vendored nanostores](#handling-the-gitignored-vendored-nanostores).
 - No E2E browser tests in this spec (Playwright, real-browser) — explicitly
   deferred to a future spec. Integration here is jsdom-only.
-- `parseHash` and `serialiseHash` in `state.js` are **not** exported and
-  stay internal. They are tested indirectly through `bridgeFromHash` /
-  `bridgeToHash`; this spec does not refactor `state.js` to export them.
+- `parseHash` in `state.js` stays internal; `serialiseHash` is now exported
+  (superseded by `specs/refactors/js_reactive_effects.md`, which reuses it in
+  `browseUrl`). Both remain tested indirectly through `bridgeFromHash` /
+  `bridgeToHash`; `serialiseHash` additionally has direct round-trip unit
+  tests.
 
 ### Test toolchain & config
 

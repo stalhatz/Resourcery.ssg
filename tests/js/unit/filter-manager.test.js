@@ -5,10 +5,16 @@ const BROWSE = 'http://localhost/browse.html';
 const FIX = () => readFixture('browse.html');
 
 async function setup(url = BROWSE, html = FIX()) {
-  await loadFresh('static/js/modules/state.js', { url, html });
+  const state = await loadFresh('static/js/modules/state.js', { url, html });
   const tagMod = await loadFresh('static/js/modules/tag-manager.js', { url });
   const fmMod = await loadFresh('static/js/modules/filter-manager.js', { url });
-  return { TagManager: tagMod.TagManager, FilterManager: fmMod.FilterManager };
+  const fx = await loadFresh('static/js/modules/effects.js', { url });
+  return {
+    state,
+    TagManager: tagMod.TagManager,
+    FilterManager: fmMod.FilterManager,
+    installEffects: fx.installEffects,
+  };
 }
 
 const gridOrder = () =>
@@ -26,12 +32,12 @@ describe('filter-manager.js', () => {
     expect(FilterManager.dropdowns.sort.native).toBe(document.getElementById('sortFilter'));
   });
 
-  it('bindDropdown: category option click -> clear search+tag, setCategoryDisplay, write "#category-<v>" (or pushState to clear for ""), filterCards', async () => {
-    const { TagManager, FilterManager } = await setup();
+  it('bindDropdown: category option click -> batched clears + $activeCategory; drain syncs select/header/cards; hash write', async () => {
+    const { TagManager, FilterManager, installEffects } = await setup();
     FilterManager.init();
+    installEffects();
     const clearSearchSpy = vi.spyOn(TagManager, 'clearActiveSearch');
     const clearTagSpy = vi.spyOn(TagManager, 'clearActiveTag');
-    const setCatSpy = vi.spyOn(TagManager, 'setCategoryDisplay');
 
     document.querySelector('#categoryDropdown .filter-dropdown-option[data-value="web"]').click();
     expect(clearSearchSpy).toHaveBeenCalled();
@@ -41,13 +47,17 @@ describe('filter-manager.js', () => {
     // the previous category before the new one was set).
     expect(clearSearchSpy).toHaveBeenCalledWith(false);
     expect(clearTagSpy).toHaveBeenCalledWith(false);
-    expect(setCatSpy).toHaveBeenCalledWith('web');
     expect(window.location.hash).toBe('#category-web');
-    expect(document.getElementById('resultsCount').textContent).not.toBe('');
+    // the batch drain synced the DOM (no CATEGORY_MAP -> literal 'web' matches 0 cards)
+    expect(document.getElementById('categoryFilter').value).toBe('web');
+    expect(document.getElementById('filterValue1').textContent).toBe('Web');
+    expect(document.getElementById('resultsCount').textContent).toBe('0 items');
 
-    // '' option -> pushState clears the hash
+    // '' option -> $activeCategory nulled, pushState clears the hash, drain re-renders
     document.querySelector('#categoryDropdown .filter-dropdown-option[data-value=""]').click();
     expect(window.location.hash).toBe('');
+    expect(document.getElementById('categoryFilter').value).toBe('');
+    expect(document.getElementById('resultsCount').textContent).toBe('4 items');
   });
 
   it('bindDropdown: sort option click -> sortCards()', async () => {
@@ -120,12 +130,14 @@ describe('filter-manager.js', () => {
     expect(sort.classList.contains('active')).toBe(false);
   });
 
-  it("init: window 'clearFilters' event resets search+tag+category, clears the select, syncs, and filters", async () => {
+  it("init: window 'clearFilters' event resets search+tag+category; the batch drain clears the select, syncs, and filters", async () => {
     const s = await loadFresh('static/js/modules/state.js', { url: BROWSE, html: FIX() });
     const tagMod = await loadFresh('static/js/modules/tag-manager.js', { url: BROWSE });
     const fmMod = await loadFresh('static/js/modules/filter-manager.js', { url: BROWSE });
+    const fx = await loadFresh('static/js/modules/effects.js', { url: BROWSE });
     const FilterManager = fmMod.FilterManager;
     FilterManager.init();
+    fx.installEffects();
     s.$activeSearch.set('foo');
     s.$activeTag.set('bar');
     s.$activeCategory.set('frontend');
@@ -135,16 +147,13 @@ describe('filter-manager.js', () => {
 
     expect(s.$activeSearch.get()).toBeNull();
     expect(s.$activeTag.get()).toBeNull();
-    // Regression: the category must be cleared too — clearActive*'s null-branch
-    // used to re-activate it from the (still populated) select before the
-    // handler cleared the select, leaving the grid filtered.
     expect(s.$activeCategory.get()).toBeNull();
     expect(document.getElementById('categoryFilter').value).toBe('');
-    // syncSelection('category','') -> only the '' option is .selected
+    // the drain ran syncSelection('category','') -> only the '' option is .selected
     const selected = document.querySelectorAll('#categoryDropdown .filter-dropdown-option.selected');
     expect(selected.length).toBe(1);
     expect(selected[0].dataset.value).toBe('');
-    // filterCards ran with all atoms null -> every card visible
+    // the drain rendered with all reactive variables null -> every card visible
     expect(document.getElementById('resultsCount').textContent).toBe('4 items');
   });
 });

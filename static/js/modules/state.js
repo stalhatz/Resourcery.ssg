@@ -1,31 +1,66 @@
 /**
  * Central observable state model for Resourcery.ssg.
  *
- * Atoms are Nanostores-based reactive primitives.
- * $visibleCards is a computed derived from the three filter atoms.
- * allCards is built once at module load time from DOM <link-card> elements.
+ * Reactive variables are Nanostores-based reactive primitives.
+ * $activeFilter / $visibleCards are computeds derived from the three filter
+ * reactive variables. allCards is built once at module load time from DOM
+ * <link-card> elements.
  */
 
 import { atom, computed } from '../vendor/nanostores.js';
 import { slugify, foldDiacritics } from './slugify.js';
 
 // ---------------------------------------------------------------------------
-// Batched atom writes — one URL-hash write per logical transition
+// Batched reactive-variable writes — one URL-hash write per logical transition
 // ---------------------------------------------------------------------------
 
 /**
- * Nesting depth of active atom-write batches. While > 0, bridgeToHash's
- * hash write is suppressed so multi-atom transitions (e.g. tag -> category)
- * emit a single hashchange instead of one per atom.set().
+ * Nesting depth of active reactive-variable write batches. While > 0,
+ * bridgeToHash's hash write is suppressed so multi-variable transitions
+ * (e.g. tag -> category) emit a single hashchange instead of one per .set().
  */
 let batchDepth = 0;
 
+/** Map of store -> callback, queued while a batch is active (deduped per store). */
+const effectQueue = new Map();
+let draining = false;
+
 /**
- * Run atom writes as one batch: the URL-hash bridge is suppressed while `fn`
- * runs. Callers that change state must write the URL exactly once themselves
- * (handleHashChange leaves the hash untouched — the parsed state always
- * serialises back to the current hash — while TagManager/FilterManager write
- * the final hash at the end of their own transition).
+ * Route an effect dispatch: immediately outside a batch, queued (once per
+ * store) while a batch is active or while the drain is running, so a
+ * re-entrant effect write cannot recurse.
+ */
+function dispatch(store, cb) {
+  if (batchDepth > 0 || draining) {
+    effectQueue.set(store, cb);
+    return;
+  }
+  cb(store.get());
+}
+
+/**
+ * Nanostores-subscribe-like registration that honours batching: fires
+ * immediately with the current value, then on every change; while a batch
+ * is active the change is queued (once per store) and drained at the
+ * outermost batch exit with the final value.
+ *
+ * @param {import('nanostores').Store} store
+ * @param {(value: any) => void} cb
+ */
+export function effect(store, cb) {
+  dispatch(store, cb);
+  return store.listen(() => dispatch(store, cb));
+}
+
+/**
+ * Run reactive-variable writes as one batch: the URL-hash bridge is
+ * suppressed and effect dispatches are queued while `fn` runs, then drained
+ * exactly once, synchronously, at the outermost batch exit — each effect
+ * reading the *final* value of its store. Callers that change state must
+ * write the URL exactly once themselves (handleHashChange leaves the hash
+ * untouched — the parsed state always serialises back to the current hash —
+ * while TagManager/FilterManager write the final hash at the end of their
+ * own transition).
  *
  * @param {() => void} fn
  */
@@ -35,11 +70,23 @@ export function batchAtomWrites(fn) {
     fn();
   } finally {
     batchDepth -= 1;
+    if (batchDepth === 0) {
+      draining = true;
+      try {
+        while (effectQueue.size > 0) {
+          const entries = Array.from(effectQueue.entries());
+          effectQueue.clear();
+          for (const [store, cb] of entries) cb(store.get());
+        }
+      } finally {
+        draining = false;
+      }
+    }
   }
 }
 
 // ---------------------------------------------------------------------------
-// Atoms — single source of truth for filter state
+// Reactive variables — single source of truth for filter state
 // ---------------------------------------------------------------------------
 
 /** @type {import('nanostores').WritableAtom<string|null>} */
@@ -50,6 +97,21 @@ export const $activeSearch = atom(null);
 
 /** @type {import('nanostores').WritableAtom<string|null>} */
 export const $activeCategory = atom(null);
+
+/**
+ * Computed descriptor of which filter is active (at most one of the three
+ * filter reactive variables is non-null — invariant held by all writers).
+ * @type {import('nanostores').Computed<{ kind: 'tag'|'search'|'category'|null, value: string|null }>}
+ */
+export const $activeFilter = computed(
+  [$activeTag, $activeSearch, $activeCategory],
+  (tag, search, category) => {
+    if (tag) return { kind: 'tag', value: tag };
+    if (search) return { kind: 'search', value: search };
+    if (category) return { kind: 'category', value: category };
+    return { kind: null, value: null };
+  }
+);
 
 /** @type {import('nanostores').WritableAtom<Set<string>>} */
 export const $animatedIds = atom(new Set());
@@ -68,12 +130,12 @@ export const allCards = Array.from(document.querySelectorAll('.link-card')).map(
 }));
 
 // ---------------------------------------------------------------------------
-// Computed: visible card ids based on current filter atoms
+// Computed: visible card ids based on the current filter reactive variables
 // ---------------------------------------------------------------------------
 
 /**
  * Returns the list of card ids that match the current filter criteria.
- * Mirrors the logic of today's filterCards().
+ * Mirrors the logic of today's card filtering.
  */
 export const $visibleCards = computed(
   [$activeTag, $activeSearch, $activeCategory],
@@ -154,10 +216,11 @@ function parseHash(hash) {
 }
 
 /**
- * Serialise filter atoms into a URL hash string.
+ * Serialise filter reactive variables into a URL hash string.
  *
- * Tag and search segments are percent-encoded so the written URL is always
- * the normalized form — matching what the browser reports in
+ * Exported for `browseUrl`; keep in sync with `parseHash`'s inverse
+ * contract. Tag and search segments are percent-encoded so the written URL
+ * is always the normalized form — matching what the browser reports in
  * window.location.hash, which keeps writeHash's comparison stable (both
  * sides encoded) and the hash round-trip idempotent. ASCII values are
  * unaffected (encodeURIComponent('foo') === 'foo').
@@ -167,7 +230,7 @@ function parseHash(hash) {
  * @param {string|null} category
  * @returns {string}
  */
-function serialiseHash(tag, search, category) {
+export function serialiseHash(tag, search, category) {
   if (tag) return `#tag-${encodeURIComponent(tag)}`;
   if (search) return `#search-${encodeURIComponent(search)}`;
   if (category) return `#category-${category}`;
@@ -176,7 +239,7 @@ function serialiseHash(tag, search, category) {
 
 /**
  * Parse the current URL hash and pass the result to `apply`.
- * Used to initialise atoms from the hash on page load.
+ * Used to initialise reactive variables from the hash on page load.
  *
  * @param {(next: { tag: string|null, search: string|null, category: string|null }) => void} apply
  */
@@ -186,7 +249,7 @@ export function bridgeFromHash(apply) {
 }
 
 /**
- * Subscribe to atom changes and push to URL hash.
+ * Subscribe to reactive-variable changes and push to URL hash.
  * Nanostores' built-in === equality check prevents write loops when
  * handleHashChange re-applies the same values.
  *

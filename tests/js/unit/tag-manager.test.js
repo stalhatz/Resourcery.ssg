@@ -9,7 +9,8 @@ const LANDING_FIX = () => readFixture('landing.html');
 async function setup(url = BROWSE, html = FIX(), globals) {
   const state = await loadFresh('static/js/modules/state.js', { url, html, globals });
   const tagMod = await loadFresh('static/js/modules/tag-manager.js', { url });
-  return { state, TagManager: tagMod.TagManager, logger: tagMod.logger };
+  const fc = await loadFresh('static/js/modules/filter-cards.js', { url });
+  return { state, TagManager: tagMod.TagManager, logger: tagMod.logger, filterCards: fc.filterCards };
 }
 
 describe('tag-manager.js', () => {
@@ -20,7 +21,7 @@ describe('tag-manager.js', () => {
     expect(TagManager.slugify('a--b')).toBe('a-b');
   });
 
-  it('setActiveTag(tag,true): clears other two atoms, sets $activeTag=slug, writes "#tag-<slug>"', async () => {
+  it('setActiveTag(tag,true): clears the other two reactive variables, sets $activeTag=slug, writes "#tag-<slug>"', async () => {
     const { state, TagManager } = await setup();
     TagManager.setActiveTag('foo', true);
     expect(state.$activeTag.get()).toBe('foo');
@@ -32,7 +33,7 @@ describe('tag-manager.js', () => {
   // B3 regression: setActiveTag slugifies ('C++' -> 'c', 'machine learning'
   // -> 'machine-learning'); $visibleCards must match cards whose raw
   // data-tags hold the un-slugified form.
-  it("setActiveTag('C++', true): slug atom 'c' + hash '#tag-c' match a card with raw data-tags 'C++'", async () => {
+  it("setActiveTag('C++', true): slug reactive variable 'c' + hash '#tag-c' match a card with raw data-tags 'C++'", async () => {
     const html = `
       <article class="link-card" id="cpp" data-title="C++" data-tags="C++" data-category="frontend"></article>
       <article class="link-card" id="js" data-title="JS" data-tags="JavaScript" data-category="frontend"></article>
@@ -44,7 +45,7 @@ describe('tag-manager.js', () => {
     expect(state.$visibleCards.get()).toEqual(['cpp']);
   });
 
-  it("setActiveTag('machine learning', true): slug atom 'machine-learning' matches raw data-tags 'machine learning'", async () => {
+  it("setActiveTag('machine learning', true): slug reactive variable 'machine-learning' matches raw data-tags 'machine learning'", async () => {
     const html = `
       <article class="link-card" id="ml" data-title="ML" data-tags="machine learning" data-category="ai"></article>
       <article class="link-card" id="js" data-title="JS" data-tags="JavaScript" data-category="frontend"></article>
@@ -55,7 +56,7 @@ describe('tag-manager.js', () => {
     expect(state.$visibleCards.get()).toEqual(['ml']);
   });
 
-  it("setActiveTag('R&D', true): slug atom 'rd' matches raw data-tags 'R&D'", async () => {
+  it("setActiveTag('R&D', true): slug reactive variable 'rd' matches raw data-tags 'R&D'", async () => {
     const html = `
       <article class="link-card" id="rd" data-title="R&D" data-tags="R&D" data-category="backend"></article>
     `;
@@ -97,18 +98,18 @@ describe('tag-manager.js', () => {
     expect(state.$visibleCards.get()).toEqual(['gr']);
   });
 
-  // B8 regression: the atom carries the DECODED slug and the URL the ENCODED
+  // B8 regression: the reactive variable carries the DECODED slug and the URL the ENCODED
   // form; the hashchange round-trip (parse the URL the browser reports) must
   // decode back to the same slug so slug-matching keeps working. Exercise the
   // real user tag with a capital delta ('Δύο').
-  it("setActiveTag('Δύο', true): atom 'δυο', encoded hash '#tag-%CE%B4%CF%85%CE%BF'; round-trip parse decodes back to 'δυο' and matches raw data-tags 'Δύο'", async () => {
+  it("setActiveTag('Δύο', true): reactive variable 'δυο', encoded hash '#tag-%CE%B4%CF%85%CE%BF'; round-trip parse decodes back to 'δυο' and matches raw data-tags 'Δύο'", async () => {
     const html = `
       <article class="link-card" id="gr" data-title="Δύο" data-tags="Δύο" data-category="frontend"></article>
       <article class="link-card" id="js" data-title="JS" data-tags="JavaScript" data-category="frontend"></article>
     `;
     const { state, TagManager } = await setup(BROWSE, html);
     TagManager.setActiveTag('Δύο', true);
-    // atom carries the decoded slug (header display '#' + atom shows '#δυο')
+    // the reactive variable carries the decoded slug (header display '#' + it shows '#δυο')
     expect(state.$activeTag.get()).toBe('δυο');
     // the URL holds the percent-encoded form, exactly as a browser reports it
     expect(window.location.hash).toBe('#tag-%CE%B4%CF%85%CE%BF');
@@ -128,12 +129,17 @@ describe('tag-manager.js', () => {
     expect(window.location.hash).toBe('');
   });
 
-  it('setActiveTag(null,true) with an active category: switches to category (sets $activeCategory, writes "#category-<v>")', async () => {
+  // Latent-behaviour elimination (js_reactive_effects.md): the null-branches
+  // of setActiveTag/setActiveSearch no longer re-read the select and
+  // "restore" a category — clearing is purely reactive-variable-driven.
+  it('setActiveTag(null,true) with a category in the select: restore branch deleted — category NOT restored, hash cleared', async () => {
     const { state, TagManager } = await setup();
+    window.location.hash = '#tag-foo';
     document.getElementById('categoryFilter').value = 'web';
     TagManager.setActiveTag(null, true);
-    expect(state.$activeCategory.get()).toBe('web');
-    expect(window.location.hash).toBe('#category-web');
+    expect(state.$activeCategory.get()).toBeNull();
+    expect(state.$activeTag.get()).toBeNull();
+    expect(window.location.hash).toBe('');
   });
 
   it('setActiveSearch(term,true): clears tag+category, writes "#search-<encoded>"', async () => {
@@ -145,8 +151,8 @@ describe('tag-manager.js', () => {
     expect(window.location.hash).toBe('#search-bar%20baz');
   });
 
-  it('setActiveSearch(null,true): same null branches as setActiveTag(null)', async () => {
-    const { TagManager } = await setup();
+  it('setActiveSearch(null,true): clears the hash; category NOT restored from the select (restore branch deleted)', async () => {
+    const { state, TagManager } = await setup();
     window.location.hash = '#search-foo';
     TagManager.setActiveSearch(null, true);
     expect(window.location.hash).toBe('');
@@ -155,13 +161,14 @@ describe('tag-manager.js', () => {
     const s2 = await setup();
     document.getElementById('categoryFilter').value = 'web';
     s2.TagManager.setActiveSearch(null, true);
-    expect(s2.state.$activeCategory.get()).toBe('web');
-    expect(window.location.hash).toBe('#category-web');
+    expect(s2.state.$activeCategory.get()).toBeNull();
+    expect(window.location.hash).toBe('');
   });
 
   it("updateFilterHeader: 'search' branch (filterText1='Searching', hide categoryTrigger, searchValue shows quoted term, filterText2 hidden)", async () => {
     const { TagManager } = await setup();
     TagManager.setActiveSearch('bar', true);
+    TagManager.updateFilterHeader(); // managers no longer call it — the effects layer does
     expect(document.getElementById('filterText1').style.display).toBe('inline');
     expect(document.getElementById('filterText1').textContent).toBe('Searching');
     expect(document.getElementById('categoryTrigger').style.display).toBe('none');
@@ -173,6 +180,7 @@ describe('tag-manager.js', () => {
   it("updateFilterHeader: 'tag' branch (filterText1='Showing', categoryTrigger inline-flex+pe none+opacity1, filterValue1='#<tag>', searchValue hidden, filterText2 inline)", async () => {
     const { TagManager } = await setup();
     TagManager.setActiveTag('foo', true);
+    TagManager.updateFilterHeader(); // managers no longer call it — the effects layer does
     const ct = document.getElementById('categoryTrigger');
     expect(document.getElementById('filterText1').textContent).toBe('Showing');
     expect(ct.style.display).toBe('inline-flex');
@@ -187,6 +195,7 @@ describe('tag-manager.js', () => {
   it("updateFilterHeader: 'none' branch (filterText1='Showing', categoryTrigger inline-flex+pe auto+opacity1, searchValue hidden, filterText2 inline, filterValue1=option.textContent|'All Categories')", async () => {
     const { TagManager } = await setup();
     TagManager.setActiveTag(null, true); // all null
+    TagManager.updateFilterHeader(); // managers no longer call it — the effects layer does
     const ct = document.getElementById('categoryTrigger');
     expect(document.getElementById('filterText1').textContent).toBe('Showing');
     expect(ct.style.display).toBe('inline-flex');
@@ -204,7 +213,7 @@ describe('tag-manager.js', () => {
     expect(warnSpy).toHaveBeenCalledWith('⚠️ Filter header elements not found');
   });
 
-  it('getActiveTag/getActiveSearch getters return atom values', async () => {
+  it('getActiveTag/getActiveSearch getters return reactive-variable values', async () => {
     const { state, TagManager } = await setup();
     state.$activeTag.set('foo');
     expect(TagManager.getActiveTag()).toBe('foo');
@@ -233,10 +242,10 @@ describe('tag-manager.js', () => {
   });
 
   // Regression: a tag<->category transition must emit exactly ONE hashchange.
-  // Without batching, the sequential atom sets fire bridgeToHash's writeHash
-  // per atom (e.g. '#category-frontend' -> '' -> '#tag-foo'), polluting the
+  // Without batching, the sequential reactive-variable sets fire bridgeToHash's writeHash
+  // per variable (e.g. '#category-frontend' -> '' -> '#tag-foo'), polluting the
   // browser back-stack with intermediate entries.
-  describe('one hashchange per transition (with the atom->hash bridge installed)', () => {
+  describe('one hashchange per transition (with the reactive-state -> hash bridge installed)', () => {
     const installBridge = (state) =>
       state.bridgeToHash({
         $activeTag: state.$activeTag,
@@ -281,7 +290,7 @@ describe('tag-manager.js', () => {
       expect(count).toBe(1);
     });
 
-    it('clearActiveTag with a category in the select: falls back to the category with exactly one hashchange', async () => {
+    it('clearActiveTag with a category in the select: restore branch deleted — reactive variables null, hash cleared, zero hashchanges', async () => {
       const { state, TagManager } = await setup();
       installBridge(state);
       state.$activeTag.set('foo'); // bridge writes '#tag-foo'
@@ -291,9 +300,10 @@ describe('tag-manager.js', () => {
       TagManager.clearActiveTag();
       const count = await countHashchanges();
 
-      expect(state.$activeCategory.get()).toBe('web');
-      expect(window.location.hash).toBe('#category-web');
-      expect(count).toBe(1);
+      expect(state.$activeCategory.get()).toBeNull();
+      expect(state.$activeTag.get()).toBeNull();
+      expect(window.location.hash).toBe('');
+      expect(count).toBe(0); // pushState fires no hashchange
     });
   });
 
@@ -487,7 +497,7 @@ describe('tag-manager.js', () => {
   });
 
   it('navigateToBrowse (browse): "#<tag>" -> setActiveTag; else -> setActiveSearch; then searchInput.value="" + filterCards()', async () => {
-    const { TagManager } = await setup();
+    const { TagManager, filterCards } = await setup();
     const setActiveTagSpy = vi.spyOn(TagManager, 'setActiveTag');
     const setActiveSearchSpy = vi.spyOn(TagManager, 'setActiveSearch');
     const input = document.getElementById('searchInput');
@@ -500,8 +510,11 @@ describe('tag-manager.js', () => {
     TagManager.navigateToBrowse('bar baz', input);
     expect(setActiveSearchSpy).toHaveBeenCalledWith('bar baz', true);
     expect(input.value).toBe('');
-    // filterCards() ran as a side-effect
-    expect(document.getElementById('resultsCount').textContent).not.toBe('');
+    // the effects layer calls filterCards on the $visibleCards drain; the
+    // isolated unit pattern is an explicit call here (no effects registered).
+    // The final state is the search filter 'bar baz' -> 0 matches.
+    filterCards();
+    expect(document.getElementById('resultsCount').textContent).toBe('0 items');
   });
 
   it('debounce: coalesces rapid calls into one trailing call', async () => {

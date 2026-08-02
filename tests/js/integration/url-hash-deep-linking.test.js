@@ -13,23 +13,26 @@ const CASES = [
 
 describe('URL hash deep-linking (integration)', () => {
   for (const c of CASES) {
-    it(`load '${c.name}' -> bridgeFromHash sets the right atom; handleHashChange updates DOM; filterCards shows matching; round-trip hash equals load`, async () => {
+    it(`load '${c.name}' -> bridgeFromHash sets the right reactive variable; handleHashChange updates DOM; filterCards shows matching; round-trip hash equals load`, async () => {
       const state = await loadFresh('static/js/modules/state.js', { url: c.url, html: FIX() });
       await loadFresh('static/js/modules/tag-manager.js', { url: c.url });
       await loadFresh('static/js/modules/entry-animator.js', { url: c.url });
       const hhc = await loadFresh('static/js/modules/handle-hash-change.js', { url: c.url });
       await loadFresh('static/js/modules/filter-cards.js', { url: c.url });
+      const fx = await loadFresh('static/js/modules/effects.js', { url: c.url });
       const loadHash = window.location.hash;
 
-      // install the bridge FIRST so atom sets drive writeHash (round-trip)
+      // install the bridge FIRST so reactive-variable sets drive writeHash (round-trip);
+      // effects before handleHashChange mirrors main.js's boot order
       state.bridgeToHash({
         $activeTag: state.$activeTag,
         $activeSearch: state.$activeSearch,
         $activeCategory: state.$activeCategory,
       });
-      hhc.handleHashChange(); // sets atoms + filterCards
+      fx.installEffects();
+      hhc.handleHashChange(); // sets reactive variables + drain-syncs the DOM
 
-      // exactly the right atom set, others null
+      // exactly the right reactive variable set, others null
       if (c.atom) {
         expect(state[c.atom].get()).toBe(c.value);
         for (const key of ['$activeTag', '$activeSearch', '$activeCategory']) {
@@ -59,7 +62,7 @@ describe('URL hash deep-linking (integration)', () => {
 
   // B3 regression: a deep link carrying a SLUG ('#tag-rd') must match a card
   // whose raw data-tags hold the un-slugified form ('R&D') end to end:
-  // parseHash -> atoms -> handleHashChange -> filterCards -> DOM.
+  // parseHash -> reactive variables -> handleHashChange -> effects -> DOM.
   it("deep link '#tag-rd': handleHashChange sets slug 'rd', filterCards shows the card with raw tag 'R&D'", async () => {
     const html = `
       <span id="filterText1"></span><span id="filterText2"></span><span id="filterValue1"></span>
@@ -74,7 +77,9 @@ describe('URL hash deep-linking (integration)', () => {
     await loadFresh('static/js/modules/entry-animator.js', { url });
     const hhc = await loadFresh('static/js/modules/handle-hash-change.js', { url });
     await loadFresh('static/js/modules/filter-cards.js', { url });
+    const fx = await loadFresh('static/js/modules/effects.js', { url });
 
+    fx.installEffects();
     hhc.handleHashChange();
 
     expect(state.$activeTag.get()).toBe('rd');
@@ -89,7 +94,7 @@ describe('URL hash deep-linking (integration)', () => {
   // DECODED '#δυο', not the raw encoding. (The browser always reports the
   // encoded fragment, so this is the form real deep links and the click-path
   // hashchange round-trip take.)
-  it("deep link '#tag-%CE%B4%CF%85%CE%BF': atom 'δυο', card with raw tag 'δύο' visible, header shows '#δυο', hash round-trips unchanged", async () => {
+  it("deep link '#tag-%CE%B4%CF%85%CE%BF': reactive variable 'δυο', card with raw tag 'δύο' visible, header shows '#δυο', hash round-trips unchanged", async () => {
     const html = `
       <span id="filterText1"></span><span id="filterText2"></span><span id="filterValue1"></span>
       <span id="searchValue"></span>
@@ -103,6 +108,7 @@ describe('URL hash deep-linking (integration)', () => {
     await loadFresh('static/js/modules/entry-animator.js', { url });
     const hhc = await loadFresh('static/js/modules/handle-hash-change.js', { url });
     await loadFresh('static/js/modules/filter-cards.js', { url });
+    const fx = await loadFresh('static/js/modules/effects.js', { url });
     const loadHash = window.location.hash;
 
     state.bridgeToHash({
@@ -110,9 +116,10 @@ describe('URL hash deep-linking (integration)', () => {
       $activeSearch: state.$activeSearch,
       $activeCategory: state.$activeCategory,
     });
+    fx.installEffects();
     hhc.handleHashChange();
 
-    // atom carries the DECODED slug; slug-matching finds the raw 'δύο' card
+    // the reactive variable carries the DECODED slug; slug-matching finds the raw 'δύο' card
     expect(state.$activeTag.get()).toBe('δυο');
     expect(state.$activeSearch.get()).toBeNull();
     expect(state.$activeCategory.get()).toBeNull();
@@ -127,9 +134,9 @@ describe('URL hash deep-linking (integration)', () => {
 
   // B9 regression: a deep link with an UNACCENTED search term
   // ('#search-francais') must match a card whose title holds the ACCENTED
-  // form ('Français') end to end — parseHash -> atoms -> handleHashChange ->
+  // form ('Français') end to end — parseHash -> reactive variables ->
   // filterCards (diacritic folding in the $visibleCards search branch).
-  it("deep link '#search-francais': search atom 'francais' shows the accented 'Français' card, header shows the quoted term", async () => {
+  it("deep link '#search-francais': search reactive variable 'francais' shows the accented 'Français' card, header shows the quoted term", async () => {
     const html = `
       <span id="filterText1"></span><span id="filterText2"></span><span id="filterValue1"></span>
       <span id="searchValue"></span>
@@ -143,6 +150,7 @@ describe('URL hash deep-linking (integration)', () => {
     await loadFresh('static/js/modules/entry-animator.js', { url });
     const hhc = await loadFresh('static/js/modules/handle-hash-change.js', { url });
     await loadFresh('static/js/modules/filter-cards.js', { url });
+    const fx = await loadFresh('static/js/modules/effects.js', { url });
     const loadHash = window.location.hash;
 
     state.bridgeToHash({
@@ -150,9 +158,10 @@ describe('URL hash deep-linking (integration)', () => {
       $activeSearch: state.$activeSearch,
       $activeCategory: state.$activeCategory,
     });
+    fx.installEffects();
     hhc.handleHashChange();
 
-    // search atom carries the raw term; folding happens in $visibleCards
+    // the search reactive variable carries the raw term; folding happens in $visibleCards
     expect(state.$activeSearch.get()).toBe('francais');
     expect(state.$activeTag.get()).toBeNull();
     expect(state.$activeCategory.get()).toBeNull();
